@@ -151,10 +151,83 @@ PLANOS["pedra2"] = [
     ("braco", -7, 0, -1, -4, 6, 2, (-5, 6, 0), PERNA_A),
     ("braco", 4, 0, -1, 7, 6, 2, (5, 6, 0), PERNA_B),
 ]
-ORDEM_PLANOS = ["raposa", "porquinho", "esquilo", "ave", "bolha", "raposa2", "raposa3", "porquinho2", "porquinho3", "esquilo2", "ave2", "bolha2", "pedra2"]
+PLANOS["lagarta"] = [
+    ("cabeca", -3, 0, -8, 3, 6, -3, (0, 3, -4), CABECA),
+    ("antena_e", -3, 6, -6, -2, 9, -5, (0, 3, -4), CABECA),
+    ("antena_d", 2, 6, -6, 3, 9, -5, (0, 3, -4), CABECA),
+    ("corpo", -3, 0, -3, 3, 5, 2, (0, 0, 0), FIXO),
+    ("segmento", -3, 0, 2, 3, 4, 6, (0, 2, 2), PERNA_A),
+    ("ponta", -2, 0, 6, 2, 3, 9, (0, 2, 6), CAUDA),
+]
+PLANOS["casulo"] = [
+    ("corpo", -3, 0, -3, 3, 11, 3, (0, 0, 0), FIXO),
+    ("topo", -2, 11, -2, 2, 13, 2, (0, 0, 0), FIXO),
+    ("casca", -4, 2, -2, -3, 9, 2, (0, 0, 0), FIXO),
+    ("casca", 3, 2, -2, 4, 9, 2, (0, 0, 0), FIXO),
+    ("fio", 0, 13, 0, 1, 16, 1, (0, 0, 0), FIXO),
+]
+PLANOS["borboleta"] = [
+    ("cabeca", -2, 7, -5, 2, 11, -1, (0, 9, -1), CABECA),
+    ("antena_e", -2, 11, -4, -1, 15, -3, (0, 9, -1), CABECA),
+    ("antena_d", 1, 11, -4, 2, 15, -3, (0, 9, -1), CABECA),
+    ("corpo", -1, 5, -1, 1, 9, 6, (0, 0, 0), FIXO),
+    ("asa_e", -12, 4, 1, -1, 16, 2, (-1, 9, 1), ASA_E),
+    ("asa_d", 1, 4, 1, 12, 16, 2, (1, 9, 1), ASA_D),
+    ("asinha_e", -8, 1, 2, -1, 7, 3, (-1, 6, 2), ASA_E),
+    ("asinha_d", 1, 1, 2, 8, 7, 3, (1, 6, 2), ASA_D),
+]
+PLANOS["caranguejo"] = [
+    ("corpo", -5, 2, -4, 5, 7, 3, (0, 0, 0), FIXO),
+    ("olho_e", -4, 7, -4, -1, 10, -2, (0, 7, -3), CABECA),
+    ("olho_d", 1, 7, -4, 4, 10, -2, (0, 7, -3), CABECA),
+    ("garra", -9, 2, -8, -5, 6, -4, (-5, 4, -4), PERNA_A),
+    ("garra", 5, 2, -8, 9, 6, -4, (5, 4, -4), PERNA_B),
+    ("perna", -7, 0, -2, -5, 3, -1, (-5, 3, -1), PERNA_B),
+    ("perna", -7, 0, 1, -5, 3, 2, (-5, 3, 1), PERNA_A),
+    ("perna", 5, 0, -2, 7, 3, -1, (5, 3, -1), PERNA_A),
+    ("perna", 5, 0, 1, 7, 3, 2, (5, 3, 1), PERNA_B),
+]
+PLANOS["caranguejo2"] = [
+    ("corpo", -6, 3, -5, 6, 9, 4, (0, 0, 0), FIXO),
+    ("espinho", -4, 9, -2, -2, 11, 0, (0, 0, 0), FIXO),
+    ("espinho", 2, 9, -2, 4, 11, 0, (0, 0, 0), FIXO),
+    ("espinho", -1, 9, 1, 1, 12, 3, (0, 0, 0), FIXO),
+    ("olho_e", -5, 9, -5, -2, 12, -3, (0, 9, -4), CABECA),
+    ("olho_d", 2, 9, -5, 5, 12, -3, (0, 9, -4), CABECA),
+    ("garra", -12, 2, -11, -6, 8, -5, (-6, 5, -5), PERNA_A),
+    ("garra", 6, 2, -11, 12, 8, -5, (6, 5, -5), PERNA_B),
+    ("perna", -8, 0, -3, -6, 4, -2, (-6, 4, -2), PERNA_B),
+    ("perna", -8, 0, 1, -6, 4, 2, (-6, 4, 1), PERNA_A),
+    ("perna", 6, 0, -3, 8, 4, -2, (6, 4, -2), PERNA_A),
+    ("perna", 6, 0, 1, 8, 4, 2, (6, 4, 1), PERNA_B),
+]
+PLANOS["toupeira"] = [
+    ("cabeca", -3, 2, -9, 3, 8, -4, (0, 5, -4), CABECA),
+    ("focinho", -1, 3, -10, 1, 5, -9, (0, 5, -4), CABECA),
+    ("corpo", -4, 1, -4, 4, 8, 4, (0, 0, 0), FIXO),
+    ("garra", -6, 0, -6, -3, 3, -3, (-4, 3, -4), PERNA_A),
+    ("garra", 3, 0, -6, 6, 3, -3, (4, 3, -4), PERNA_B),
+    ("perna", -3, 0, 2, -1, 1, 4, (-2, 1, 3), PERNA_B),
+    ("perna", 1, 0, 2, 3, 1, 4, (2, 1, 3), PERNA_A),
+    ("cauda", -1, 2, 4, 1, 3, 7, (0, 2, 4), CAUDA),
+]
+PLANOS["toupeira2"] = [
+    ("cabeca", -4, 4, -11, 4, 11, -5, (0, 7, -5), CABECA),
+    ("broca", -2, 4, -13, 2, 7, -11, (0, 7, -5), CABECA),
+    ("broca", -1, 5, -15, 1, 6, -13, (0, 7, -5), CABECA),
+    ("corpo", -5, 2, -5, 5, 11, 5, (0, 0, 0), FIXO),
+    ("rocha", -4, 11, -3, 4, 13, 4, (0, 0, 0), FIXO),
+    ("garra", -8, 0, -8, -4, 5, -4, (-5, 5, -5), PERNA_A),
+    ("garra", 4, 0, -8, 8, 5, -4, (5, 5, -5), PERNA_B),
+    ("perna", -4, 0, 2, -1, 2, 5, (-2, 2, 3), PERNA_B),
+    ("perna", 1, 0, 2, 4, 2, 5, (2, 2, 3), PERNA_A),
+    ("cauda", -1, 3, 5, 1, 4, 8, (0, 3, 5), CAUDA),
+]
+ORDEM_PLANOS = ["raposa", "porquinho", "esquilo", "ave", "bolha", "raposa2", "raposa3", "porquinho2", "porquinho3", "esquilo2", "ave2", "bolha2", "pedra2",
+                "lagarta", "casulo", "borboleta", "caranguejo", "caranguejo2", "toupeira", "toupeira2"]
 
 # ---------------------------------------------------------------- tipos
-TIPOS = ["FOGO", "AGUA", "PLANTA", "ELETRICO", "VENTO", "PEDRA"]
+TIPOS = ["FOGO", "AGUA", "PLANTA", "ELETRICO", "VENTO", "PEDRA", "INSETO"]
 # habitat: onde nasce no mundo
 HABITATS = ["CAMPO", "AREIA", "AGUA", "ALTO", "PEDRA"]
 
@@ -213,6 +286,30 @@ ESPECIES = [
     dict(id="pedregulho", nome="Pedregulho", cor="&8", tipo="PEDRA", plano="pedra2", escala=1.35,
          vida=26, dano=6, vel=2.0, evolui=None, nivel=0, habitat="PEDRA", inicial=0,
          pal=dict(base=(105, 100, 95), barriga=(140, 135, 130), detalhe=(90, 150, 70), olho=(255, 200, 60), rocha=True, sobrancelha=True)),
+    # inseto: lagarta -> casulo -> borboleta
+    dict(id="larvito", nome="Larvito", cor="&a", tipo="INSETO", plano="lagarta", escala=1.0,
+         vida=8, dano=2, vel=2.2, evolui="casulim", nivel=4, habitat="CAMPO", inicial=0,
+         pal=dict(base=(140, 215, 90), barriga=(250, 235, 160), detalhe=(250, 150, 60), olho=(30, 35, 20), bolinhas=True)),
+    dict(id="casulim", nome="Casulim", cor="&2", tipo="INSETO", plano="casulo", escala=0.95,
+         vida=12, dano=1, vel=0.6, evolui="asalume", nivel=7, habitat="CAMPO", inicial=0,
+         pal=dict(base=(170, 190, 90), barriga=(210, 220, 140), detalhe=(120, 140, 60), olho=(30, 35, 20), sonolento=True)),
+    dict(id="asalume", nome="Asalume", cor="&d", tipo="INSETO", plano="borboleta", escala=1.1,
+         vida=15, dano=5, vel=4.5, evolui=None, nivel=0, habitat="CAMPO", inicial=0,
+         pal=dict(base=(90, 70, 120), barriga=(250, 245, 255), detalhe=(250, 120, 200), olho=(240, 60, 90), asa2=(120, 220, 250))),
+    # agua: caranguejos da praia
+    dict(id="pincudo", nome="Pincudo", cor="&c", tipo="AGUA", plano="caranguejo", escala=0.85,
+         vida=11, dano=3, vel=3.0, evolui="tenazor", nivel=9, habitat="AREIA", inicial=0,
+         pal=dict(base=(240, 110, 80), barriga=(255, 215, 180), detalhe=(255, 240, 230), olho=(25, 20, 30))),
+    dict(id="tenazor", nome="Tenazor", cor="&4", tipo="AGUA", plano="caranguejo2", escala=1.2,
+         vida=22, dano=7, vel=3.2, evolui=None, nivel=0, habitat="AREIA", inicial=0,
+         pal=dict(base=(170, 50, 50), barriga=(240, 180, 140), detalhe=(250, 230, 200), olho=(255, 230, 90), sobrancelha=True)),
+    # pedra: toupeiras cavadoras
+    dict(id="toupito", nome="Toupito", cor="&6", tipo="PEDRA", plano="toupeira", escala=0.85,
+         vida=12, dano=3, vel=2.6, evolui="cavucao", nivel=9, habitat="PEDRA", inicial=0,
+         pal=dict(base=(120, 90, 70), barriga=(200, 170, 140), detalhe=(250, 160, 170), olho=(25, 20, 20))),
+    dict(id="cavucao", nome="Cavucao", cor="&6", tipo="PEDRA", plano="toupeira2", escala=1.25,
+         vida=24, dano=7, vel=2.6, evolui=None, nivel=0, habitat="PEDRA", inicial=0,
+         pal=dict(base=(95, 70, 55), barriga=(185, 150, 120), detalhe=(150, 150, 160), olho=(255, 210, 80), rocha=True)),
 ]
 
 
@@ -350,6 +447,8 @@ def cor_pixel(esp, nome, face, i, j, w, h, rnd):
         return mix(det, (30, 90, 30), rnd.random() * 0.6)
     if nome == "barbatana":
         return det if j < h - 1 else clar(base, 0.9)
+    if nome == "rocha" and plano == "toupeira":
+        return clar((135, 135, 140), 0.75 + 0.3 * rnd.random())
     if nome == "rocha":
         if face == "topo" and rnd.random() < 0.5:
             return mix(det, (60, 120, 50), rnd.random() * 0.4)
@@ -486,6 +585,129 @@ def cor_pixel(esp, nome, face, i, j, w, h, rnd):
         if nome == "topo":
             return det if not pal.get("rocha") else clar(base, 0.85)
         return c
+    if plano == "lagarta":
+        if nome == "cabeca" and face == "frente":
+            r = rosto(esp, i, j, w, h, base, olho_y=1)
+            if r:
+                return r
+            if j == h - 1 and i in (2, 3):
+                return clar(base, 0.45)
+        if nome.startswith("antena"):
+            return det if j == 0 else clar(base, 0.7)
+        if face == "baixo" or (face in ("esq", "dir", "frente") and j >= h - 1):
+            return barriga
+        if pal.get("bolinhas") and face in ("esq", "dir") and nome != "cabeca" and (i + 1) % 3 == 0 and j == 1:
+            return det
+        if nome in ("corpo", "segmento") and face == "topo" and i in (0, w - 1):
+            return clar(base, 0.8)
+        return c
+
+    if plano == "casulo":
+        if nome == "corpo" and face == "frente":
+            oy = 3
+            for x0 in (1, w - 3):
+                if x0 <= i < x0 + 2 and oy <= j < oy + 2:
+                    if j == oy:
+                        return clar(base, 0.55)  # palpebra sonolenta
+                    return pal["olho"] if i != x0 else (255, 255, 255, 255)
+            if j == oy + 2 and i in (0, w - 1):
+                return (250, 150, 150, 255)
+        if nome == "corpo" and face in ("esq", "dir", "tras") and j % 3 == 0:
+            return det
+        if nome == "casca":
+            return clar(det, 0.9 + 0.1 * (j % 2))
+        if nome == "fio":
+            return (240, 240, 230, 255)
+        if nome == "topo":
+            return clar(base, 0.85)
+        return c
+
+    if plano == "borboleta":
+        if nome == "cabeca" and face == "frente":
+            r = rosto(esp, i, j, w, h, base)
+            if r:
+                return r
+        if nome.startswith("antena"):
+            return det if j == 0 else clar(base, 0.8)
+        if nome.startswith("asa") or nome.startswith("asinha"):
+            asa2 = pal["asa2"]
+            if face in ("topo", "baixo", "esq", "dir"):
+                return clar(base, 0.9)
+            borda = i == 0 or j == 0 or i == w - 1 or j == h - 1
+            if borda:
+                return clar(base, 0.8)
+            # lado de fora da asa (longe do corpo)
+            fora = (w - 1 - i) if (nome.endswith("_e")) == (face == "frente") else i
+            cx, cy = (w - 1) * 0.35, (h - 1) * 0.45
+            dx, dy = (w - 1 - fora) - cx, j - cy
+            d = (dx * dx + dy * dy) ** 0.5
+            if nome.startswith("asa_") and d < 1.0:
+                return (255, 255, 255, 255)
+            if nome.startswith("asa_") and d < 2.6:
+                return det
+            if fora < 2:
+                return mix(asa2, base, 0.5)
+            return mix(asa2, barriga, 0.35 * j / max(1, h - 1))
+        if nome == "corpo":
+            return clar(base, 1.0 if (j + i) % 2 else 0.85)
+        return c
+
+    if plano == "caranguejo":
+        if nome.startswith("olho"):
+            if face == "topo":
+                return pal["olho"]
+            if j < 2 and face in ("frente", "esq", "dir", "tras"):
+                if face == "frente" and i == 0 and j == 0:
+                    return (255, 255, 255, 255)
+                if face == "frente" and i == 0:
+                    return (235, 235, 240, 255)
+                return pal["olho"]
+            return c
+        if nome == "corpo":
+            if face == "frente":
+                if pal.get("sobrancelha") and j == 0 and 2 <= i < w - 2:
+                    return clar(base, 0.55)
+                if j == h - 2 and 3 <= i < w - 3:
+                    return clar(base, 0.45)  # sorriso
+                if j == h - 3 and i in (2, w - 3):
+                    return clar(base, 0.45)
+                if j >= h - 3 and i in (1, w - 2):
+                    return (250, 150, 150, 255)
+            if face == "topo" and (i * 7 + j * 3) % 11 == 0:
+                return det
+            if face in ("esq", "dir", "tras") and j >= h - 1:
+                return barriga
+        if nome == "garra":
+            if face == "frente" and j == h // 2:
+                return clar(base, 0.45)  # abertura da pinca
+            if face == "frente" or j == 0:
+                return clar(base, 1.15)
+        if nome == "espinho":
+            return det if j == 0 or face == "topo" else clar(base, 1.1)
+        if nome == "perna":
+            return clar(base, 0.75)
+        return c
+
+    if plano == "toupeira":
+        if nome == "cabeca" and face == "frente":
+            r = rosto(esp, i, j, w, h, base, olho_y=1)
+            if r:
+                return r
+            if j >= h - 2 and 1 <= i < w - 1:
+                return barriga
+        if nome == "focinho":
+            return det
+        if nome == "broca":
+            return clar(det, 1.15 if (i + j) % 3 == 0 else 0.85)
+        if nome == "garra":
+            if face == "frente" and j >= h - 2 and i % 2 == 0:
+                return (250, 245, 230, 255)  # unhas
+            return barriga
+        if nome == "corpo" and (face == "frente" or (face in ("esq", "dir") and j >= h - 2)):
+            return barriga
+        if nome == "cauda":
+            return det
+        return c
     return c
 
 
@@ -509,6 +731,8 @@ def gerar_c(pngs):
                 u, v, x1, y1, z1, x2, y2, z2, piv[0], piv[1], piv[2], anim, nome))
         L.append("};")
     L.append("#define PLANOS_COUNT %d" % len(ORDEM_PLANOS))
+    for i, p in enumerate(ORDEM_PLANOS):
+        L.append("#define PLANO_%s %d" % (p.upper(), i))
     L.append("static const struct PlanoDef planos_def[PLANOS_COUNT] = {")
     for p in ORDEM_PLANOS:
         cx = PLANOS[p]

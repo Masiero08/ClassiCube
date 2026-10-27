@@ -28,8 +28,19 @@ void Survival_DescribeRecipe(int i, cc_string* str);
 /* Crafts the given recipe if the player has enough of its inputs */
 cc_bool Survival_Craft(int i);
 
+/* Size of the data written by Survival_GetTools */
+#define SURVIVAL_TOOLS_SIZE 9
+
 /* Current health (0 to 20), for saving the world */
 int  Survival_GetHealth(void);
+/* Current food level (0 to 20), for saving the world */
+int  Survival_GetFood(void);
+/* Writes the tier and remaining uses of each tool (SURVIVAL_TOOLS_SIZE bytes) */
+void Survival_GetTools(cc_uint8* data);
+/* Food level read from a saved world, applied once it has finished loading */
+void Survival_LoadFood(int value);
+/* Tools read from a saved world (see Survival_GetTools), applied once it has finished loading */
+void Survival_LoadTools(const cc_uint8* data, int len);
 /* Writes how many of each block the player has, as BLOCK_COUNT big endian 16 bit values */
 void Survival_GetCounts(cc_uint8* data);
 /* Health read from a saved world, applied once it has finished loading */

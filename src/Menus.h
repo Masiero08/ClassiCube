@@ -50,6 +50,10 @@ void TexturePackScreen_Show(void);
 void FontListScreen_Show(void);
 void HotkeyListScreen_Show(void);
 void CraftingScreen_Show(void);
+struct StringsBuffer;
+/* Lista paginada simples para mods: loadEntries enche a lista, entryClick recebe o indice clicado */
+void ModListScreen_Show(const char* title, const char* actionText,
+						void (*loadEntries)(struct StringsBuffer* entries), void (*entryClick)(int index));
 
 void MiscOptionsScreen_Show(void);
 void ChatOptionsScreen_Show(void);

@@ -21,6 +21,8 @@
 #include "String_.h"
 #include "Utils.h"
 #include "Particle.h"
+#include "Menus.h"
+#include "Gui.h"
 #include "CriaturasDados.h"
 
 /* Criaturas do Bioma: criaturas capturaveis para o modo um jogador.
@@ -38,16 +40,19 @@ struct Especie {
 	struct Model model; /* precisa ser o primeiro campo (Models.Active -> Especie) */
 	struct ModelTex tex;
 	char texName[24];
-	int id;
+	int id, plano;
+	const cc_uint8* png;
+	int pngLen;
 };
-static struct Especie especies[ESPECIES_COUNT];
+/* as especies e, depois delas, os modelos dos casulos de captura */
+static struct Especie especies[ESPECIES_COUNT + CASULOS_COUNT];
 static struct ModelVertex plano_vertices[PLANOS_COUNT][MAX_PECAS * MODEL_BOX_VERTICES];
 static struct ModelPart   plano_partes[PLANOS_COUNT][MAX_PECAS];
 
 static void Criatura_MakeParts(void) {
 	struct Especie* sp = (struct Especie*)Models.Active;
-	const struct PlanoDef* plano = &planos_def[especies_def[sp->id].plano];
-	struct ModelPart* partes     = plano_partes[especies_def[sp->id].plano];
+	const struct PlanoDef* plano = &planos_def[sp->plano];
+	struct ModelPart* partes     = plano_partes[sp->plano];
 	struct BoxDesc desc;
 	int i;
 
@@ -65,19 +70,18 @@ static void Criatura_MakeParts(void) {
 
 /* Carrega a textura embutida quando ainda nao existe (ou depois de perder o contexto grafico) */
 static void Criatura_CheckTexture(struct Especie* sp) {
-	const struct EspecieDef* def = &especies_def[sp->id];
 	struct Stream mem;
 	cc_string name;
 	if (sp->tex.texID) return;
 
-	Stream_ReadonlyMemory(&mem, (void*)def->png, def->pngLen);
+	Stream_ReadonlyMemory(&mem, (void*)sp->png, sp->pngLen);
 	name = String_FromReadonly(sp->texName);
 	Game_UpdateTexture(&sp->tex.texID, &mem, &name, &sp->tex.skinType, NULL);
 }
 
 static void Criatura_Draw(struct Entity* e) {
 	struct Especie* sp = (struct Especie*)e->Model;
-	int idPlano = especies_def[sp->id].plano;
+	int idPlano = sp->plano;
 	const struct PlanoDef* plano = &planos_def[idPlano];
 	struct ModelPart* partes     = plano_partes[idPlano];
 	float pitch = -e->Pitch * MATH_DEG2RAD;
@@ -122,17 +126,17 @@ static void Criatura_Draw(struct Entity* e) {
 
 static float Criatura_GetNameY(struct Entity* e) {
 	struct Especie* sp = (struct Especie*)e->Model;
-	return planos_def[especies_def[sp->id].plano].nameY;
+	return planos_def[sp->plano].nameY;
 }
 
 static float Criatura_GetEyeY(struct Entity* e) {
 	struct Especie* sp = (struct Especie*)e->Model;
-	return planos_def[especies_def[sp->id].plano].eyeY;
+	return planos_def[sp->plano].eyeY;
 }
 
 static void Criatura_GetSize(struct Entity* e) {
 	struct Especie* sp = (struct Especie*)e->Model;
-	const cc_int8* bb  = planos_def[especies_def[sp->id].plano].bb;
+	const cc_int8* bb  = planos_def[sp->plano].bb;
 	float w = (bb[3] - bb[0]) / 16.0f, h = (bb[4] - bb[1]) / 16.0f;
 	/* colisao quadrada, como os outros bichos do jogo */
 	Vec3_Set(e->Size, w, h, w);
@@ -140,7 +144,7 @@ static void Criatura_GetSize(struct Entity* e) {
 
 static void Criatura_GetBounds(struct Entity* e) {
 	struct Especie* sp = (struct Especie*)e->Model;
-	const cc_int8* bb  = planos_def[especies_def[sp->id].plano].bb;
+	const cc_int8* bb  = planos_def[sp->plano].bb;
 	Vec3_Set(e->ModelAABB.Min, bb[0] / 16.0f, bb[1] / 16.0f, bb[2] / 16.0f);
 	Vec3_Set(e->ModelAABB.Max, bb[3] / 16.0f, bb[4] / 16.0f, bb[5] / 16.0f);
 }
@@ -149,15 +153,27 @@ static void Especies_Register(void) {
 	cc_string name;
 	int i, j, plano;
 
-	for (i = 0; i < ESPECIES_COUNT; i++)
+	for (i = 0; i < ESPECIES_COUNT + CASULOS_COUNT; i++)
 	{
 		struct Especie* sp = &especies[i];
-		plano  = especies_def[i].plano;
+		const char* nome;
 		sp->id = i;
+		if (i < ESPECIES_COUNT) {
+			nome       = especies_def[i].nome;
+			sp->plano  = especies_def[i].plano;
+			sp->png    = especies_def[i].png;
+			sp->pngLen = especies_def[i].pngLen;
+		} else {
+			nome       = casulos_def[i - ESPECIES_COUNT].nome;
+			sp->plano  = PLANO_CASULO_ITEM;
+			sp->png    = casulos_def[i - ESPECIES_COUNT].png;
+			sp->pngLen = casulos_def[i - ESPECIES_COUNT].pngLen;
+		}
+		plano = sp->plano;
 
 		/* textura "<nome>.png" (minusculo), pode ser trocada por um texture pack */
 		String_InitArray_NT(name, sp->texName);
-		String_AppendConst(&name, especies_def[i].nome);
+		String_AppendConst(&name, nome);
 		String_AppendConst(&name, ".png");
 		sp->texName[name.length] = '\0';
 		for (j = 0; j < name.length; j++) { Char_MakeLower(sp->texName[j]); } /* ex.: faiscol.png */
@@ -165,7 +181,7 @@ static void Especies_Register(void) {
 		sp->tex.skinType = SKIN_64x64;
 		Model_RegisterTexture(&sp->tex);
 
-		sp->model.name       = especies_def[i].nome;
+		sp->model.name       = nome;
 		sp->model.vertices   = plano_vertices[plano];
 		sp->model.defaultTex = &sp->tex;
 		sp->model.MakeParts  = Criatura_MakeParts;
@@ -249,6 +265,36 @@ static void Equipe_Carregar(void) {
 
 
 /*########################################################################################################################*
+*---------------------------------------------------Diario das Criaturas--------------------------------------------------*
+*#########################################################################################################################*/
+#define OPT_VISTAS     "criaturas-vistas"
+#define OPT_CAPTURADAS "criaturas-capturadas"
+static int diarioVistas, diarioCapturadas; /* um bit por especie */
+
+static void Diario_Carregar(void) {
+	int i;
+	diarioVistas     = Options_GetInt(OPT_VISTAS,     0, 0x7FFFFFFF, 0);
+	diarioCapturadas = Options_GetInt(OPT_CAPTURADAS, 0, 0x7FFFFFFF, 0);
+	/* quem ja esta na equipe conta como capturada */
+	for (i = 0; i < equipeCount; i++) diarioCapturadas |= 1 << equipe[i].especie;
+	diarioVistas |= diarioCapturadas;
+}
+
+static void Diario_Marcar(int especie, cc_bool capturada) {
+	int bit = 1 << especie;
+	if (!(diarioVistas & bit)) {
+		diarioVistas |= bit;
+		Options_SetInt(OPT_VISTAS, diarioVistas);
+		Chat_Add2("&bNova criatura no Diario: %c%c&b!", especies_def[especie].cor, especies_def[especie].nome);
+	}
+	if (capturada && !(diarioCapturadas & bit)) {
+		diarioCapturadas |= bit;
+		Options_SetInt(OPT_CAPTURADAS, diarioCapturadas);
+	}
+}
+
+
+/*########################################################################################################################*
 *--------------------------------------------------------Entidades--------------------------------------------------------*
 *#########################################################################################################################*/
 #define CRIATURAS_MAX     24
@@ -267,6 +313,7 @@ struct Criatura {
 	cc_bool nomeSujo;
 	cc_bool avisouTipo; /* ja avisou no chat que o tipo e forte/fraco contra esta */
 	cc_bool doMestre;   /* criatura de um Mestre de Bioma (nao foge, nao pode ser capturada) */
+	cc_bool capturando; /* dentro de um casulo que ainda esta balancando */
 };
 static struct Criatura criaturas[CRIATURAS_MAX];
 static RNGState rnd;
@@ -387,6 +434,7 @@ static PackedCol Criatura_GetCol(struct Entity* e) {
 }
 
 static void Criatura_RenderModel(struct Entity* e, float delta, float t) {
+	if (((struct Criatura*)e)->capturando) { e->ShouldRender = false; return; }
 	Vec3_Lerp(&e->Position, &e->prev.pos, &e->next.pos, t);
 	Entity_LerpAngles(e, t);
 	AnimatedComp_GetCurrent(e, t);
@@ -429,6 +477,7 @@ static struct Criatura* Criatura_Criar(int especie, int nivel, Vec3 pos, cc_bool
 	c->base.next.rotY = c->base.prev.rotY = c->base.next.yaw;
 	Criatura_Teleportar(c, pos);
 	Criatura_AtualizarNome(c);
+	Diario_Marcar(especie, !selvagem);
 
 	Entities.List[CRIATURA_ID_BASE + i] = &c->base;
 	return c;
@@ -512,6 +561,7 @@ static void Criatura_GanharXp(struct Criatura* c, int xp) {
 			Chat_Add(&msg);
 			Criatura_DefinirEspecie(c, def->evolui);
 			c->vida = VidaMax(c->especie, c->nivel);
+			Diario_Marcar(c->especie, true);
 		}
 	}
 	c->nomeSujo = true;
@@ -542,6 +592,7 @@ static void Criatura_Derrotada(struct Criatura* c) {
 static void Criatura_Dano(struct Criatura* c, int dano, Vec3 origem) {
 	Vec3 dir;
 	float len;
+	if (c->capturando) return;
 	c->vida -= max(1, dano);
 	c->hurtTimer = 0.4f;
 	c->nomeSujo  = true;
@@ -720,6 +771,10 @@ static void Criatura_Tick(struct Entity* e, float delta) {
 	c->pensarTimer -= delta;
 	c->curaTimer   -= delta;
 
+	if (c->capturando) {
+		/* esta dentro do casulo: nao anda nem pensa */
+		return;
+	}
 	if (c->selvagem) {
 		if (!c->doMestre && Dist2XZ(e->next.pos, jogador->Position) > DIST_SUMIR) { Criatura_Remover(c); return; }
 		Criatura_PensarSelvagem(c, jogador, delta);
@@ -1331,7 +1386,7 @@ static struct Criatura* CriaturaNaMira(float* tOut) {
 
 	for (i = 0; i < CRIATURAS_MAX; i++)
 	{
-		if (!criaturas[i].usada) continue;
+		if (!criaturas[i].usada || criaturas[i].capturando) continue;
 		if (!Intersection_RayIntersectsRotatedBox(eye, dir, &criaturas[i].base, &t0, &t1)) continue;
 		if (t0 < 0 || t0 > melhorT) continue;
 		melhorT = t0; melhor = &criaturas[i];
@@ -1340,18 +1395,122 @@ static struct Criatura* CriaturaNaMira(float* tOut) {
 	return melhor;
 }
 
-static void TentarCapturar(struct Criatura* c) {
-	const struct EspecieDef* def = &especies_def[c->especie];
-	cc_string msg; char msgBuffer[STRING_SIZE];
-	float chance;
-	int vidaMax = VidaMax(c->especie, c->nivel);
-	String_InitArray(msg, msgBuffer);
+/* --- Casulo jogado: voa ate a criatura, prende ela e balanca antes de decidir --- */
+#define LANCAMENTO_ID (CRIATURA_ID_BASE + CRIATURAS_MAX + 1) /* 225 */
+#define VOO_TEMPO     0.5f
+#define BALANCO_TEMPO 0.7f
 
+static struct Lancamento {
+	struct Entity base;
+	cc_bool usado, sucesso, pousou;
+	int tipo, alvo, balancos;
+	float t;
+	Vec3 de, para;
+} lanc;
+
+static void Lancamento_Efeito(Vec3 p, BlockID bloco) {
 	IVec3 coords;
-	Vec3 p;
-	int tipo;
+	p.y += 0.3f;
+	IVec3_Floor(&coords, &p);
+	Particles_BreakBlockEffect(coords, bloco, BLOCK_AIR);
+}
 
-	if (capturaTimer > 0) return;
+static void Lancamento_Remover(void) {
+	if (!lanc.usado) return;
+	if (lanc.alvo >= 0 && criaturas[lanc.alvo].usada) criaturas[lanc.alvo].capturando = false;
+	Entities_Remove(LANCAMENTO_ID);
+	lanc.usado = false;
+}
+
+static void Captura_Concluir(struct Criatura* c) {
+	const struct EspecieDef* def = &especies_def[c->especie];
+	Vec3 pos = lanc.para;
+
+	c->capturando = false;
+	if (lanc.sucesso && equipeCount < EQUIPE_MAX) {
+		equipe[equipeCount].especie = c->especie;
+		equipe[equipeCount].nivel   = c->nivel;
+		equipe[equipeCount].vida    = max(1, c->vida);
+		equipe[equipeCount].xp      = 0;
+		equipeCount++;
+		Diario_Marcar(c->especie, true);
+
+		Chat_Add2("&aPegou! Voce capturou %c%c&a!", def->cor, def->nome);
+		Lancamento_Efeito(pos, BLOCK_GOLD);
+		Criatura_Remover(c);
+		if (!Criatura_DoJogador()) SoltarMembro(equipeCount - 1);
+		else Equipe_Salvar();
+	} else {
+		Chat_Add2("%c%c &eescapou do casulo! Enfraqueca ele antes.", def->cor, def->nome);
+		Lancamento_Efeito(pos, casuloBloco[lanc.tipo]);
+		c->fugaTimer = 2.0f;
+	}
+	lanc.alvo = -1;
+	Lancamento_Remover();
+}
+
+static void Lancamento_Tick(struct Entity* e, float delta) {
+	struct Criatura* c = &criaturas[lanc.alvo];
+	float s, local;
+	int k;
+	Vec3 pos;
+
+	e->prev = e->next;
+	lanc.t += delta;
+	if (!c->usada) { lanc.alvo = -1; Lancamento_Remover(); return; }
+
+	if (lanc.t < VOO_TEMPO) {
+		/* voa em arco ate a criatura, girando */
+		s = lanc.t / VOO_TEMPO;
+		Vec3_Lerp(&pos, &lanc.de, &lanc.para, s);
+		pos.y += Math_SinF(s * MATH_PI) * 1.2f;
+		e->next.pos  = pos;
+		e->next.rotX = s * 720.0f;
+		return;
+	}
+	if (!lanc.pousou) {
+		/* abriu: a criatura entra no casulo */
+		lanc.pousou   = true;
+		c->capturando = true;
+		e->next.pos   = lanc.para;
+		e->prev.pos   = lanc.para;
+		e->next.rotX  = 0; e->prev.rotX = 0;
+		Lancamento_Efeito(lanc.para, casuloBloco[lanc.tipo]);
+	}
+
+	/* balanca uma vez para cada "quase"; quando escapa, para antes do terceiro */
+	local = lanc.t - VOO_TEMPO;
+	k     = (int)(local / BALANCO_TEMPO);
+	if (k < lanc.balancos) {
+		local -= k * BALANCO_TEMPO;
+		e->next.rotZ = local < 0.35f ? Math_SinF(local / 0.35f * 2 * MATH_PI) * 25.0f : 0.0f;
+		return;
+	}
+	Captura_Concluir(c);
+}
+
+static void Lancamento_RenderModel(struct Entity* e, float delta, float t) {
+	Vec3_Lerp(&e->Position, &e->prev.pos, &e->next.pos, t);
+	Entity_LerpAngles(e, t);
+	e->ShouldRender = Model_ShouldRender(e);
+	if (e->ShouldRender) Model_Render(e->Model, e);
+}
+
+static cc_bool Lancamento_ShouldRenderName(struct Entity* e) { return false; }
+
+static const struct EntityVTABLE lancamento_VTABLE = {
+	Lancamento_Tick,        Criatura_Despawn,            Criatura_SetLocation, Treinador_GetCol,
+	Lancamento_RenderModel, Lancamento_ShouldRenderName
+};
+
+static void TentarCapturar(struct Criatura* c) {
+	struct Entity* jogador = &Entities.CurPlayer->Base;
+	struct Entity* e = &lanc.base;
+	float chance;
+	int vidaMax = VidaMax(c->especie, c->nivel), tipo;
+	cc_string name;
+
+	if (capturaTimer > 0 || lanc.usado) return;
 	capturaTimer = 1.0f;
 
 	if (c->doMestre) {
@@ -1370,29 +1529,96 @@ static void TentarCapturar(struct Criatura* c) {
 	tipo   = Casulo_Escolher(c);
 	chance = 1.0f - (float)Math_Exp2(Math_Log2(1.0f - chance) * Casulo_Mult(tipo, c));
 	if (tipo != CASULO_COMUM) { casulos[tipo]--; Casulos_Salvar(); }
-
-	p = c->base.next.pos; p.y += 0.4f;
-	IVec3_Floor(&coords, &p);
-	Particles_BreakBlockEffect(coords, casuloBloco[tipo], BLOCK_AIR);
 	Chat_Add2("&7Voce jogou um Casulo %c%c&7...", casuloCores[tipo], casuloNomes[tipo]);
 
-	if (Random_Float(&rnd) < chance) {
-		equipe[equipeCount].especie = c->especie;
-		equipe[equipeCount].nivel   = c->nivel;
-		equipe[equipeCount].vida    = max(1, c->vida);
-		equipe[equipeCount].xp      = 0;
-		equipeCount++;
+	Mem_Set(&lanc, 0, sizeof(lanc));
+	Entity_Init(e);
+	e->VTABLE    = &lancamento_VTABLE;
+	lanc.usado   = true;
+	lanc.tipo    = tipo;
+	lanc.alvo    = Criatura_Index(c);
+	lanc.sucesso = Random_Float(&rnd) < chance;
+	lanc.balancos = lanc.sucesso ? 3 : Random_Next(&rnd, 3);
 
-		String_Format2(&msg, "&aVoce capturou %c%c&a!", def->cor, def->nome);
-		Chat_Add(&msg);
-		Criatura_Remover(c);
-		if (!Criatura_DoJogador()) SoltarMembro(equipeCount - 1);
-		else Equipe_Salvar();
-	} else {
-		String_Format2(&msg, "%c%c &eescapou do casulo! Enfraqueca ele antes.", def->cor, def->nome);
-		Chat_Add(&msg);
-		c->fugaTimer = 2.0f;
+	lanc.de   = Entity_GetEyePosition(jogador);
+	lanc.de.y -= 0.3f;
+	lanc.para = c->base.next.pos;
+	e->prev.pos = e->next.pos = e->Position = lanc.de;
+	e->next.yaw = e->prev.yaw = jogador->Yaw;
+
+	name = String_FromReadonly(casulos_def[tipo].nome);
+	e->Model = Model_Get(&name);
+	Vec3_Set(e->ModelScale, 1.3f, 1.3f, 1.3f);
+	Entity_UpdateModelBounds(e);
+	Entities.List[LANCAMENTO_ID] = e;
+}
+
+/* Diario: tela com a lista de especies */
+static const char* const tipoNomes[TIPO_COUNT] = { "Fogo", "Agua", "Planta", "Eletrico", "Vento", "Pedra", "Inseto" };
+static const char* const habitatNomes[]        = { "na grama", "na areia", "na agua", "em lugares altos", "nas pedras" };
+
+static void Diario_Contar(int* vistas, int* capturadas) {
+	int i;
+	*vistas = 0; *capturadas = 0;
+	for (i = 0; i < ESPECIES_COUNT; i++)
+	{
+		if (diarioVistas     & (1 << i)) (*vistas)++;
+		if (diarioCapturadas & (1 << i)) (*capturadas)++;
 	}
+}
+
+static void Diario_CarregarLista(struct StringsBuffer* entries) {
+	cc_string str; char strBuffer[STRING_SIZE];
+	int i, n;
+	for (i = 0; i < ESPECIES_COUNT; i++)
+	{
+		String_InitArray(str, strBuffer);
+		n = i + 1;
+		if (n < 10) String_Append(&str, '0');
+		String_AppendInt(&str, n);
+		String_Append(&str, ' ');
+
+		if (!(diarioVistas & (1 << i))) {
+			String_AppendConst(&str, "&8???");
+		} else {
+			String_AppendConst(&str, especies_def[i].cor);
+			String_AppendConst(&str, especies_def[i].nome);
+			String_AppendConst(&str, (diarioCapturadas & (1 << i)) ? " &a(capturada)" : " &7(vista)");
+		}
+		StringsBuffer_Add(entries, &str);
+	}
+}
+
+static void Diario_MostrarEspecie(int i) {
+	const struct EspecieDef* def = &especies_def[i];
+	struct Screen* tela = Gui_GetInputGrab();
+	int n = i + 1, vel = (int)def->vel, vida = def->vida, dano = def->dano;
+	if (i < 0 || i >= ESPECIES_COUNT) return;
+	if (tela) Gui_Remove(tela);
+
+	if (!(diarioVistas & (1 << i))) {
+		Chat_Add1("&8#%i ???: &7ainda nao vista. Explore outros lugares!", &n);
+		return;
+	}
+	Chat_Add4("&f#%i %c%c &7- tipo %c", &n, def->cor, def->nome, tipoNomes[def->tipo]);
+	Chat_Add1("&7%c", def->desc);
+	Chat_Add4("&7Vive %c. Vida %i, ataque %i, velocidade %i.", habitatNomes[def->habitat], &vida, &dano, &vel);
+	if (def->evolui >= 0) {
+		Chat_Add3("&7Evolui para %c%c &7no nivel %i.", especies_def[def->evolui].cor, especies_def[def->evolui].nome, &def->nivelEvolui);
+	}
+	Chat_AddRaw((diarioCapturadas & (1 << i)) ? "&aVoce ja capturou uma!" : "&eAinda nao capturada.");
+}
+
+static char diarioTitulo[64];
+static void Diario_Abrir(void) {
+	cc_string str;
+	int vistas, capturadas, total = ESPECIES_COUNT;
+	Diario_Contar(&vistas, &capturadas);
+	String_InitArray_NT(str, diarioTitulo);
+	String_Format3(&str, "Diario: %i vistas, %i capturadas de %i", &vistas, &capturadas, &total);
+	diarioTitulo[str.length] = '\0';
+	ModListScreen_Show(diarioTitulo, "Fechar", Diario_CarregarLista, Diario_MostrarEspecie);
+	Chat_AddRaw("&7Toque numa criatura do Diario para ver os detalhes.");
 }
 
 cc_bool Criaturas_HandleClick(cc_bool place) {
@@ -1697,6 +1923,20 @@ static void MestreCommand_Execute(const cc_string* args, int argsCount) {
 	Chat_AddRaw("&7Eles aparecem pelo mundo. &f/client mestre chamar &7chama o proximo.");
 }
 
+static void DiarioCommand_Execute(const cc_string* args, int argsCount) {
+	if (!criaturasLigadas) { Chat_AddRaw("&eO mod de criaturas esta desligado (menu Mods)."); return; }
+	Diario_Abrir();
+}
+
+static struct ChatCommand DiarioCommand = {
+	"Diario", DiarioCommand_Execute,
+	COMMAND_FLAG_SINGLEPLAYER_ONLY,
+	{
+		"&a/client diario",
+		"&eAbre o Diario das Criaturas: todas as especies que voce ja viu e capturou.",
+	}
+};
+
 static struct ChatCommand MestreCommand = {
 	"Mestre", MestreCommand_Execute,
 	COMMAND_FLAG_SINGLEPLAYER_ONLY,
@@ -1714,20 +1954,23 @@ static void Criaturas_Init(void) {
 	Especies_Register();
 	Equipe_Carregar();
 	Casulos_Carregar();
+	Diario_Carregar();
 	Mestres_RegistrarTexturas();
 	Commands_Register(&EquipeCommand);
 	Commands_Register(&CasuloCommand);
 	Commands_Register(&MestreCommand);
+	Commands_Register(&DiarioCommand);
 	Commands_Register(&InicialCommand);
 	Commands_Register(&CriaturaCommand);
 	ScheduledTask_Add(GAME_DEF_TICKS, Criaturas_TickGlobal);
 }
 
-static void Criaturas_Reset(void) { Mestre_Remover(); RemoverTodas(); }
+static void Criaturas_Reset(void) { Lancamento_Remover(); Mestre_Remover(); RemoverTodas(); }
 
 static void Criaturas_OnNewMap(void) {
 	struct Criatura* minha = Criatura_DoJogador();
 	if (minha) Membro_SincronizarDe(minha);
+	Lancamento_Remover();
 	Mestre_Remover();
 	RemoverTodas();
 	Hud_Limpar();
@@ -1741,6 +1984,7 @@ static void Criaturas_OnNewMapLoaded(void) {
 static void Criaturas_Free(void) {
 	struct Criatura* minha = Criatura_DoJogador();
 	if (minha) { Membro_SincronizarDe(minha); Equipe_Salvar(); }
+	Lancamento_Remover();
 	Mestre_Remover();
 	RemoverTodas();
 }

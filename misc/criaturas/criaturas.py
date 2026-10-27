@@ -223,8 +223,15 @@ PLANOS["toupeira2"] = [
     ("perna", 1, 0, 2, 4, 2, 5, (2, 2, 3), PERNA_A),
     ("cauda", -1, 3, 5, 1, 4, 8, (0, 3, 5), CAUDA),
 ]
+# casulo de captura (parece uma bolota: corpo, tampa e cabinho; nao e uma bola)
+PLANOS["casulo_item"] = [
+    ("corpo", -2, 0, -2, 2, 5, 2, (0, 0, 0), FIXO),
+    ("ponta", -1, -1, -1, 1, 0, 1, (0, 0, 0), FIXO),
+    ("tampa", -3, 5, -3, 3, 7, 3, (0, 0, 0), FIXO),
+    ("cabo", 0, 7, 0, 1, 9, 1, (0, 0, 0), FIXO),
+]
 ORDEM_PLANOS = ["raposa", "porquinho", "esquilo", "ave", "bolha", "raposa2", "raposa3", "porquinho2", "porquinho3", "esquilo2", "ave2", "bolha2", "pedra2",
-                "lagarta", "casulo", "borboleta", "caranguejo", "caranguejo2", "toupeira", "toupeira2"]
+                "lagarta", "casulo", "borboleta", "caranguejo", "caranguejo2", "toupeira", "toupeira2", "casulo_item"]
 
 # ---------------------------------------------------------------- tipos
 TIPOS = ["FOGO", "AGUA", "PLANTA", "ELETRICO", "VENTO", "PEDRA", "INSETO"]
@@ -407,6 +414,89 @@ def pintar_mestre(m):
                         c = sap if j >= fh - 2 or face == "baixo" else calca
                     if c is not None:
                         img.putpixel((fx + i, fy + j), ruido(c))
+    return img
+
+
+# descricoes do Diario das Criaturas (sem acentos: a fonte do jogo e cp437)
+DESCRICOES = {
+    "faiscol": "Raposinha que acende a ponta do rabo quando fica feliz.",
+    "labareda": "A juba esquenta tanto que derrete a neve em volta.",
+    "fornalobo": "Dizem que o coracao dele e uma fornalha que nunca apaga.",
+    "gotinha": "Uma gota viva que adora pular em pocas de chuva.",
+    "marolha": "Faz pequenas ondas com os bracinhos para nadar rapido.",
+    "tsunamor": "Quando fica bravo, levanta ondas do tamanho de casas.",
+    "brotinho": "Dorme ao sol para o broto da cabeca crescer.",
+    "musgao": "O musgo das costas guarda agua para os dias secos.",
+    "florestauro": "Carrega uma arvore inteira nas costas, com flores e tudo.",
+    "choquilo": "Guarda eletricidade no rabo felpudo para a noite.",
+    "trovesquilo": "Pula de galho em galho soltando faiscas.",
+    "penape": "Canta toda manha no alto das montanhas.",
+    "ventania": "Bate as asas e levanta um vento que derruba folhas.",
+    "seixo": "Parece uma pedra comum ate abrir os olhos.",
+    "pedregulho": "Cresce musgo nas costas de tanto ficar parado.",
+    "larvito": "Come folhas o dia inteiro para virar casulo.",
+    "casulim": "Quase nao se mexe: esta se preparando para voar.",
+    "asalume": "As asas brilham com o sol e confundem quem olha.",
+    "pincudo": "Anda de lado na praia e belisca quem chega perto.",
+    "tenazor": "As pincas gigantes quebram ate pedra.",
+    "toupito": "Cava tuneis sem parar e quase nunca ve o sol.",
+    "cavucao": "O focinho de broca atravessa rocha como se fosse areia.",
+}
+for _e in ESPECIES:
+    _e["desc"] = DESCRICOES[_e["id"]]
+
+
+# ---------------------------------------------------------------- casulos de captura
+# mesma ordem do enum do Criaturas.c (comum, reforcado, mare, mestre)
+CASULOS = [
+    dict(id="comum", corpo=(205, 160, 105), tampa=(120, 75, 40), detalhe=(220, 60, 50), marca="faixa"),
+    dict(id="reforcado", corpo=(190, 195, 205), tampa=(90, 95, 110), detalhe=(250, 250, 255), marca="rebites"),
+    dict(id="mare", corpo=(110, 200, 235), tampa=(30, 120, 170), detalhe=(245, 250, 255), marca="ondas"),
+    dict(id="mestre", corpo=(250, 205, 60), tampa=(130, 60, 170), detalhe=(255, 255, 255), marca="estrela"),
+]
+
+
+def pintar_casulo(cs):
+    rnd = random.Random("casulo" + cs["id"])
+    img = Image.new("RGBA", (TEX_W, TEX_H), (0, 0, 0, 0))
+    plano = PLANOS["casulo_item"]
+    corpo, tampa, det = cs["corpo"], cs["tampa"], cs["detalhe"]
+    for idx, caixa in enumerate(plano):
+        nome = caixa[0]
+        sx, sy, sz = tamanho(caixa)
+        u, v = UVS["casulo_item"][idx]
+        for face, (fx, fy, fw, fh) in regioes(u, v, sx, sy, sz).items():
+            for j in range(fh):
+                for i in range(fw):
+                    if nome == "tampa":
+                        # tampa com textura de casca (xadrez)
+                        c = clar(tampa, 1.15 if (i + j) % 2 else 0.9)
+                        if face != "topo" and face != "baixo" and j == fh - 1:
+                            c = clar(tampa, 0.7)
+                    elif nome == "cabo":
+                        c = clar(tampa, 0.75)
+                    elif nome == "ponta":
+                        c = clar(corpo, 0.8)
+                    else:
+                        c = clar(corpo, 1.08 - 0.25 * j / max(1, fh - 1)) if face not in ("topo", "baixo") else clar(corpo, 0.9)
+                        if face in ("frente", "tras", "esq", "dir"):
+                            m = cs["marca"]
+                            if m == "faixa" and j == 2:
+                                c = det
+                            elif m == "rebites" and j in (1, 3) and i in (0, fw - 1):
+                                c = det
+                            elif m == "rebites" and j == 2:
+                                c = clar(tampa, 1.1)
+                            elif m == "ondas" and j == 2 + (i % 2):
+                                c = det
+                            elif m == "estrela" and face in ("frente", "tras") and ((j == 2 and 0 < i < fw - 1) or (i in (1, 2) and j in (1, 3))):
+                                c = det
+                            elif m == "estrela" and face in ("esq", "dir") and j == 2:
+                                c = clar(tampa, 1.2)
+                            if face == "frente" and j == 0 and i == 1:
+                                c = (255, 255, 255)  # brilho
+                    k = rnd.randint(-5, 5)
+                    img.putpixel((fx + i, fy + j), tuple(max(0, min(255, x + k)) for x in c) + (255,))
     return img
 
 
@@ -819,7 +909,7 @@ def gerar_c(pngs):
     L.append("struct PlanoDef { const struct PecaDef* pecas; int count; float nameY, eyeY; cc_int8 bb[6]; };")
     L.append("struct EspecieDef { const char* nome; const char* cor; cc_uint8 tipo, plano; float escala;")
     L.append("\tcc_uint8 vida, dano; float vel; int evolui, nivelEvolui; cc_uint8 habitat, inicial;")
-    L.append("\tconst cc_uint8* png; int pngLen; };")
+    L.append("\tconst cc_uint8* png; int pngLen; const char* desc; };")
     L.append("")
     for p in ORDEM_PLANOS:
         L.append("static const struct PecaDef pecas_%s[] = {" % p)
@@ -854,9 +944,21 @@ def gerar_c(pngs):
     L.append("static const struct EspecieDef especies_def[ESPECIES_COUNT] = {")
     for e in ESPECIES:
         evo = ids.index(e["evolui"]) if e["evolui"] else -1
-        L.append('\t{ "%s", "%s", TIPO_%s, %d, %.2ff, %d, %d, %.1ff, %d, %d, HABITAT_%s, %d, png_%s, sizeof(png_%s) },' % (
+        L.append('\t{ "%s", "%s", TIPO_%s, %d, %.2ff, %d, %d, %.1ff, %d, %d, HABITAT_%s, %d, png_%s, sizeof(png_%s), "%s" },' % (
             e["nome"], e["cor"], e["tipo"], ORDEM_PLANOS.index(e["plano"]), e["escala"], e["vida"], e["dano"],
-            e["vel"], evo, e["nivel"], e["habitat"], e["inicial"], e["id"], e["id"]))
+            e["vel"], evo, e["nivel"], e["habitat"], e["inicial"], e["id"], e["id"], e["desc"]))
+    L.append("};")
+    L.append("")
+    for cs in CASULOS:
+        data = pngs["casulo_" + cs["id"]]
+        L.append("static const cc_uint8 png_casulo_%s[%d] = {" % (cs["id"], len(data)))
+        for i in range(0, len(data), 20):
+            L.append("\t" + ",".join("%d" % b for b in data[i:i + 20]) + ",")
+        L.append("};")
+    L.append("#define CASULOS_COUNT %d" % len(CASULOS))
+    L.append("static const struct { const char* nome; const cc_uint8* png; int pngLen; } casulos_def[CASULOS_COUNT] = {")
+    for cs in CASULOS:
+        L.append('\t{ "casulo_%s", png_casulo_%s, sizeof(png_casulo_%s) },' % (cs["id"], cs["id"], cs["id"]))
     L.append("};")
     L.append("")
     L.append("struct MestreDef { const char* nome; const char* titulo; const char* insignia; const char* cor; cc_uint8 tipo, count;")
@@ -888,6 +990,12 @@ def main():
         img.save(path, optimize=True)
         with open(path, "rb") as f:
             pngs[e["id"]] = f.read()
+    for cs in CASULOS:
+        img = pintar_casulo(cs)
+        path = os.path.join(TEX_DIR, "casulo_" + cs["id"] + ".png")
+        img.save(path, optimize=True)
+        with open(path, "rb") as f:
+            pngs["casulo_" + cs["id"]] = f.read()
     for m in MESTRES:
         img = pintar_mestre(m)
         path = os.path.join(TEX_DIR, "mestre_" + m["id"] + ".png")

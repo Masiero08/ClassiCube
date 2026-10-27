@@ -20,6 +20,7 @@
 #include "Entity.h"
 #include "Survival.h"
 #include "Criaturas.h"
+#include "DayNight.h"
 #include "Screens.h"
 #include "Block.h"
 #include "Menus.h"
@@ -607,6 +608,7 @@ static cc_bool BindTriggered_DeleteBlock(int key, struct InputDevice* device) {
 	
 	MouseStatePress(MOUSE_LEFT);
 	if (Criaturas_HandleClick(false)) { HeldBlockRenderer_ClickAnim(true); return true; }
+	if (DayNight_HandleAttack()) { HeldBlockRenderer_ClickAnim(true); return true; }
 	InputHandler_DeleteBlock();
 	return true;
 }

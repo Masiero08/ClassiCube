@@ -20,6 +20,12 @@ cc_bool Survival_CanPlace(BlockID block);
 void Survival_OnBlockPlaced(BlockID block);
 /* Whether survival mode is currently being played (enabled and in singleplayer) */
 cc_bool Survival_IsActive(void);
+/* Hurts the player (2 = one heart), if survival mode is being played */
+void Survival_Damage(int amount);
+/* Damage the player's next hit does to a monster (and wears out their sword) */
+int  Survival_AttackDamage(void);
+/* Gives the player some of the given block, e.g. dropped by a monster */
+void Survival_AddBlocks(BlockID block, int count);
 
 /* Number of crafting recipes */
 int  Survival_RecipesCount(void);
@@ -29,7 +35,7 @@ void Survival_DescribeRecipe(int i, cc_string* str);
 cc_bool Survival_Craft(int i);
 
 /* Size of the data written by Survival_GetTools */
-#define SURVIVAL_TOOLS_SIZE 9
+#define SURVIVAL_TOOLS_SIZE 12
 
 /* Current health (0 to 20), for saving the world */
 int  Survival_GetHealth(void);

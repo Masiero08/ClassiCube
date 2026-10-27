@@ -18,6 +18,7 @@
 #include "Utils.h"
 #include "Audio.h"
 #include "Survival.h"
+#include "DayNight.h"
 
 #ifdef CC_BUILD_FILESYSTEM
 static struct LocationUpdate* spawn_point;
@@ -691,6 +692,7 @@ static void Cw_Callback_2(struct NbtTag* tag) {
 	if (IsTag(tag->parent, "Survival")) {
 		if (IsTag(tag, "Health")) { Survival_LoadHealth(NbtTag_U8(tag)); return; }
 		if (IsTag(tag, "Food"))   { Survival_LoadFood(NbtTag_U8(tag));   return; }
+		if (IsTag(tag, "Time"))   { DayNight_SetTime(NbtTag_I32(tag));  return; }
 		if (IsTag(tag, "Tools")) {
 			arr = NbtTag_U8_Array(tag, SURVIVAL_TOOLS_SIZE);
 			if (arr) Survival_LoadTools(arr, tag->dataSize);
@@ -1643,6 +1645,7 @@ cc_result Cw_Save(struct Stream* stream) {
 		cur = Nbt_WriteDict(cur,  "Survival");
 		cur = Nbt_WriteUInt8(cur, "Health", Survival_GetHealth());
 		cur = Nbt_WriteUInt8(cur, "Food",   Survival_GetFood());
+		cur = Nbt_WriteInt32(cur, "Time",   DayNight_GetTime());
 		cur = Nbt_WriteArray(cur, "Tools",  SURVIVAL_TOOLS_SIZE);
 		Survival_GetTools(cur); cur += SURVIVAL_TOOLS_SIZE;
 		cur = Nbt_WriteArray(cur, "Counts", sizeof(counts));

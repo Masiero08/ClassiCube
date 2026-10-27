@@ -127,12 +127,17 @@ static void ResetSky(void) {
 *---------------------------------------------------------Monsters--------------------------------------------------------*
 *#########################################################################################################################*/
 #define MONSTERS_MAX     8
+#define ANIMALS_MAX      6
+#define SLOTS_MAX        (MONSTERS_MAX + ANIMALS_MAX)
 #define MONSTER_ID_BASE  240 /* 200-224 are used by Criaturas, 225-239 by Minerios, 248 by the Ender Dragon */
+#define ANIMAL_ID_BASE   249 /* farm animals use 249-254 */
 #define DESPAWN_DIST     48.0f
 #define CHASE_DIST       16.0f
 #define ATTACK_REACH     4.0f
 
-enum MonsterType { MONSTER_ZOMBIE, MONSTER_SKELETON, MONSTER_SPIDER, MONSTER_CREEPER, MONSTER_TYPES };
+enum MonsterType { MONSTER_ZOMBIE, MONSTER_SKELETON, MONSTER_SPIDER, MONSTER_CREEPER, HOSTILE_TYPES,
+	MONSTER_PIG = HOSTILE_TYPES, MONSTER_SHEEP, MONSTER_CHICKEN, MONSTER_TYPES };
+#define IsAnimal(type) ((type) >= HOSTILE_TYPES)
 
 struct MonsterDef {
 	const char* model;
@@ -147,6 +152,10 @@ static const struct MonsterDef monster_defs[MONSTER_TYPES] = {
 	{ "skeleton", 10, 2, 2.6f, true,  BLOCK_COAL_ORE,     1 },
 	{ "spider",    8, 2, 3.4f, false, BLOCK_ROPE,         2 },
 	{ "creeper",  10, 0, 2.0f, false, BLOCK_TNT,          1 },
+	/* Farm animals wander around in daylight and run away when hit */
+	{ "pig",      10, 0, 2.0f, false, LITEM_RAW_MEAT,     2 },
+	{ "sheep",     8, 0, 2.0f, false, BLOCK_WHITE,        2 },
+	{ "chicken",   4, 0, 2.4f, false, LITEM_RAW_MEAT,     1 },
 };
 
 struct Monster {
@@ -156,8 +165,11 @@ struct Monster {
 	float attackTimer, hurtTimer, thinkTimer, fuseTimer, burnTimer;
 	Vec3 target;
 };
-static struct Monster monsters[MONSTERS_MAX];
-static float spawnTimer;
+static struct Monster monsters[SLOTS_MAX];
+static float spawnTimer, animalTimer;
+
+/* Monsters use the first MONSTERS_MAX slots, animals the rest */
+static int SlotEntityID(int i) { return i < MONSTERS_MAX ? MONSTER_ID_BASE + i : ANIMAL_ID_BASE + (i - MONSTERS_MAX); }
 
 static float Dist2XZ(Vec3 a, Vec3 b) {
 	float dx = a.x - b.x, dz = a.z - b.z;
@@ -192,13 +204,13 @@ static cc_bool FindGround(int x, int z, int yTop, int yBottom, float* yOut) {
 
 static void Monster_Remove(struct Monster* m) {
 	if (!m->used) return;
-	Entities_Remove(MONSTER_ID_BASE + (int)(m - monsters));
+	Entities_Remove(SlotEntityID((int)(m - monsters)));
 	m->used = false;
 }
 
 static void RemoveAll(void) {
 	int i;
-	for (i = 0; i < MONSTERS_MAX; i++) Monster_Remove(&monsters[i]);
+	for (i = 0; i < SLOTS_MAX; i++) Monster_Remove(&monsters[i]);
 }
 
 static void Monster_Walk(struct Monster* m, Vec3 target, float speed, float delta) {
@@ -267,6 +279,28 @@ static void Monster_Tick(struct Entity* e, float delta) {
 	d2  = Dist2XZ(pos, player->Position);
 
 	if (d2 > DESPAWN_DIST * DESPAWN_DIST) { Monster_Remove(m); return; }
+
+	if (IsAnimal(m->type)) {
+		/* Runs away from the player for a while after being hit, otherwise wanders */
+		if (m->fuseTimer > 0) {
+			m->fuseTimer -= delta;
+			m->target.x = pos.x + (pos.x - player->Position.x) * 2.0f;
+			m->target.z = pos.z + (pos.z - player->Position.z) * 2.0f;
+			Monster_Walk(m, m->target, def->speed * 1.6f, delta);
+		} else {
+			if (m->thinkTimer <= 0) {
+				m->thinkTimer = 3.0f + Random_Float(&daynight_rnd) * 5.0f;
+				ang = Random_Float(&daynight_rnd) * 2 * MATH_PI;
+				m->target.x = pos.x + Math_CosF(ang) * 4.0f;
+				m->target.z = pos.z + Math_SinF(ang) * 4.0f;
+				/* stands still now and then, grazing */
+				if (Random_Next(&daynight_rnd, 3) == 0) m->target = pos;
+			}
+			Monster_Walk(m, m->target, def->speed * 0.4f, delta);
+		}
+		AnimatedComp_Update(e, e->prev.pos, e->next.pos, delta);
+		return;
+	}
 
 	/* Daylight burns zombies and skeletons, others wander off */
 	if (!DayNight_IsNight() && dayNightMode == DAYNIGHT_NORMAL) {
@@ -353,11 +387,14 @@ static void Monster_Create(int type, Vec3 pos) {
 	struct Monster* m;
 	int i;
 
-	for (i = 0; i < MONSTERS_MAX; i++)
+	int first = IsAnimal(type) ? MONSTERS_MAX : 0;
+	int last  = IsAnimal(type) ? SLOTS_MAX    : MONSTERS_MAX;
+
+	for (i = first; i < last; i++)
 	{
 		if (!monsters[i].used) break;
 	}
-	if (i == MONSTERS_MAX) return;
+	if (i == last) return;
 	m = &monsters[i];
 
 	Mem_Set(m, 0, sizeof(struct Monster));
@@ -374,12 +411,18 @@ static void Monster_Create(int type, Vec3 pos) {
 	m->base.next.rotY = m->base.prev.rotY = m->base.next.yaw;
 	m->base.prev.pos  = pos; m->base.next.pos = pos; m->base.Position = pos;
 
-	Entities.List[MONSTER_ID_BASE + i] = &m->base;
+	Entities.List[SlotEntityID(i)] = &m->base;
 }
 
 static int CountMonsters(void) {
 	int i, count = 0;
 	for (i = 0; i < MONSTERS_MAX; i++) count += monsters[i].used;
+	return count;
+}
+
+static int CountAnimals(void) {
+	int i, count = 0;
+	for (i = MONSTERS_MAX; i < SLOTS_MAX; i++) count += monsters[i].used;
 	return count;
 }
 
@@ -399,7 +442,32 @@ static void TrySpawn(void) {
 
 	pos.x = x + 0.5f; pos.y = y; pos.z = z + 0.5f;
 	/* Only zombies and skeletons live in the Nether */
-	Monster_Create(dayNightMode == DAYNIGHT_NETHER ? Random_Next(&daynight_rnd, 2) : Random_Next(&daynight_rnd, MONSTER_TYPES), pos);
+	Monster_Create(dayNightMode == DAYNIGHT_NETHER ? Random_Next(&daynight_rnd, 2) : Random_Next(&daynight_rnd, HOSTILE_TYPES), pos);
+}
+
+/* Tries to spawn a farm animal on grass in daylight, 14 to 30 blocks away from the player */
+static void TrySpawnAnimal(void) {
+	struct Entity* player = &Entities.CurPlayer->Base;
+	float ang  = Random_Float(&daynight_rnd) * 2 * MATH_PI;
+	float dist = 14.0f + Random_Float(&daynight_rnd) * 16.0f;
+	int x = Math_Floor(player->Position.x + Math_CosF(ang) * dist);
+	int z = Math_Floor(player->Position.z + Math_SinF(ang) * dist);
+	int type, i, count;
+	Vec3 pos;
+	float y;
+
+	if (!FindGround(x, z, World.MaxY - 2, 1, &y)) return;
+	if (World_GetBlock(x, Math_Floor(y) - 1, z) != BLOCK_GRASS) return;
+	if (!Lighting.IsLit(x, Math_Floor(y), z)) return;
+
+	/* Animals come in small groups of the same kind */
+	type  = HOSTILE_TYPES + Random_Next(&daynight_rnd, MONSTER_TYPES - HOSTILE_TYPES);
+	count = 1 + Random_Next(&daynight_rnd, 3);
+	for (i = 0; i < count; i++)
+	{
+		pos.x = x + 0.5f + (i & 1); pos.y = y; pos.z = z + 0.5f + (i >> 1);
+		Monster_Create(type, pos);
+	}
 }
 
 cc_bool DayNight_HandleAttack(void) {
@@ -414,8 +482,8 @@ cc_bool DayNight_HandleAttack(void) {
 	eye    = Entity_GetEyePosition(player);
 	dir    = Vec3_GetDirVector(player->Yaw * MATH_DEG2RAD, player->Pitch * MATH_DEG2RAD + Camera.TiltPitch);
 
-	/* Finds the closest monster the player is looking at */
-	for (i = 0; i < MONSTERS_MAX; i++)
+	/* Finds the closest monster (or animal) the player is looking at */
+	for (i = 0; i < SLOTS_MAX; i++)
 	{
 		if (!monsters[i].used) continue;
 		center    = monsters[i].base.Position;
@@ -434,11 +502,12 @@ cc_bool DayNight_HandleAttack(void) {
 	damage = Survival_AttackDamage();
 	best->health   -= damage;
 	best->hurtTimer = 0.3f;
-	best->fuseTimer = 0;
+	best->fuseTimer = IsAnimal(best->type) ? 4.0f : 0; /* animals run away for a while */
 
 	if (best->health <= 0) {
 		const struct MonsterDef* def = &monster_defs[best->type];
 		Survival_AddBlocks(def->drop, def->dropCount);
+		if (best->type == MONSTER_SHEEP) Survival_AddBlocks(LITEM_RAW_MEAT, 1);
 		/* Skeletons in the Nether sometimes carry ender pearls (needed for the End) */
 		if (dayNightMode == DAYNIGHT_NETHER && best->type == MONSTER_SKELETON && Random_Next(&daynight_rnd, 2) == 0)
 			Survival_AddBlocks(LITEM_ENDER_PEARL, 1);
@@ -477,6 +546,14 @@ static cc_bool DayNight_Tick(struct ScheduledTask2* task) {
 
 	skyTimer += delta;
 	if (skyTimer >= 0.5f) { skyTimer = 0; UpdateSky(); }
+
+	if (!DayNight_IsNight() && dayNightMode == DAYNIGHT_NORMAL) {
+		animalTimer += delta;
+		if (animalTimer >= 6.0f) {
+			animalTimer = 0;
+			if (CountAnimals() < ANIMALS_MAX - 2) TrySpawnAnimal();
+		}
+	}
 
 	if (DayNight_IsNight()) {
 		spawnTimer += delta;

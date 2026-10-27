@@ -623,6 +623,7 @@ static cc_bool BindTriggered_PlaceBlock(int key, struct InputDevice* device) {
 	MouseStatePress(MOUSE_RIGHT);
 	if (Criaturas_HandleClick(true)) { HeldBlockRenderer_ClickAnim(false); return true; }
 	if (Minerios_HandleClick(true))  { HeldBlockRenderer_ClickAnim(false); return true; }
+	if (Survival_HandleUse())        { HeldBlockRenderer_ClickAnim(false); return true; }
 	InputHandler_PlaceBlock();
 	return true;
 }

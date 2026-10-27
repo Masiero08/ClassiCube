@@ -55,6 +55,10 @@ static const struct LateBlockDef late_blockDefs[LBLOCK_END - LBLOCK_DIAMOND_ORE]
 { "Portal do Fim",        T(END_PORTAL),      T(END_PORTAL),      T(END_PORTAL),      DRAW_OPAQUE,      COLLIDE_NONE,  SOUND_GLASS, FANCY_LIGHTING_MAX_LEVEL },
 { "Ovo do dragao",        T(DRAGON_EGG),      T(DRAGON_EGG),      T(DRAGON_EGG),      DRAW_SPRITE,      COLLIDE_NONE,  SOUND_STONE, 0 },
 { "Perola do Fim",        T(ENDER_PEARL),     T(ENDER_PEARL),     T(ENDER_PEARL),     DRAW_SPRITE,      COLLIDE_NONE,  SOUND_GLASS, 0 },
+{ "Carne crua",           T(RAW_MEAT),        T(RAW_MEAT),        T(RAW_MEAT),        DRAW_SPRITE,      COLLIDE_NONE,  SOUND_CLOTH, 0 },
+{ "Carne assada",         T(COOKED_MEAT),     T(COOKED_MEAT),     T(COOKED_MEAT),     DRAW_SPRITE,      COLLIDE_NONE,  SOUND_CLOTH, 0 },
+{ "Fornalha",             T(FURNACE_TOP),     T(FURNACE_SIDE),    T(FURNACE_TOP),     DRAW_OPAQUE,      COLLIDE_SOLID, SOUND_STONE, 0 },
+{ "Cama",                 T(BED_TOP),         T(BED_SIDE),        4,                  DRAW_OPAQUE,      COLLIDE_SOLID, SOUND_CLOTH, 0 },
 };
 
 
@@ -134,6 +138,12 @@ static void DefineBlock(BlockID block, const struct LateBlockDef* def) {
 	Blocks.Brightness[block]  = def->brightness;
 	Blocks.DigSounds[block]   = def->sound;
 	Blocks.StepSounds[block]  = def->sound == SOUND_GLASS ? SOUND_STONE : def->sound;
+
+	/* The bed is a low block you can sleep on (see Survival_HandleUse) */
+	if (block == LBLOCK_BED) {
+		Blocks.MaxBB[block].y     = 9.0f / 16.0f;
+		Blocks.BlocksLight[block] = false;
+	}
 	Block_DefineCustom(block, true);
 }
 

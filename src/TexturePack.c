@@ -12,11 +12,11 @@
 #include "Funcs.h"
 #include "ExtMath.h"
 #include "Options.h"
+#include "Minerios.h"
 #include "Logger.h"
 #include "Utils.h"
 #include "Chat.h" /* TODO avoid this include */
 #include "Errors.h"
-#include "Minerios.h"
 
 /* Simple fallback terrain for when no texture packs are available at all */
 static BitmapCol fallback_terrain[16 * 8] = {
@@ -171,7 +171,6 @@ static void Atlas_Update1D(void) {
 
 /* Loads the given atlas and converts it into an array of 1D atlases. */
 static void Atlas_Update(struct Bitmap* bmp) {
-	Minerios_PatchAtlas(bmp);
 	Atlas2D.Bmp       = *bmp;
 	Atlas2D.TileSize  = bmp->width  / ATLAS2D_TILES_PER_ROW;
 	Atlas2D.RowsCount = bmp->height / Atlas2D.TileSize;
@@ -252,6 +251,7 @@ cc_bool Atlas_TryChange(struct Bitmap* atlas) {
 	Atlas1D_Free();
 	Atlas2D_Free();
 
+	Minerios_PatchAtlas(atlas);
 	Atlas_Update(atlas);
 	Event_RaiseVoid(&TextureEvents.AtlasChanged);
 	return true;

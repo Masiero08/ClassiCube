@@ -1,5 +1,6 @@
 #include "Survival.h"
 #include "Minerios.h"
+#include "LateGame.h"
 #include "Block.h"
 #include "BlockID.h"
 #include "Chat.h"
@@ -54,10 +55,10 @@ static float exhaustion, starveTimer;
 static Vec3 lastPos;
 
 enum ToolKind { TOOL_PICKAXE, TOOL_AXE, TOOL_SHOVEL, TOOL_SWORD, TOOL_KINDS };
-#define MAX_TOOL_TIER 3
+#define MAX_TOOL_TIER 4
 static const char* const toolNames[TOOL_KINDS]     = { "Picareta", "Machado", "Pa", "Espada" };
-static const char* const tierNames[MAX_TOOL_TIER + 1] = { "", "madeira", "pedra", "ferro" };
-static const int tierUses[MAX_TOOL_TIER + 1]       = { 0, 60, 132, 251 };
+static const char* const tierNames[MAX_TOOL_TIER + 1] = { "", "madeira", "pedra", "ferro", "diamante" };
+static const int tierUses[MAX_TOOL_TIER + 1]       = { 0, 60, 132, 251, 1000 };
 static cc_uint8 toolTier[TOOL_KINDS];
 static int toolUses[TOOL_KINDS];
 static BlockID lastHeld;
@@ -301,6 +302,9 @@ static BlockID GetDrop(BlockID block) {
 	case BLOCK_ICE:    return BLOCK_AIR;
 	case BLOCK_FIRE:   return BLOCK_AIR;
 	case MBLOCK_SORTE: return BLOCK_AIR; /* abre uma surpresa (Minerios.c) */
+	case LBLOCK_DIAMOND_ORE:   return LITEM_DIAMOND;
+	case LBLOCK_QUARTZ_ORE:    return LITEM_QUARTZ;
+	case LBLOCK_NETHER_PORTAL: return BLOCK_AIR;
 	case BLOCK_LEAVES: 
 		return Random_Next(&survival_rnd, 8) == 0 ? BLOCK_SAPLING : BLOCK_AIR;
 	}
@@ -324,6 +328,10 @@ static int GetHardness(BlockID block) {
 		return 8;
 	case BLOCK_OBSIDIAN:
 		return 24;
+	case LBLOCK_NETHERRACK: case LBLOCK_SOUL_SAND: case LBLOCK_GLOWSTONE:
+		return 2;
+	case LBLOCK_DIAMOND_ORE: case LBLOCK_DIAMOND: case LBLOCK_QUARTZ_ORE:
+		return 8;
 	}
 	/* Cloth (wool) blocks */
 	if (block >= BLOCK_RED && block <= BLOCK_WHITE) return 2;
@@ -341,10 +349,13 @@ static int GetToolKind(BlockID block) {
 	case BLOCK_ICE: case BLOCK_CERAMIC_TILE: case BLOCK_MAGMA: case BLOCK_PILLAR: case BLOCK_STONE_BRICK:
 	case MBLOCK_RUBI_MINERIO: case MBLOCK_TITANIO_MINERIO: case MBLOCK_URANIO_MINERIO: case MBLOCK_OVO_MINERIO:
 	case MBLOCK_RUBI: case MBLOCK_TITANIO: case MBLOCK_URANIO: case MBLOCK_PEDRA_CRISTAL:
+	case LBLOCK_DIAMOND_ORE: case LBLOCK_DIAMOND: case LBLOCK_NETHERRACK: case LBLOCK_NETHER_BRICKS:
+	case LBLOCK_QUARTZ_ORE: case LBLOCK_END_STONE:
 		return TOOL_PICKAXE;
 	case BLOCK_WOOD: case BLOCK_LOG: case BLOCK_BOOKSHELF: case BLOCK_CRATE:
 		return TOOL_AXE;
 	case BLOCK_DIRT: case BLOCK_GRASS: case BLOCK_SAND: case BLOCK_GRAVEL: case BLOCK_SNOW:
+	case LBLOCK_SOUL_SAND:
 		return TOOL_SHOVEL;
 	}
 	return -1;
@@ -359,8 +370,10 @@ static int GetRequiredTier(BlockID block) {
 		return 2;
 	case MBLOCK_TITANIO_MINERIO: case MBLOCK_URANIO_MINERIO: case MBLOCK_TITANIO: case MBLOCK_URANIO:
 		return 3;
-	case BLOCK_OBSIDIAN:
+	case LBLOCK_DIAMOND_ORE: case LBLOCK_DIAMOND:
 		return 3;
+	case BLOCK_OBSIDIAN:
+		return 4;
 	}
 	return GetToolKind(block) == TOOL_PICKAXE ? 1 : 0;
 }
@@ -384,7 +397,7 @@ static int GetBreakHits(BlockID block) {
 cc_bool Survival_CanBreak(BlockID block, int x, int y, int z) {
 	int hardness;
 	if (!survival_active) return true;
-	if (block == BLOCK_BEDROCK) return false;
+	if (block == BLOCK_BEDROCK || block == LBLOCK_END_PORTAL) return false;
 
 	/* Continuing to hit the same block? */
 	if (breakPos.x != x || breakPos.y != y || breakPos.z != z || Game.Time - lastHitTime > 0.5) {
@@ -511,6 +524,10 @@ static const struct Recipe recipes[] = {
 	{ 1, MBLOCK_URANIO,          4, BLOCK_GOLD,             2, MBLOCK_PORTAL_UTOPIA   },
 	{ 1, MBLOCK_RUBI,            4, BLOCK_GLASS,            2, MBLOCK_PORTAL_CRISTAL  },
 	{ 1, MBLOCK_RUBI_MINERIO,    2, BLOCK_GOLD_ORE,         1, MBLOCK_SORTE           },
+	/* Diamantes e Nether */
+	{ 4, LITEM_DIAMOND,          0, BLOCK_AIR,              1, LBLOCK_DIAMOND         },
+	{ 1, LBLOCK_DIAMOND,         0, BLOCK_AIR,              4, LITEM_DIAMOND          },
+	{ 4, LBLOCK_NETHERRACK,      1, BLOCK_COAL_ORE,         4, LBLOCK_NETHER_BRICKS   },
 };
 
 struct FoodRecipe {
@@ -545,6 +562,10 @@ static const struct ToolRecipe tools[] = {
 	{ TOOL_AXE,     3, 3, BLOCK_IRON,   2, BLOCK_WOOD },
 	{ TOOL_SHOVEL,  3, 1, BLOCK_IRON,   2, BLOCK_WOOD },
 	{ TOOL_SWORD,   3, 2, BLOCK_IRON,   1, BLOCK_WOOD },
+	{ TOOL_PICKAXE, 4, 3, LITEM_DIAMOND, 2, BLOCK_WOOD },
+	{ TOOL_AXE,     4, 3, LITEM_DIAMOND, 2, BLOCK_WOOD },
+	{ TOOL_SHOVEL,  4, 1, LITEM_DIAMOND, 2, BLOCK_WOOD },
+	{ TOOL_SWORD,   4, 2, LITEM_DIAMOND, 1, BLOCK_WOOD },
 };
 
 #define FOODS_COUNT Array_Elems(foods)

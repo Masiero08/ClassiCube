@@ -20,6 +20,7 @@
 #include "Physics.h"
 #include "String_.h"
 #include "Utils.h"
+#include "Particle.h"
 #include "CriaturasDados.h"
 
 /* Criaturas do Bioma: criaturas capturaveis para o modo um jogador.
@@ -80,7 +81,8 @@ static void Criatura_Draw(struct Entity* e) {
 	const struct PlanoDef* plano = &planos_def[idPlano];
 	struct ModelPart* partes     = plano_partes[idPlano];
 	float pitch = -e->Pitch * MATH_DEG2RAD;
-	float asa   = Math_AbsF(e->Anim.LeftArmX) + 0.15f;
+	float bate  = Math_AbsF(Math_SinF((float)Game.Time * (idPlano == PLANO_BORBOLETA ? 9.0f : 5.0f)));
+	float asa   = Math_AbsF(e->Anim.LeftArmX) + 0.15f + bate * (idPlano == PLANO_BORBOLETA ? 0.8f : 0.15f);
 	int i;
 
 	Criatura_CheckTexture(sp);
@@ -100,10 +102,15 @@ static void Criatura_Draw(struct Entity* e) {
 			Model_DrawRotate(e->Anim.RightLegX, 0, 0, part, false); break;
 		case ANIM_CAUDA:
 			Model_DrawRotate(0.2f, e->Anim.LeftLegX * 0.8f, 0, part, false); break;
+		/* borboleta abre e fecha as asas para tras; aves batem para cima */
 		case ANIM_ASA_E:
-			Model_DrawRotate(0, 0, -asa, part, false); break;
+			if (idPlano == PLANO_BORBOLETA) Model_DrawRotate(0,  asa, 0, part, false);
+			else Model_DrawRotate(0, 0, -asa, part, false);
+			break;
 		case ANIM_ASA_D:
-			Model_DrawRotate(0, 0,  asa, part, false); break;
+			if (idPlano == PLANO_BORBOLETA) Model_DrawRotate(0, -asa, 0, part, false);
+			else Model_DrawRotate(0, 0,  asa, part, false);
+			break;
 		default:
 			Model_DrawPart(part); break;
 		}
@@ -233,11 +240,11 @@ static void Equipe_Carregar(void) {
 
 		equipe[equipeCount].especie = v[0];
 		equipe[equipeCount].nivel   = max(1, min(v[1], NIVEL_MAX));
-		equipe[equipeCount].vida    = max(1, min(v[2], VidaMax(v[0], equipe[equipeCount].nivel)));
+		equipe[equipeCount].vida    = max(0, min(v[2], VidaMax(v[0], equipe[equipeCount].nivel)));
 		equipe[equipeCount].xp      = max(0, v[3]);
 		equipeCount++;
 	}
-	if (Convert_ParseInt(&ativo, &v[0]) && v[0] >= 0 && v[0] < equipeCount) membroAtivo = v[0];
+	if (Convert_ParseInt(&ativo, &v[0]) && v[0] >= 0 && v[0] < equipeCount && equipe[v[0]].vida > 0) membroAtivo = v[0];
 }
 
 
@@ -258,6 +265,7 @@ struct Criatura {
 	int alvo;       /* indice em criaturas[] que esta sendo atacada (-1 = nenhum) */
 	cc_bool ajudou; /* a criatura do jogador ajudou a derrotar esta (ganha xp) */
 	cc_bool nomeSujo;
+	cc_bool avisouTipo; /* ja avisou no chat que o tipo e forte/fraco contra esta */
 };
 static struct Criatura criaturas[CRIATURAS_MAX];
 static RNGState rnd;
@@ -456,16 +464,17 @@ static void RemoverTodas(void) {
 *---------------------------------------------------------Combate---------------------------------------------------------*
 *#########################################################################################################################*/
 /* Quem ganha de quem: fogo > planta > agua > fogo, eletrico > agua/vento, */
-/* vento > planta, pedra > fogo/vento, agua/planta > pedra */
+/* vento > planta, pedra > fogo/vento, agua/planta > pedra, inseto > planta, fogo/vento > inseto */
 static float Multiplicador(int atk, int def) {
 	switch (atk)
 	{
-	case TIPO_FOGO:     if (def == TIPO_PLANTA) return 1.5f; if (def == TIPO_AGUA || def == TIPO_PEDRA) return 0.6f; break;
+	case TIPO_FOGO:     if (def == TIPO_PLANTA || def == TIPO_INSETO) return 1.5f; if (def == TIPO_AGUA || def == TIPO_PEDRA) return 0.6f; break;
 	case TIPO_AGUA:     if (def == TIPO_FOGO || def == TIPO_PEDRA) return 1.5f; if (def == TIPO_PLANTA) return 0.6f; break;
 	case TIPO_PLANTA:   if (def == TIPO_AGUA || def == TIPO_PEDRA) return 1.5f; if (def == TIPO_FOGO) return 0.6f; break;
 	case TIPO_ELETRICO: if (def == TIPO_AGUA || def == TIPO_VENTO) return 1.5f; if (def == TIPO_PEDRA) return 0.6f; break;
-	case TIPO_VENTO:    if (def == TIPO_PLANTA) return 1.5f; if (def == TIPO_PEDRA || def == TIPO_ELETRICO) return 0.6f; break;
+	case TIPO_VENTO:    if (def == TIPO_PLANTA || def == TIPO_INSETO) return 1.5f; if (def == TIPO_PEDRA || def == TIPO_ELETRICO) return 0.6f; break;
 	case TIPO_PEDRA:    if (def == TIPO_FOGO || def == TIPO_VENTO) return 1.5f; break;
+	case TIPO_INSETO:   if (def == TIPO_PLANTA) return 1.5f; if (def == TIPO_FOGO || def == TIPO_PEDRA || def == TIPO_VENTO) return 0.6f; break;
 	}
 	return 1.0f;
 }
@@ -509,6 +518,8 @@ static void Criatura_GanharXp(struct Criatura* c, int xp) {
 	Equipe_Salvar();
 }
 
+static void Criatura_Desmaiou(struct Criatura* c);
+
 static void Criatura_Derrotada(struct Criatura* c) {
 	struct Criatura* minha = Criatura_DoJogador();
 	cc_string msg; char msgBuffer[STRING_SIZE];
@@ -538,12 +549,53 @@ static void Criatura_Dano(struct Criatura* c, int dano, Vec3 origem) {
 	}
 
 	if (c->selvagem) {
-		c->fugaTimer = 3.0f;
+		/* briga enquanto tem forca; fraca, tenta fugir */
+		if (c->alvo < 0 || c->vida * 10 < VidaMax(c->especie, c->nivel) * 3) c->fugaTimer = 3.0f;
 		if (c->vida <= 0) Criatura_Derrotada(c);
 	} else {
-		if (c->vida < 1) c->vida = 1;
+		if (c->vida < 0) c->vida = 0;
 		Membro_SincronizarDe(c);
+		if (c->vida == 0) Criatura_Desmaiou(c);
 	}
+}
+
+/* Faz particulas da cor do tipo no alvo */
+static const BlockID efeitoBloco[TIPO_COUNT] = {
+	BLOCK_LAVA, BLOCK_WATER, BLOCK_LEAVES, BLOCK_GOLD, BLOCK_WHITE, BLOCK_STONE, BLOCK_LIME
+};
+static void Efeito_Golpe(struct Criatura* alvo, int tipo) {
+	Vec3 p = alvo->base.next.pos;
+	IVec3 coords;
+	p.y += 0.4f;
+	IVec3_Floor(&coords, &p);
+	Particles_BreakBlockEffect(coords, efeitoBloco[tipo], BLOCK_AIR);
+}
+
+static void Criatura_Olhar(struct Criatura* c, Vec3 alvo) {
+	float dx = alvo.x - c->base.next.pos.x, dz = alvo.z - c->base.next.pos.z;
+	c->base.next.yaw  = Math_Atan2f(dx, -dz) * MATH_RAD2DEG;
+	c->base.next.rotY = c->base.next.yaw;
+}
+
+static void Criatura_Golpear(struct Criatura* atk, struct Criatura* alvo) {
+	const struct EspecieDef* da = &especies_def[atk->especie];
+	float mult = Multiplicador(da->tipo, especies_def[alvo->especie].tipo);
+	int dano   = (int)((da->dano + atk->nivel / 2) * mult * (atk->selvagem ? 0.7f : 1.0f));
+
+	atk->atkTimer = atk->selvagem ? 1.4f : 1.0f;
+	Criatura_Olhar(atk, alvo->base.next.pos);
+	Efeito_Golpe(alvo, da->tipo);
+
+	if (!atk->selvagem) {
+		alvo->ajudou = true;
+		if (alvo->alvo < 0) alvo->alvo = Criatura_Index(atk); /* a selvagem revida */
+		if (!alvo->avisouTipo && mult != 1.0f) {
+			Chat_AddRaw(mult > 1.0f ? "&aGolpe em cheio! O tipo dela e fraco contra o seu."
+			                        : "&7Golpe fraco... o tipo dela resiste ao seu.");
+			alvo->avisouTipo = true;
+		}
+	}
+	Criatura_Dano(alvo, dano, atk->base.next.pos);
 }
 
 
@@ -583,7 +635,22 @@ static void Criatura_PensarSelvagem(struct Criatura* c, struct Entity* jogador, 
 	const struct EspecieDef* def = &especies_def[c->especie];
 	Vec3 pos = c->base.next.pos;
 	float vel = def->vel * 0.45f;
-	float ang;
+	float ang, d2;
+	struct Criatura* alvo = c->alvo >= 0 ? &criaturas[c->alvo] : NULL;
+
+	if (alvo && (!alvo->usada || alvo->selvagem)) { c->alvo = -1; alvo = NULL; }
+	if (alvo && c->fugaTimer <= 0) {
+		d2 = Dist2XZ(pos, alvo->base.next.pos);
+		if (d2 > 18 * 18) {
+			c->alvo = -1;
+		} else if (d2 > 1.6f * 1.6f) {
+			Criatura_Andar(c, alvo->base.next.pos, def->vel * 0.9f, delta);
+			return;
+		} else {
+			if (c->atkTimer <= 0) Criatura_Golpear(c, alvo);
+			return;
+		}
+	}
 
 	if (c->fugaTimer > 0) {
 		/* foge do jogador */
@@ -610,7 +677,6 @@ static void Criatura_PensarDoJogador(struct Criatura* c, struct Entity* jogador,
 	struct Criatura* alvo = c->alvo >= 0 ? &criaturas[c->alvo] : NULL;
 	Vec3 pos = c->base.next.pos, dest;
 	float d2;
-	int dano;
 
 	if (alvo && (!alvo->usada || Dist2(alvo->base.next.pos, jogador->Position) > 20 * 20)) {
 		c->alvo = -1; alvo = NULL;
@@ -622,10 +688,7 @@ static void Criatura_PensarDoJogador(struct Criatura* c, struct Entity* jogador,
 		if (d2 > 1.6f * 1.6f) {
 			Criatura_Andar(c, alvo->base.next.pos, def->vel * 1.1f, delta);
 		} else if (c->atkTimer <= 0) {
-			c->atkTimer = 1.0f;
-			dano = (int)((def->dano + c->nivel / 2) * Multiplicador(def->tipo, especies_def[alvo->especie].tipo));
-			alvo->ajudou = true;
-			Criatura_Dano(alvo, dano, pos);
+			Criatura_Golpear(c, alvo);
 		}
 		return;
 	}
@@ -729,7 +792,7 @@ static void SoltarMembro(int idx) {
 
 	if (atual) { Membro_SincronizarDe(atual); Criatura_Remover(atual); }
 	membroAtivo = idx;
-	if (idx < 0 || idx >= equipeCount) { membroAtivo = -1; Equipe_Salvar(); return; }
+	if (idx < 0 || idx >= equipeCount || equipe[idx].vida <= 0) { membroAtivo = -1; Equipe_Salvar(); return; }
 
 	pos = jogador->Position; pos.x += 1.0f;
 	c = Criatura_Criar(equipe[idx].especie, equipe[idx].nivel, pos, false);
@@ -737,14 +800,139 @@ static void SoltarMembro(int idx) {
 	Equipe_Salvar();
 }
 
+/* proximo membro (depois de 'atual') que ainda tem vida, ou -1 */
+static int ProximoSaudavel(int atual) {
+	int i, idx;
+	for (i = 1; i <= equipeCount; i++)
+	{
+		idx = (atual + i) % equipeCount;
+		if (idx != atual && equipe[idx].vida > 0) return idx;
+	}
+	return -1;
+}
+
+static void Criatura_Desmaiou(struct Criatura* c) {
+	const struct EspecieDef* def = &especies_def[c->especie];
+	int prox = ProximoSaudavel(membroAtivo);
+	Chat_Add2("%c%c &cdesmaiou e voltou para o casulo!", def->cor, def->nome);
+
+	SoltarMembro(prox);
+	if (prox >= 0) {
+		def = &especies_def[equipe[prox].especie];
+		Chat_Add2("&eVai, %c%c&e!", def->cor, def->nome);
+	} else {
+		Chat_AddRaw("&cSua equipe esta cansada. No casulo elas recuperam a vida aos poucos.");
+	}
+}
+
+/* Membros guardados no casulo descansam e recuperam vida aos poucos */
+static float descansoTimer;
+static void Equipe_Descansar(float delta) {
+	int i, vidaMax, curou = 0;
+	descansoTimer -= delta;
+	if (descansoTimer > 0) return;
+	descansoTimer = 3.0f;
+
+	for (i = 0; i < equipeCount; i++)
+	{
+		if (i == membroAtivo) continue;
+		vidaMax = VidaMax(equipe[i].especie, equipe[i].nivel);
+		if (equipe[i].vida >= vidaMax) continue;
+		equipe[i].vida = min(vidaMax, equipe[i].vida + max(1, vidaMax / 10));
+		curou++;
+	}
+	if (curou) Equipe_Salvar();
+}
+
+/*########################################################################################################################*
+*-----------------------------------------------------------HUD-----------------------------------------------------------*
+*#########################################################################################################################*/
+/* Linhas no canto de cima a direita: sua criatura, o alvo e a equipe */
+static char hudTexto[3][STRING_SIZE];
+static float hudTimer;
+
+static void Hud_Linha(int linha, const cc_string* str) {
+	cc_string antigo = String_FromReadonly(hudTexto[linha]);
+	if (String_Equals(&antigo, str)) return;
+	String_CopyToRawArray(hudTexto[linha], str);
+	Chat_AddOf(str, MSG_TYPE_STATUS_1 + linha);
+}
+
+static void Hud_Barra(cc_string* str, int vida, int vidaMax) {
+	int i, cheio = vidaMax > 0 ? (vida * 10 + vidaMax - 1) / vidaMax : 0;
+	String_AppendConst(str, vida * 3 <= vidaMax ? "&c" : (vida * 3 <= vidaMax * 2 ? "&e" : "&a"));
+	for (i = 0; i < 10; i++)
+	{
+		if (i == cheio) String_AppendConst(str, "&8");
+		String_Append(str, '|');
+	}
+	String_Format2(str, " &f%i/%i", &vida, &vidaMax);
+}
+
+static void Hud_Criatura(cc_string* str, const char* titulo, struct Criatura* c) {
+	const struct EspecieDef* def = &especies_def[c->especie];
+	int vidaMax = VidaMax(c->especie, c->nivel);
+	String_AppendConst(str, titulo);
+	String_AppendConst(str, def->cor);
+	String_AppendConst(str, def->nome);
+	String_Format1(str, " &fNv%i ", &c->nivel);
+	Hud_Barra(str, c->vida, vidaMax);
+}
+
+static void Hud_Limpar(void) {
+	int i;
+	for (i = 0; i < 3; i++)
+	{
+		if (!hudTexto[i][0]) continue;
+		hudTexto[i][0] = '\0';
+		Chat_AddOf(&String_Empty, MSG_TYPE_STATUS_1 + i);
+	}
+}
+
+static void Hud_Atualizar(float delta) {
+	cc_string str; char strBuffer[STRING_SIZE];
+	struct Criatura* minha;
+	int i;
+
+	hudTimer -= delta;
+	if (hudTimer > 0) return;
+	hudTimer = 0.2f;
+	if (!equipeCount) { Hud_Limpar(); return; }
+	minha = Criatura_DoJogador();
+
+	String_InitArray(str, strBuffer);
+	if (minha) Hud_Criatura(&str, "&fSua: ", minha);
+	else String_AppendConst(&str, "&7Nenhuma criatura fora do casulo");
+	Hud_Linha(0, &str);
+
+	String_InitArray(str, strBuffer);
+	if (minha && minha->alvo >= 0 && criaturas[minha->alvo].usada)
+		Hud_Criatura(&str, "&fContra: ", &criaturas[minha->alvo]);
+	Hud_Linha(1, &str);
+
+	String_InitArray(str, strBuffer);
+	String_AppendConst(&str, "&fEquipe: ");
+	for (i = 0; i < equipeCount; i++)
+	{
+		if (i == membroAtivo)           String_AppendConst(&str, "&e");
+		else if (equipe[i].vida <= 0)   String_AppendConst(&str, "&8");
+		else                            String_AppendConst(&str, "&a");
+		String_Append(&str, 'o');
+	}
+	Hud_Linha(2, &str);
+}
+
 static float capturaTimer;
 static void Criaturas_TickGlobal(struct ScheduledTask* task) {
-	capturaTimer -= (float)task->interval;
-	if (!Ativo()) return;
+	float delta = (float)task->interval;
+	capturaTimer -= delta;
+	if (!Ativo()) { Hud_Limpar(); return; }
 
 	/* traz a criatura ativa de volta depois de carregar o mundo */
 	if (membroAtivo >= 0 && !Criatura_DoJogador()) SoltarMembro(membroAtivo);
-	Spawner_Tick((float)task->interval);
+	Spawner_Tick(delta);
+	Equipe_Descansar(delta);
+	Hud_Atualizar(delta);
 }
 
 
@@ -823,8 +1011,17 @@ cc_bool Criaturas_HandleClick(cc_bool place) {
 	jogador = &Entities.CurPlayer->Base;
 
 	if (!c->selvagem) {
-		/* colocar na sua criatura = dar uma fruta-cura */
-		if (place && c->curaTimer <= 0) {
+		/* colocar na sua criatura: vida cheia = troca pela proxima da equipe, */
+		/* senao da uma fruta-cura */
+		if (place && c->vida >= VidaMax(c->especie, c->nivel)) {
+			int prox = ProximoSaudavel(membroAtivo);
+			if (prox < 0) { Chat_AddRaw("&eNao tem outra criatura pronta na equipe."); return true; }
+			if (capturaTimer > 0) return true;
+			capturaTimer = 1.0f;
+			Chat_Add2("&eVolta, %c%c&e!", especies_def[c->especie].cor, especies_def[c->especie].nome);
+			SoltarMembro(prox);
+			Chat_Add2("&eVai, %c%c&e!", especies_def[equipe[prox].especie].cor, especies_def[equipe[prox].especie].nome);
+		} else if (place && c->curaTimer <= 0) {
 			c->vida = VidaMax(c->especie, c->nivel);
 			c->curaTimer = 20.0f;
 			c->nomeSujo  = true;
@@ -844,7 +1041,10 @@ cc_bool Criaturas_HandleClick(cc_bool place) {
 		c->ajudou = c->ajudou || Criatura_DoJogador() != NULL;
 		Criatura_Dano(c, 2, jogador->Position);
 		minha = Criatura_DoJogador();
-		if (minha && c->usada) minha->alvo = Criatura_Index(c);
+		if (minha && c->usada) {
+			minha->alvo = Criatura_Index(c);
+			if (c->alvo < 0) c->alvo = Criatura_Index(minha);
+		}
 	}
 	return true;
 }
@@ -870,6 +1070,7 @@ static void Equipe_Listar(void) {
 		String_InitArray(msg, msgBuffer);
 		String_Format4(&msg, "&f%i. %c%c &fNv.%i", &n, def->cor, def->nome, &equipe[i].nivel);
 		if (i == membroAtivo) String_AppendConst(&msg, " &a(fora do casulo)");
+		else if (equipe[i].vida <= 0) String_AppendConst(&msg, " &8(descansando)");
 		Chat_Add(&msg);
 	}
 	Chat_AddRaw("&7/client equipe [numero] solta, /client equipe guardar guarda");
@@ -893,6 +1094,7 @@ static void EquipeCommand_Execute(const cc_string* args, int argsCount) {
 		Equipe_Salvar();
 		Chat_AddRaw("&eVoce libertou a criatura. Tchau!");
 	} else if (Convert_ParseInt(&args[0], &n) && n >= 1 && n <= equipeCount) {
+		if (equipe[n - 1].vida <= 0) { Chat_AddRaw("&eEssa criatura esta descansando no casulo. Espere ela recuperar a vida."); return; }
 		SoltarMembro(n - 1);
 	} else {
 		Equipe_Listar();
@@ -995,7 +1197,7 @@ static void CriaturaCommand_Execute(const cc_string* args, int argsCount) {
 		/* em arco na frente do jogador */
 		/* varias: duas fileiras em arco; uma so: logo na frente */
 		ang = yaw + (total > 1 ? ((i % 8) - 3.5f) * 0.16f : 0.0f);
-		dist = total > 1 ? (i < 8 ? 6.0f : 10.0f) : 3.0f;
+		dist = total > 1 ? 6.0f + (i / 8) * 4.0f : 3.0f;
 		pos.x = jogador->Position.x + Math_SinF(ang) * dist;
 		pos.z = jogador->Position.z - Math_CosF(ang) * dist;
 		if (!AcharChaoEntre(Math_Floor(pos.x), Math_Floor(pos.z), Math_Floor(jogador->Position.y) + 8, Math_Floor(jogador->Position.y) - 16, true, &y)) continue;
@@ -1041,6 +1243,7 @@ static void Criaturas_OnNewMap(void) {
 	struct Criatura* minha = Criatura_DoJogador();
 	if (minha) Membro_SincronizarDe(minha);
 	RemoverTodas();
+	Hud_Limpar();
 	spawnTimer = 2.0f;
 }
 

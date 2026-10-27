@@ -266,6 +266,7 @@
     <ClCompile Include="..\..\src\LBackend.c" />
     <ClCompile Include="..\..\src\LBackend_Android.c" />
     <ClCompile Include="..\..\src\Lighting.c" />
+    <ClCompile Include="..\..\src\Criaturas.c" />
     <ClCompile Include="..\..\src\Logger.c" />
     <ClCompile Include="..\..\src\LScreens.c" />
     <ClCompile Include="..\..\src\LWeb.c" />

@@ -263,7 +263,11 @@ static struct Criatura criaturas[CRIATURAS_MAX];
 static RNGState rnd;
 static float spawnTimer;
 
-static cc_bool Ativo(void) { return Server.IsSinglePlayer && World.Loaded; }
+/* Ligado/desligado na tela "Mods" do menu inicial (lido a cada mundo carregado) */
+#define OPT_CRIATURAS "mod-criaturas"
+static cc_bool criaturasLigadas = true;
+
+static cc_bool Ativo(void) { return criaturasLigadas && Server.IsSinglePlayer && World.Loaded; }
 
 static int Criatura_Index(struct Criatura* c) { return (int)(c - criaturas); }
 
@@ -873,6 +877,8 @@ static void Equipe_Listar(void) {
 
 static void EquipeCommand_Execute(const cc_string* args, int argsCount) {
 	int n;
+
+	if (!criaturasLigadas) { Chat_AddRaw("&eO mod de criaturas esta desligado (menu Mods)."); return; }
 	if (!argsCount) { Equipe_Listar(); return; }
 
 	if (String_CaselessEqualsConst(&args[0], "guardar")) {
@@ -907,6 +913,8 @@ static struct ChatCommand EquipeCommand = {
 static void InicialCommand_Execute(const cc_string* args, int argsCount) {
 	int i, escolha = -1;
 	cc_string nome;
+
+	if (!criaturasLigadas) { Chat_AddRaw("&eO mod de criaturas esta desligado (menu Mods)."); return; }
 
 	if (equipeCount) {
 		Chat_AddRaw("&eVoce ja tem sua criatura inicial!");
@@ -958,6 +966,7 @@ static void CriaturaCommand_Execute(const cc_string* args, int argsCount) {
 	float yaw = jogador->Yaw * MATH_DEG2RAD, ang, dist, y;
 	Vec3 pos;
 
+	if (!criaturasLigadas) { Chat_AddRaw("&eO mod de criaturas esta desligado (menu Mods)."); return; }
 	if (argsCount > 1) Convert_ParseInt(&args[1], &nivel);
 	nivel = max(1, min(nivel, NIVEL_MAX));
 	if (argsCount) {
@@ -1035,6 +1044,10 @@ static void Criaturas_OnNewMap(void) {
 	spawnTimer = 2.0f;
 }
 
+static void Criaturas_OnNewMapLoaded(void) {
+	criaturasLigadas = Options_GetBool(OPT_CRIATURAS, true);
+}
+
 static void Criaturas_Free(void) {
 	struct Criatura* minha = Criatura_DoJogador();
 	if (minha) { Membro_SincronizarDe(minha); Equipe_Salvar(); }
@@ -1045,5 +1058,6 @@ struct IGameComponent Criaturas_Component = {
 	Criaturas_Init,     /* Init  */
 	Criaturas_Free,     /* Free  */
 	Criaturas_Reset,    /* Reset */
-	Criaturas_OnNewMap  /* OnNewMap */
+	Criaturas_OnNewMap, /* OnNewMap */
+	Criaturas_OnNewMapLoaded /* OnNewMapLoaded */
 };

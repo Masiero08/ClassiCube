@@ -20,6 +20,7 @@
 #include "String_.h"
 #include "Utils.h"
 #include "World.h"
+#include "LateGame.h"
 
 /* Day and night cycle with monsters at night, for survival mode: */
 /*  - the sky darkens at dusk, and monsters appear around the player at night */
@@ -33,6 +34,7 @@
 #define CYCLE_SECONDS (DAY_SECONDS + DUSK_SECONDS + NIGHT_SECONDS + DAWN_SECONDS)
 
 static float timeOfDay;
+static int dayNightMode = DAYNIGHT_NORMAL;
 static cc_bool cycleActive, envChanged;
 static int sunStep = -1;
 static RNGState daynight_rnd;
@@ -49,7 +51,13 @@ static float GetBrightness(void) {
 	return t / DAWN_SECONDS;
 }
 
-cc_bool DayNight_IsNight(void) { return cycleActive && GetBrightness() < 0.25f; }
+cc_bool DayNight_IsNight(void) {
+	if (!cycleActive || dayNightMode == DAYNIGHT_END) return false;
+	/* The Nether is always dark, so monsters always appear there */
+	return dayNightMode == DAYNIGHT_NETHER || GetBrightness() < 0.25f;
+}
+
+void DayNight_SetMode(int mode) { dayNightMode = mode; }
 
 
 /*########################################################################################################################*
@@ -89,6 +97,13 @@ static void SetSunStep(int step) {
 
 static void UpdateSky(void) {
 	float b = GetBrightness();
+	/* Other dimensions keep the same sky all the time */
+	if (dayNightMode != DAYNIGHT_NORMAL) {
+		SetSky(daySky, dayFog, dayClouds);
+		SetSunStep(dayNightMode == DAYNIGHT_NETHER ? 1 : 2);
+		envChanged = true;
+		return;
+	}
 	SetSky(LerpCol(PackedCol_Make(0x0A, 0x0F, 0x23, 0xFF), daySky,    b),
 		   LerpCol(PackedCol_Make(0x10, 0x14, 0x20, 0xFF), dayFog,    b),
 		   LerpCol(PackedCol_Make(0x30, 0x30, 0x40, 0xFF), dayClouds, b));
@@ -112,7 +127,7 @@ static void ResetSky(void) {
 *---------------------------------------------------------Monsters--------------------------------------------------------*
 *#########################################################################################################################*/
 #define MONSTERS_MAX     8
-#define MONSTER_ID_BASE  240 /* 200-223 are used by Criaturas, 232-239 by Minerios */
+#define MONSTER_ID_BASE  240 /* 200-224 are used by Criaturas, 225-239 by Minerios, 248 by the Ender Dragon */
 #define DESPAWN_DIST     48.0f
 #define CHASE_DIST       16.0f
 #define ATTACK_REACH     4.0f
@@ -254,7 +269,7 @@ static void Monster_Tick(struct Entity* e, float delta) {
 	if (d2 > DESPAWN_DIST * DESPAWN_DIST) { Monster_Remove(m); return; }
 
 	/* Daylight burns zombies and skeletons, others wander off */
-	if (!DayNight_IsNight()) {
+	if (!DayNight_IsNight() && dayNightMode == DAYNIGHT_NORMAL) {
 		IVec3_Floor(&p, &pos); p.y++;
 		if (def->burns && World_Contains(p.x, p.y, p.z) && Lighting.IsLit(p.x, p.y, p.z)) {
 			m->burnTimer += delta;
@@ -380,10 +395,11 @@ static void TrySpawn(void) {
 
 	if (!FindGround(x, z, World.MaxY - 2, 1, &y)) return;
 	/* Only on open ground under the sky (not on roofs above the player's head) */
-	if (!Lighting.IsLit(x, Math_Floor(y), z)) return;
+	if (dayNightMode == DAYNIGHT_NORMAL && !Lighting.IsLit(x, Math_Floor(y), z)) return;
 
 	pos.x = x + 0.5f; pos.y = y; pos.z = z + 0.5f;
-	Monster_Create(Random_Next(&daynight_rnd, MONSTER_TYPES), pos);
+	/* Only zombies and skeletons live in the Nether */
+	Monster_Create(dayNightMode == DAYNIGHT_NETHER ? Random_Next(&daynight_rnd, 2) : Random_Next(&daynight_rnd, MONSTER_TYPES), pos);
 }
 
 cc_bool DayNight_HandleAttack(void) {
@@ -423,6 +439,9 @@ cc_bool DayNight_HandleAttack(void) {
 	if (best->health <= 0) {
 		const struct MonsterDef* def = &monster_defs[best->type];
 		Survival_AddBlocks(def->drop, def->dropCount);
+		/* Skeletons in the Nether sometimes carry ender pearls (needed for the End) */
+		if (dayNightMode == DAYNIGHT_NETHER && best->type == MONSTER_SKELETON && Random_Next(&daynight_rnd, 2) == 0)
+			Survival_AddBlocks(LITEM_ENDER_PEARL, 1);
 		Monster_Remove(best);
 	} else {
 		/* Knocked back a little */
@@ -471,6 +490,7 @@ static cc_bool DayNight_Tick(struct ScheduledTask2* task) {
 static struct ScheduledTask2 daynight_task = { 0, 1.0f / 20, DayNight_Tick };
 
 int  DayNight_GetTime(void)      { return (int)timeOfDay; }
+int  DayNight_GetMode(void)      { return dayNightMode; }
 void DayNight_SetTime(int value) { timeOfDay = (float)(value % (int)CYCLE_SECONDS); if (timeOfDay < 0) timeOfDay = 0; }
 
 static void TimeCommand_Execute(const cc_string* args, int argsCount) {

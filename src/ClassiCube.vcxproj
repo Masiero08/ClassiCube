@@ -417,6 +417,8 @@
     <ClInclude Include="ModernBlocks.h" />
     <ClInclude Include="ModernBlocks_tex.h" />
     <ClInclude Include="Survival.h" />
+    <ClInclude Include="LateGame.h" />
+    <ClInclude Include="LateGame_tex.h" />
     <ClInclude Include="DayNight.h" />
     <ClInclude Include="Generator.h" />
     <ClInclude Include="MapRenderer.h" />
@@ -626,6 +628,7 @@
     <ClCompile Include="Lighting.c" />
     <ClCompile Include="ModernBlocks.c" />
     <ClCompile Include="Survival.c" />
+    <ClCompile Include="LateGame.c" />
     <ClCompile Include="DayNight.c" />
     <ClCompile Include="Entity.c" />
     <ClCompile Include="MapRenderer.c" />

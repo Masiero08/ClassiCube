@@ -188,6 +188,12 @@
     <ClInclude Include="Survival.h">
       <Filter>Header Files\Entities</Filter>
     </ClInclude>
+    <ClInclude Include="LateGame.h">
+      <Filter>Header Files\Map</Filter>
+    </ClInclude>
+    <ClInclude Include="LateGame_tex.h">
+      <Filter>Header Files\Map</Filter>
+    </ClInclude>
     <ClInclude Include="DayNight.h">
       <Filter>Header Files\Entities</Filter>
     </ClInclude>
@@ -419,6 +425,9 @@
       <Filter>Source Files\Map</Filter>
     <ClCompile Include="Survival.c">
       <Filter>Source Files\Entities</Filter>
+    </ClCompile>
+    <ClCompile Include="LateGame.c">
+      <Filter>Source Files\Map</Filter>
     </ClCompile>
     <ClCompile Include="DayNight.c">
       <Filter>Source Files\Entities</Filter>

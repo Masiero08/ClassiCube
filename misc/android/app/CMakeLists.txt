@@ -63,6 +63,7 @@ add_library(classicube SHARED
         ../../src/Lighting.c
         ../../src/ModernBlocks.c
         ../../src/Survival.c
+        ../../src/LateGame.c
         ../../src/Criaturas.c
         ../../src/DayNight.c
         ../../src/Resources.c

@@ -7,6 +7,7 @@
 #include "Lighting.h"
 #include "MapRenderer.h"
 #include "Minerios.h"
+#include "LateGame.h"
 #include "Graphics.h"
 #include "Camera.h"
 #include "Options.h"
@@ -419,6 +420,7 @@ static void Game_Load(void) {
 	Game_AddComponent(&ModernBlocks_Component);
 	/* antes da sobrevivencia: leva a vida e os blocos do jogador entre as dimensoes */
 	Game_AddComponent(&Minerios_Component);
+	Game_AddComponent(&LateGame_Component);
 	Game_AddComponent(&Survival_Component);
 	Game_AddComponent(&DayNight_Component);
 	Game_AddComponent(&Drawer2D_Component);

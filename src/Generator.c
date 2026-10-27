@@ -5,6 +5,7 @@
 #include "Platform.h"
 #include "World.h"
 #include "Utils.h"
+#include "LateGame.h"
 #include "Minerios.h"
 #include "Game.h"
 #include "Screens.h"
@@ -773,6 +774,7 @@ static void NotchyGen_Generate(void) {
 		GEN_COOP_STEP(12, NotchyGen_PlantTrees() );
 		GEN_COOP_STEP(13, NotchyGen_CarveModOres() );
 		GEN_COOP_STEP(14, Minerios_PosGeracao() );
+		GEN_COOP_STEP(15, LateGame_GenOverworld() );
 	GEN_COOP_END
 
 	Mem_Free(heightmap);

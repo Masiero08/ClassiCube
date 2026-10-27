@@ -608,6 +608,9 @@
     <ClCompile Include="Commands.c">
       <Filter>Source Files\Game</Filter>
     </ClCompile>
+    <ClCompile Include="Criaturas.c">
+      <Filter>Source Files\Game</Filter>
+    </ClCompile>
     <ClCompile Include="FancyLighting.c">
       <Filter>Source Files\Map</Filter>
     </ClCompile>

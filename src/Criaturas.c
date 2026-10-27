@@ -266,6 +266,7 @@ struct Criatura {
 	cc_bool ajudou; /* a criatura do jogador ajudou a derrotar esta (ganha xp) */
 	cc_bool nomeSujo;
 	cc_bool avisouTipo; /* ja avisou no chat que o tipo e forte/fraco contra esta */
+	cc_bool doMestre;   /* criatura de um Mestre de Bioma (nao foge, nao pode ser capturada) */
 };
 static struct Criatura criaturas[CRIATURAS_MAX];
 static RNGState rnd;
@@ -519,6 +520,8 @@ static void Criatura_GanharXp(struct Criatura* c, int xp) {
 }
 
 static void Criatura_Desmaiou(struct Criatura* c);
+static void Mestre_CriaturaCaiu(void);
+static void Casulos_Recompensa(struct Criatura* c);
 
 static void Criatura_Derrotada(struct Criatura* c) {
 	struct Criatura* minha = Criatura_DoJogador();
@@ -526,10 +529,13 @@ static void Criatura_Derrotada(struct Criatura* c) {
 	const struct EspecieDef* def = &especies_def[c->especie];
 
 	String_InitArray(msg, msgBuffer);
-	String_Format2(&msg, "%c%c &7selvagem foi derrotado.", def->cor, def->nome);
+	if (c->doMestre) String_Format2(&msg, "%c%c &7do Mestre foi derrotado!", def->cor, def->nome);
+	else String_Format2(&msg, "%c%c &7selvagem foi derrotado.", def->cor, def->nome);
 	Chat_Add(&msg);
 
-	if (minha && c->ajudou) Criatura_GanharXp(minha, 3 + c->nivel * 2);
+	if (minha && c->ajudou) Criatura_GanharXp(minha, (3 + c->nivel * 2) * (c->doMestre ? 2 : 1));
+	if (c->doMestre) Mestre_CriaturaCaiu();
+	else if (c->ajudou) Casulos_Recompensa(c);
 	Criatura_Remover(c);
 }
 
@@ -550,7 +556,7 @@ static void Criatura_Dano(struct Criatura* c, int dano, Vec3 origem) {
 
 	if (c->selvagem) {
 		/* briga enquanto tem forca; fraca, tenta fugir */
-		if (c->alvo < 0 || c->vida * 10 < VidaMax(c->especie, c->nivel) * 3) c->fugaTimer = 3.0f;
+		if (!c->doMestre && (c->alvo < 0 || c->vida * 10 < VidaMax(c->especie, c->nivel) * 3)) c->fugaTimer = 3.0f;
 		if (c->vida <= 0) Criatura_Derrotada(c);
 	} else {
 		if (c->vida < 0) c->vida = 0;
@@ -573,7 +579,7 @@ static void Efeito_Golpe(struct Criatura* alvo, int tipo) {
 
 static void Criatura_Olhar(struct Criatura* c, Vec3 alvo) {
 	float dx = alvo.x - c->base.next.pos.x, dz = alvo.z - c->base.next.pos.z;
-	c->base.next.yaw  = Math_Atan2f(dx, -dz) * MATH_RAD2DEG;
+	c->base.next.yaw  = Math_Atan2f(-dz, dx) * MATH_RAD2DEG;
 	c->base.next.rotY = c->base.next.yaw;
 }
 
@@ -615,7 +621,7 @@ static void Criatura_Andar(struct Criatura* c, Vec3 alvo, float vel, float delta
 	passo = min(vel * delta, len);
 	nx = pos.x + dx / len * passo;
 	nz = pos.z + dz / len * passo;
-	e->next.yaw  = Math_Atan2f(dx, -dz) * MATH_RAD2DEG;
+	e->next.yaw  = Math_Atan2f(-dz, dx) * MATH_RAD2DEG;
 	e->next.rotY = e->next.yaw; /* corpo vira junto com a cabeca */
 
 	if (!AcharChao(Math_Floor(nx), Math_Floor(nz), Math_Floor(pos.y + 0.5f), nada, &novoY)) {
@@ -715,7 +721,7 @@ static void Criatura_Tick(struct Entity* e, float delta) {
 	c->curaTimer   -= delta;
 
 	if (c->selvagem) {
-		if (Dist2XZ(e->next.pos, jogador->Position) > DIST_SUMIR) { Criatura_Remover(c); return; }
+		if (!c->doMestre && Dist2XZ(e->next.pos, jogador->Position) > DIST_SUMIR) { Criatura_Remover(c); return; }
 		Criatura_PensarSelvagem(c, jogador, delta);
 	} else {
 		Criatura_PensarDoJogador(c, jogador, delta);
@@ -845,6 +851,373 @@ static void Equipe_Descansar(float delta) {
 }
 
 /*########################################################################################################################*
+*--------------------------------------------------------Casulos----------------------------------------------------------*
+*#########################################################################################################################*/
+/* Casulos de captura: o comum nao acaba; os outros se ganham derrotando selvagens e Mestres */
+enum { CASULO_COMUM, CASULO_REFORCADO, CASULO_MARE, CASULO_MESTRE, CASULO_COUNT };
+static const char* const casuloNomes[CASULO_COUNT] = { "Comum", "Reforcado", "Mare", "Mestre" };
+static const char* const casuloCores[CASULO_COUNT] = { "&f", "&7", "&b", "&d" };
+static const BlockID casuloBloco[CASULO_COUNT]     = { BLOCK_RED, BLOCK_IRON, BLOCK_AQUA, BLOCK_VIOLET };
+static int casulos[CASULO_COUNT];
+static int casuloEscolhido = -1; /* -1 = automatico (o melhor que tiver, sem gastar o Mestre) */
+static int insignias;            /* um bit por Mestre de Bioma vencido */
+
+#define OPT_CASULOS   "criaturas-casulos"
+#define OPT_INSIGNIAS "criaturas-insignias"
+
+/* Salva como "reforcado,mare,mestre,escolhido" */
+static void Casulos_Salvar(void) {
+	cc_string str; char strBuffer[64];
+	String_InitArray(str, strBuffer);
+	String_Format4(&str, "%i,%i,%i,%i", &casulos[CASULO_REFORCADO], &casulos[CASULO_MARE],
+		&casulos[CASULO_MESTRE], &casuloEscolhido);
+	Options_Set(OPT_CASULOS, &str);
+	Options_SetInt(OPT_INSIGNIAS, insignias);
+}
+
+static void Casulos_Carregar(void) {
+	cc_string str; char strBuffer[64];
+	cc_string partes[4];
+	int i, v;
+	String_InitArray(str, strBuffer);
+	Options_Get(OPT_CASULOS, &str, "");
+	casuloEscolhido = -1;
+
+	if (String_UNSAFE_Split(&str, ',', partes, 4) == 4) {
+		for (i = 0; i < 3; i++)
+		{
+			if (Convert_ParseInt(&partes[i], &v)) casulos[CASULO_REFORCADO + i] = max(0, min(v, 99));
+		}
+		if (Convert_ParseInt(&partes[3], &v) && v >= -1 && v < CASULO_COUNT) casuloEscolhido = v;
+	}
+	insignias = Options_GetInt(OPT_INSIGNIAS, 0, (1 << MESTRES_COUNT) - 1, 0);
+}
+
+static float Casulo_Mult(int tipo, struct Criatura* c) {
+	switch (tipo)
+	{
+	case CASULO_REFORCADO: return 1.6f;
+	case CASULO_MARE:      return especies_def[c->especie].tipo == TIPO_AGUA ? 3.0f : 1.0f;
+	case CASULO_MESTRE:    return 100.0f;
+	}
+	return 1.0f;
+}
+
+static int Casulo_Escolher(struct Criatura* c) {
+	int i, melhor = CASULO_COMUM;
+	if (casuloEscolhido > CASULO_COMUM) {
+		if (casulos[casuloEscolhido] > 0) return casuloEscolhido;
+		Chat_Add2("&eAcabaram os Casulos %c%c&e. Voltando para o automatico.", casuloCores[casuloEscolhido], casuloNomes[casuloEscolhido]);
+		casuloEscolhido = -1;
+	}
+	if (casuloEscolhido == CASULO_COMUM) return CASULO_COMUM;
+
+	for (i = CASULO_REFORCADO; i < CASULO_MESTRE; i++)
+	{
+		if (casulos[i] > 0 && Casulo_Mult(i, c) > Casulo_Mult(melhor, c)) melhor = i;
+	}
+	return melhor;
+}
+
+static void Casulos_Ganhar(int tipo, int n) {
+	casulos[tipo] = min(99, casulos[tipo] + n);
+	Chat_Add3("&aVoce ganhou %i Casulo(s) %c%c&a!", &n, casuloCores[tipo], casuloNomes[tipo]);
+	Casulos_Salvar();
+}
+
+/* As vezes uma selvagem derrotada deixa um casulo para tras */
+static void Casulos_Recompensa(struct Criatura* c) {
+	int r = Random_Next(&rnd, 10);
+	if (r < 2)      Casulos_Ganhar(CASULO_REFORCADO, 1);
+	else if (r < 3) Casulos_Ganhar(CASULO_MARE, 1);
+}
+
+
+/*########################################################################################################################*
+*-----------------------------------------------------Mestres de Bioma----------------------------------------------------*
+*#########################################################################################################################*/
+/* Treinadores (um por tipo) que aparecem pelo mundo. Vencer a equipe deles da uma insignia. */
+#define MESTRE_ID (CRIATURA_ID_BASE + CRIATURAS_MAX) /* 224 */
+
+struct Treinador { struct Entity base; cc_bool usado; int idx; };
+static struct Treinador treinador;
+static struct ModelTex mestreTex[MESTRES_COUNT];
+static char mestreTexNome[MESTRES_COUNT][16];
+
+static struct {
+	cc_bool ativa;   /* batalha em andamento */
+	int etapa;       /* qual criatura da equipe do mestre */
+	int criatura;    /* indice em criaturas[] da criatura do mestre em campo (-1 = nenhuma) */
+	float timer;     /* espera ate mandar a proxima */
+} luta;
+static float mestreSpawnTimer = 45.0f;
+static float mestreSairTimer;
+
+static int Mestre_Proximo(void) {
+	int i;
+	for (i = 0; i < MESTRES_COUNT; i++)
+	{
+		if (!(insignias & (1 << i))) return i;
+	}
+	return -1;
+}
+
+static void Mestre_Falar(const char* fala) {
+	const struct MestreDef* m = &mestres_def[treinador.idx];
+	Chat_Add3("%c%c: &f%c", m->cor, m->nome, fala);
+}
+
+static void Mestres_RegistrarTexturas(void) {
+	cc_string name;
+	int i;
+	for (i = 0; i < MESTRES_COUNT; i++)
+	{
+		String_InitArray_NT(name, mestreTexNome[i]);
+		String_Format1(&name, "mestre%i.png", &i);
+		mestreTexNome[i][name.length] = '\0';
+		mestreTex[i].name     = mestreTexNome[i];
+		mestreTex[i].skinType = SKIN_64x64;
+		Model_RegisterTexture(&mestreTex[i]);
+	}
+}
+
+static void Mestre_CheckTexture(int idx) {
+	const struct MestreDef* m = &mestres_def[idx];
+	struct Stream mem;
+	cc_string name;
+	if (mestreTex[idx].texID) return;
+
+	Stream_ReadonlyMemory(&mem, (void*)m->png, m->pngLen);
+	name = String_FromReadonly(mestreTexNome[idx]);
+	Game_UpdateTexture(&mestreTex[idx].texID, &mem, &name, &mestreTex[idx].skinType, NULL);
+}
+
+static void Treinador_Tick(struct Entity* e, float delta) {
+	struct Entity* jogador = &Entities.CurPlayer->Base;
+	float dx = jogador->Position.x - e->next.pos.x, dz = jogador->Position.z - e->next.pos.z;
+	e->prev = e->next;
+	/* fica olhando para o jogador */
+	e->next.yaw  = Math_Atan2f(-dz, dx) * MATH_RAD2DEG;
+	e->next.rotY = e->next.yaw;
+	AnimatedComp_Update(e, e->prev.pos, e->next.pos, delta);
+}
+
+static void Treinador_RenderModel(struct Entity* e, float delta, float t) {
+	struct Treinador* tr = (struct Treinador*)e;
+	Mestre_CheckTexture(tr->idx);
+	e->TextureId = mestreTex[tr->idx].texID;
+	e->SkinType  = SKIN_64x64;
+
+	Vec3_Lerp(&e->Position, &e->prev.pos, &e->next.pos, t);
+	Entity_LerpAngles(e, t);
+	AnimatedComp_GetCurrent(e, t);
+	e->ShouldRender = Model_ShouldRender(e);
+	if (e->ShouldRender) Model_Render(e->Model, e);
+}
+
+static PackedCol Treinador_GetCol(struct Entity* e) {
+	Vec3 eyePos = Entity_GetEyePosition(e);
+	IVec3 pos;
+	IVec3_Floor(&pos, &eyePos);
+	return Lighting.Color(pos.x, pos.y, pos.z);
+}
+
+static cc_bool Treinador_ShouldRenderName(struct Entity* e) {
+	return e->ShouldRender && Model_RenderDistance(e) <= 32.0f * 32.0f;
+}
+
+static const struct EntityVTABLE treinador_VTABLE = {
+	Treinador_Tick,        Criatura_Despawn,          Criatura_SetLocation, Treinador_GetCol,
+	Treinador_RenderModel, Treinador_ShouldRenderName
+};
+
+static void Mestre_EncerrarLuta(void) {
+	struct Criatura* minha = Criatura_DoJogador();
+	if (luta.criatura >= 0 && criaturas[luta.criatura].usada && criaturas[luta.criatura].doMestre)
+		Criatura_Remover(&criaturas[luta.criatura]);
+	if (minha) minha->alvo = -1;
+	luta.ativa = false; luta.criatura = -1;
+}
+
+static void Mestre_Remover(void) {
+	if (luta.ativa) Mestre_EncerrarLuta();
+	if (!treinador.usado) return;
+	Entities_Remove(MESTRE_ID);
+	treinador.usado = false;
+	mestreSairTimer = 0;
+}
+
+static void Mestre_Aparecer(int idx, Vec3 pos) {
+	const struct MestreDef* m = &mestres_def[idx];
+	struct Entity* e = &treinador.base;
+	cc_string str; char strBuffer[STRING_SIZE];
+
+	Mestre_Remover();
+	Mem_Set(&treinador, 0, sizeof(treinador));
+	Entity_Init(e);
+	e->VTABLE = &treinador_VTABLE;
+	treinador.usado = true;
+	treinador.idx   = idx;
+	e->prev.pos = e->next.pos = e->Position = pos;
+
+	String_InitArray(str, strBuffer);
+	String_Format3(&str, "%c%c &7(%c)", m->cor, m->nome, m->titulo);
+	Entity_SetName(e, &str);
+	Entities.List[MESTRE_ID] = e;
+
+	Mem_Set(&luta, 0, sizeof(luta));
+	luta.criatura = -1;
+	Chat_Add2("&eUm Mestre de Bioma apareceu por perto: %c%c&e!", m->cor, m->nome);
+	Chat_AddRaw("&eBata nele (quebrar bloco / R) para desafiar.");
+}
+
+static void Mestre_Desafiar(void) {
+	const struct MestreDef* m = &mestres_def[treinador.idx];
+	cc_string msg; char msgBuffer[STRING_SIZE];
+	int prox;
+
+	if (!equipeCount) { Mestre_Falar("Primeiro escolha sua criatura com /client inicial."); return; }
+	if (!Criatura_DoJogador()) {
+		prox = ProximoSaudavel(-1);
+		if (prox < 0) { Mestre_Falar("Suas criaturas estao cansadas. Deixe elas descansarem no casulo."); return; }
+		SoltarMembro(prox);
+	}
+	String_InitArray(msg, msgBuffer);
+	String_Format1(&msg, "Quer a Insignia %c? Mostre o que sabe!", m->insignia);
+	msgBuffer[msg.length] = '\0';
+	Mestre_Falar(msgBuffer);
+
+	luta.ativa = true; luta.etapa = 0; luta.criatura = -1; luta.timer = 1.5f;
+}
+
+static void Mestre_CriaturaCaiu(void) {
+	luta.etapa++;
+	luta.criatura = -1;
+	luta.timer    = 2.0f;
+}
+
+static void Mestre_Vencido(void) {
+	const struct MestreDef* m = &mestres_def[treinador.idx];
+	cc_string msg; char msgBuffer[STRING_SIZE];
+	int total = 0, i;
+
+	insignias |= 1 << treinador.idx;
+	for (i = 0; i < MESTRES_COUNT; i++) { if (insignias & (1 << i)) total++; }
+
+	Mestre_Falar("Que batalha! Voce mereceu. Procure o proximo Mestre.");
+	String_InitArray(msg, msgBuffer);
+	String_Format2(&msg, "%cInsignia %c!", m->cor, m->insignia);
+	Chat_AddOf(&msg, MSG_TYPE_ANNOUNCEMENT);
+	Chat_Add3("&6Voce ganhou a Insignia %c! &7(%i de %i)", m->insignia, &total, &i);
+
+	luta.ativa = false; luta.criatura = -1;
+	mestreSairTimer  = 6.0f;
+	mestreSpawnTimer = 180.0f; /* o proximo Mestre demora um pouco para aparecer */
+	casulos[CASULO_REFORCADO] = min(99, casulos[CASULO_REFORCADO] + 3);
+	Casulos_Ganhar(CASULO_MESTRE, 1);
+	Chat_AddRaw("&aE mais 3 Casulos &7Reforcados&a.");
+	if (total == MESTRES_COUNT) Chat_AddRaw("&dVoce tem todas as insignias! Agora voce e Campeao dos Biomas!");
+}
+
+static void Mestre_MandarCriatura(void) {
+	const struct MestreDef* m = &mestres_def[treinador.idx];
+	struct Entity* jogador = &Entities.CurPlayer->Base;
+	struct Criatura* c;
+	Vec3 pos = treinador.base.next.pos;
+	float dx = jogador->Position.x - pos.x, dz = jogador->Position.z - pos.z;
+	float len = Math_SqrtF(dx * dx + dz * dz) + 0.01f, y;
+	int especie = m->especies[luta.etapa], nivel = m->niveis[luta.etapa];
+
+	pos.x += dx / len * 1.5f; pos.z += dz / len * 1.5f;
+	if (AcharChao(Math_Floor(pos.x), Math_Floor(pos.z), Math_Floor(pos.y + 0.5f), true, &y)) pos.y = y;
+
+	c = Criatura_Criar(especie, nivel, pos, true);
+	if (!c) { luta.timer = 1.0f; return; }
+	c->doMestre   = true;
+	c->avisouTipo = false;
+	luta.criatura = Criatura_Index(c);
+	Chat_Add4("%c%c &fmandou %c%c&f!", m->cor, m->nome, especies_def[especie].cor, especies_def[especie].nome);
+}
+
+static void Mestre_Tick(float delta) {
+	struct Entity* jogador = &Entities.CurPlayer->Base;
+	struct Criatura* minha;
+	struct Criatura* cur;
+	int idx, prox;
+	float ang, d2, y;
+	Vec3 pos;
+
+	if (!treinador.usado) {
+		/* aparece de vez em quando um Mestre ainda nao vencido */
+		idx = Mestre_Proximo();
+		if (!equipeCount || idx < 0) return;
+		mestreSpawnTimer -= delta;
+		if (mestreSpawnTimer > 0) return;
+		mestreSpawnTimer = 5.0f; /* tenta de novo logo se nao achar chao */
+
+		ang = Random_Float(&rnd) * 2 * MATH_PI;
+		pos.x = jogador->Position.x + Math_CosF(ang) * 12.0f;
+		pos.z = jogador->Position.z + Math_SinF(ang) * 12.0f;
+		if (!AcharChaoEntre(Math_Floor(pos.x), Math_Floor(pos.z), Math_Floor(jogador->Position.y) + 8,
+			Math_Floor(jogador->Position.y) - 8, false, &y)) return;
+		pos.x = Math_Floor(pos.x) + 0.5f; pos.z = Math_Floor(pos.z) + 0.5f; pos.y = y;
+		Mestre_Aparecer(idx, pos);
+		mestreSpawnTimer = 240.0f;
+		return;
+	}
+
+	d2 = Dist2XZ(treinador.base.next.pos, jogador->Position);
+	if (mestreSairTimer > 0) {
+		mestreSairTimer -= delta;
+		if (mestreSairTimer <= 0) Mestre_Remover();
+		return;
+	}
+	if (!luta.ativa) {
+		if (d2 > 64 * 64) Mestre_Remover();
+		return;
+	}
+	if (d2 > 32 * 32) {
+		Chat_AddRaw("&eVoce se afastou e a batalha contra o Mestre acabou.");
+		Mestre_EncerrarLuta();
+		return;
+	}
+
+	minha = Criatura_DoJogador();
+	if (!minha) {
+		prox = ProximoSaudavel(-1);
+		if (prox < 0) {
+			Mestre_Falar("Suas criaturas cansaram. Volte quando estiver mais forte!");
+			Mestre_EncerrarLuta();
+			return;
+		}
+		SoltarMembro(prox);
+		minha = Criatura_DoJogador();
+	}
+
+	cur = luta.criatura >= 0 ? &criaturas[luta.criatura] : NULL;
+	if (cur && (!cur->usada || !cur->doMestre)) { cur = NULL; luta.criatura = -1; }
+	if (cur) {
+		if (minha && minha->alvo < 0) minha->alvo = luta.criatura;
+		if (minha && cur->alvo < 0)   cur->alvo   = Criatura_Index(minha);
+		return;
+	}
+
+	luta.timer -= delta;
+	if (luta.timer > 0) return;
+	if (luta.etapa >= mestres_def[treinador.idx].count) { Mestre_Vencido(); return; }
+	Mestre_MandarCriatura();
+}
+
+static cc_bool MestreNaMira(Vec3 eye, Vec3 dir, float maxT, float* t) {
+	float t0, t1;
+	if (!treinador.usado) return false;
+	if (!Intersection_RayIntersectsRotatedBox(eye, dir, &treinador.base, &t0, &t1)) return false;
+	if (t0 < 0 || t0 > maxT) return false;
+	*t = t0;
+	return true;
+}
+
+/*########################################################################################################################*
 *-----------------------------------------------------------HUD-----------------------------------------------------------*
 *#########################################################################################################################*/
 /* Linhas no canto de cima a direita: sua criatura, o alvo e a equipe */
@@ -919,6 +1292,8 @@ static void Hud_Atualizar(float delta) {
 		else                            String_AppendConst(&str, "&a");
 		String_Append(&str, 'o');
 	}
+	String_Format3(&str, " &7Casulos &fR%i &bM%i &dS%i", &casulos[CASULO_REFORCADO], &casulos[CASULO_MARE], &casulos[CASULO_MESTRE]);
+	for (i = 0; i < MESTRES_COUNT; i++) { if (insignias & (1 << i)) String_AppendConst(&str, " &6*"); }
 	Hud_Linha(2, &str);
 }
 
@@ -932,6 +1307,7 @@ static void Criaturas_TickGlobal(struct ScheduledTask* task) {
 	if (membroAtivo >= 0 && !Criatura_DoJogador()) SoltarMembro(membroAtivo);
 	Spawner_Tick(delta);
 	Equipe_Descansar(delta);
+	Mestre_Tick(delta);
 	Hud_Atualizar(delta);
 }
 
@@ -939,7 +1315,7 @@ static void Criaturas_TickGlobal(struct ScheduledTask* task) {
 /*########################################################################################################################*
 *---------------------------------------------------------Clique----------------------------------------------------------*
 *#########################################################################################################################*/
-static struct Criatura* CriaturaNaMira(void) {
+static struct Criatura* CriaturaNaMira(float* tOut) {
 	struct LocalPlayer* p = Entities.CurPlayer;
 	Vec3 eye = Entity_GetEyePosition(&p->Base);
 	Vec3 dir = Vec3_GetDirVector(p->Base.Yaw * MATH_DEG2RAD, p->Base.Pitch * MATH_DEG2RAD);
@@ -960,6 +1336,7 @@ static struct Criatura* CriaturaNaMira(void) {
 		if (t0 < 0 || t0 > melhorT) continue;
 		melhorT = t0; melhor = &criaturas[i];
 	}
+	*tOut = melhorT;
 	return melhor;
 }
 
@@ -970,9 +1347,17 @@ static void TentarCapturar(struct Criatura* c) {
 	int vidaMax = VidaMax(c->especie, c->nivel);
 	String_InitArray(msg, msgBuffer);
 
+	IVec3 coords;
+	Vec3 p;
+	int tipo;
+
 	if (capturaTimer > 0) return;
 	capturaTimer = 1.0f;
 
+	if (c->doMestre) {
+		Chat_AddRaw("&cNao da para capturar a criatura de um Mestre! Venca ela na batalha.");
+		return;
+	}
 	if (equipeCount >= EQUIPE_MAX) {
 		Chat_AddRaw("&cSua equipe esta cheia (6). Use &f/client equipe &cpara ver.");
 		return;
@@ -980,6 +1365,16 @@ static void TentarCapturar(struct Criatura* c) {
 
 	chance = 1.0f - (float)c->vida / vidaMax;
 	if (chance < 0.15f) chance = 0.15f;
+
+	/* casulos melhores: chance = 1 - (1 - base) ^ mult */
+	tipo   = Casulo_Escolher(c);
+	chance = 1.0f - (float)Math_Exp2(Math_Log2(1.0f - chance) * Casulo_Mult(tipo, c));
+	if (tipo != CASULO_COMUM) { casulos[tipo]--; Casulos_Salvar(); }
+
+	p = c->base.next.pos; p.y += 0.4f;
+	IVec3_Floor(&coords, &p);
+	Particles_BreakBlockEffect(coords, casuloBloco[tipo], BLOCK_AIR);
+	Chat_Add2("&7Voce jogou um Casulo %c%c&7...", casuloCores[tipo], casuloNomes[tipo]);
 
 	if (Random_Float(&rnd) < chance) {
 		equipe[equipeCount].especie = c->especie;
@@ -1004,9 +1399,19 @@ cc_bool Criaturas_HandleClick(cc_bool place) {
 	struct Entity* jogador;
 	struct Criatura* c;
 	struct Criatura* minha;
+	struct LocalPlayer* p;
+	float tc, tm;
 	if (!Ativo()) return false;
 
-	c = CriaturaNaMira();
+	c = CriaturaNaMira(&tc);
+	p = Entities.CurPlayer;
+	if (MestreNaMira(Entity_GetEyePosition(&p->Base), Vec3_GetDirVector(p->Base.Yaw * MATH_DEG2RAD, p->Base.Pitch * MATH_DEG2RAD),
+			c ? tc : p->ReachDistance + 1.0f, &tm)) {
+		if (luta.ativa)              Chat_AddRaw("&eA batalha ja comecou! Ajude sua criatura batendo na do Mestre.");
+		else if (mestreSairTimer > 0) Mestre_Falar("Boa sorte com o proximo Mestre!");
+		else                          Mestre_Desafiar();
+		return true;
+	}
 	if (!c) return false;
 	jogador = &Entities.CurPlayer->Base;
 
@@ -1224,6 +1629,83 @@ static struct ChatCommand CriaturaCommand = {
 };
 
 
+static void CasuloCommand_Execute(const cc_string* args, int argsCount) {
+	int i, escolha = -2;
+	cc_string nome;
+
+	if (!criaturasLigadas) { Chat_AddRaw("&eO mod de criaturas esta desligado (menu Mods)."); return; }
+	if (argsCount) {
+		if (String_CaselessEqualsConst(&args[0], "auto")) escolha = -1;
+		for (i = 0; i < CASULO_COUNT; i++)
+		{
+			nome = String_FromReadonly(casuloNomes[i]);
+			if (String_CaselessEquals(&args[0], &nome)) escolha = i;
+		}
+		if (escolha != -2) {
+			casuloEscolhido = escolha;
+			Casulos_Salvar();
+		}
+	}
+
+	Chat_AddRaw("&fSeus casulos:");
+	Chat_AddRaw("  &fComum &7- sempre tem, chance normal");
+	Chat_Add1("  &7Reforcado &7x%i - chance maior", &casulos[CASULO_REFORCADO]);
+	Chat_Add1("  &bMare &7x%i - muito bom contra criaturas de agua", &casulos[CASULO_MARE]);
+	Chat_Add1("  &dMestre &7x%i - captura sempre", &casulos[CASULO_MESTRE]);
+	if (casuloEscolhido < 0) Chat_AddRaw("&eUsando: automatico (o melhor que tiver, sem gastar o Mestre)");
+	else Chat_Add2("&eUsando: %c%c", casuloCores[casuloEscolhido], casuloNomes[casuloEscolhido]);
+	Chat_AddRaw("&7/client casulo [auto|comum|reforcado|mare|mestre]");
+}
+
+static struct ChatCommand CasuloCommand = {
+	"Casulo", CasuloCommand_Execute,
+	COMMAND_FLAG_SINGLEPLAYER_ONLY,
+	{
+		"&a/client casulo [auto|comum|reforcado|mare|mestre]",
+		"&eMostra seus casulos e escolhe qual jogar com colocar bloco (L).",
+	}
+};
+
+static void MestreCommand_Execute(const cc_string* args, int argsCount) {
+	struct Entity* jogador = &Entities.CurPlayer->Base;
+	const struct MestreDef* m;
+	float yaw = jogador->Yaw * MATH_DEG2RAD, y;
+	int i, idx;
+	Vec3 pos;
+
+	if (!criaturasLigadas) { Chat_AddRaw("&eO mod de criaturas esta desligado (menu Mods)."); return; }
+	if (argsCount && String_CaselessEqualsConst(&args[0], "chamar")) {
+		idx = Mestre_Proximo();
+		if (idx < 0) { Chat_AddRaw("&dVoce ja venceu todos os Mestres!"); return; }
+		if (luta.ativa) { Chat_AddRaw("&eTermine a batalha atual primeiro."); return; }
+		pos.x = jogador->Position.x + Math_SinF(yaw) * 5.0f;
+		pos.z = jogador->Position.z - Math_CosF(yaw) * 5.0f;
+		if (!AcharChaoEntre(Math_Floor(pos.x), Math_Floor(pos.z), Math_Floor(jogador->Position.y) + 8,
+			Math_Floor(jogador->Position.y) - 16, false, &y)) { Chat_AddRaw("&eNao achei chao na sua frente."); return; }
+		pos.x = Math_Floor(pos.x) + 0.5f; pos.z = Math_Floor(pos.z) + 0.5f; pos.y = y;
+		Mestre_Aparecer(idx, pos);
+		return;
+	}
+
+	Chat_AddRaw("&fMestres de Bioma:");
+	for (i = 0; i < MESTRES_COUNT; i++)
+	{
+		m = &mestres_def[i];
+		Chat_Add4("  %c%c &7(%c) %c", m->cor, m->nome, m->titulo,
+			(insignias & (1 << i)) ? "&6- Insignia ganha!" : "&8- ainda nao");
+	}
+	Chat_AddRaw("&7Eles aparecem pelo mundo. &f/client mestre chamar &7chama o proximo.");
+}
+
+static struct ChatCommand MestreCommand = {
+	"Mestre", MestreCommand_Execute,
+	COMMAND_FLAG_SINGLEPLAYER_ONLY,
+	{
+		"&a/client mestre &e- lista os Mestres de Bioma e suas insignias",
+		"&a/client mestre chamar &e- chama o proximo Mestre para batalhar",
+	}
+};
+
 /*########################################################################################################################*
 *--------------------------------------------------------Componente-------------------------------------------------------*
 *#########################################################################################################################*/
@@ -1231,17 +1713,22 @@ static void Criaturas_Init(void) {
 	Random_SeedFromCurrentTime(&rnd);
 	Especies_Register();
 	Equipe_Carregar();
+	Casulos_Carregar();
+	Mestres_RegistrarTexturas();
 	Commands_Register(&EquipeCommand);
+	Commands_Register(&CasuloCommand);
+	Commands_Register(&MestreCommand);
 	Commands_Register(&InicialCommand);
 	Commands_Register(&CriaturaCommand);
 	ScheduledTask_Add(GAME_DEF_TICKS, Criaturas_TickGlobal);
 }
 
-static void Criaturas_Reset(void) { RemoverTodas(); }
+static void Criaturas_Reset(void) { Mestre_Remover(); RemoverTodas(); }
 
 static void Criaturas_OnNewMap(void) {
 	struct Criatura* minha = Criatura_DoJogador();
 	if (minha) Membro_SincronizarDe(minha);
+	Mestre_Remover();
 	RemoverTodas();
 	Hud_Limpar();
 	spawnTimer = 2.0f;
@@ -1254,6 +1741,7 @@ static void Criaturas_OnNewMapLoaded(void) {
 static void Criaturas_Free(void) {
 	struct Criatura* minha = Criatura_DoJogador();
 	if (minha) { Membro_SincronizarDe(minha); Equipe_Salvar(); }
+	Mestre_Remover();
 	RemoverTodas();
 }
 

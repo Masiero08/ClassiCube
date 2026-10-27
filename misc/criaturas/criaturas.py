@@ -313,6 +313,103 @@ ESPECIES = [
 ]
 
 
+# ---------------------------------------------------------------- mestres de bioma
+# Treinadores originais (um por tipo). Cada um tem uma equipe e da uma insignia.
+MESTRES = [
+    dict(id="tronco", nome="Mestre Tronco", titulo="Mestre das Plantas", insignia="Folha", cor="&2", tipo="PLANTA",
+         equipe=[("larvito", 6), ("brotinho", 7), ("musgao", 10)],
+         pal=dict(pele=(225, 180, 140), cabelo=(90, 60, 35), camisa=(70, 140, 60), calca=(110, 80, 50), detalhe=(200, 230, 120), sapato=(60, 45, 30))),
+    dict(id="mare", nome="Mestra Mare", titulo="Mestra das Aguas", insignia="Onda", cor="&9", tipo="AGUA",
+         equipe=[("gotinha", 9), ("pincudo", 10), ("marolha", 12)],
+         pal=dict(pele=(240, 200, 170), cabelo=(40, 90, 170), camisa=(60, 150, 230), calca=(30, 60, 130), detalhe=(240, 250, 255), sapato=(250, 250, 250), longo=True)),
+    dict(id="cascalho", nome="Mestre Cascalho", titulo="Mestre das Pedras", insignia="Rocha", cor="&7", tipo="PEDRA",
+         equipe=[("seixo", 12), ("toupito", 12), ("pedregulho", 15)],
+         pal=dict(pele=(160, 115, 80), cabelo=(40, 40, 40), camisa=(130, 120, 110), calca=(80, 70, 60), detalhe=(250, 200, 60), sapato=(50, 40, 30), capacete=True)),
+    dict(id="faisca", nome="Mestra Faisca", titulo="Mestra dos Raios", insignia="Raio", cor="&e", tipo="ELETRICO",
+         equipe=[("choquilo", 14), ("choquilo", 15), ("trovesquilo", 17)],
+         pal=dict(pele=(235, 195, 160), cabelo=(250, 220, 60), camisa=(50, 50, 60), calca=(40, 40, 50), detalhe=(255, 230, 40), sapato=(250, 220, 60), longo=True)),
+    dict(id="vendaval", nome="Mestre Vendaval", titulo="Mestre dos Ventos", insignia="Pena", cor="&3", tipo="VENTO",
+         equipe=[("penape", 16), ("asalume", 18), ("ventania", 20)],
+         pal=dict(pele=(200, 160, 120), cabelo=(240, 240, 245), camisa=(120, 190, 240), calca=(240, 240, 250), detalhe=(250, 170, 40), sapato=(90, 90, 110))),
+    dict(id="brasa", nome="Mestra Brasa", titulo="Mestra do Fogo", insignia="Chama", cor="&c", tipo="FOGO",
+         equipe=[("labareda", 20), ("labareda", 22), ("fornalobo", 25)],
+         pal=dict(pele=(230, 185, 150), cabelo=(200, 50, 30), camisa=(220, 80, 30), calca=(60, 30, 30), detalhe=(255, 210, 60), sapato=(40, 20, 20), longo=True)),
+]
+
+# caixas da pele de humano 64x64: (nome, u, v, sx, sy, sz)
+PELE_CAIXAS = [
+    ("cabeca", 0, 0, 8, 8, 8), ("chapeu", 32, 0, 8, 8, 8),
+    ("corpo", 16, 16, 8, 12, 4), ("braco", 40, 16, 4, 12, 4), ("braco", 32, 48, 4, 12, 4),
+    ("perna", 0, 16, 4, 12, 4), ("perna", 16, 48, 4, 12, 4),
+]
+
+
+def pintar_mestre(m):
+    pal = m["pal"]
+    rnd = random.Random(m["id"])
+    img = Image.new("RGBA", (64, 64), (0, 0, 0, 0))
+    pele, cab, cam, calca, det, sap = pal["pele"], pal["cabelo"], pal["camisa"], pal["calca"], pal["detalhe"], pal["sapato"]
+
+    def ruido(c, amt=6):
+        k = rnd.randint(-amt, amt)
+        return tuple(max(0, min(255, v + k)) for v in c) + (255,)
+
+    for nome, u, v, sx, sy, sz in PELE_CAIXAS:
+        for face, (fx, fy, fw, fh) in regioes(u, v, sx, sy, sz).items():
+            for j in range(fh):
+                for i in range(fw):
+                    c = None
+                    if nome == "cabeca":
+                        c = pele
+                        if face == "topo":
+                            c = cab
+                        elif face == "tras":
+                            c = cab if j < (7 if pal.get("longo") else 6) else pele
+                        elif face in ("esq", "dir"):
+                            c = cab if j < 2 or (pal.get("longo") and j < 7 and (i < 3 if face == "dir" else i >= fw - 3)) else pele
+                        elif face == "frente":
+                            c = pele
+                            if j < 2:
+                                c = cab
+                            elif j in (3, 4) and i in (1, 2, 5, 6):
+                                # olhos grandes: branco por fora, pupila por dentro
+                                c = (255, 255, 255) if i in (1, 6) else (40, 30, 40)
+                            elif j == 6 and 3 <= i <= 4:
+                                c = clar(pele, 0.6)
+                            elif j == 5 and i in (0, 7):
+                                c = (240, 150, 150)
+                            elif pal.get("longo") and i in (0, 7) and j < 6:
+                                c = cab
+                        elif face == "baixo":
+                            c = pele
+                    elif nome == "chapeu":
+                        # faixa na testa (ou capacete de minerador)
+                        if pal.get("capacete"):
+                            if face == "topo" or (face != "baixo" and j < 3):
+                                c = det if (face == "frente" and j == 1 and 3 <= i <= 4) else (230, 190, 40)
+                        elif face in ("frente", "tras", "esq", "dir") and j == 2:
+                            c = det
+                    elif nome == "corpo":
+                        c = cam
+                        if j >= fh - 2 and face in ("frente", "tras", "esq", "dir"):
+                            c = clar(calca, 0.8)  # cinto
+                            if face == "frente" and j == fh - 2 and 3 <= i <= 4:
+                                c = det
+                        elif face == "frente" and 2 <= j <= 4 and 3 <= i <= 4:
+                            c = det  # emblema do tipo
+                        elif face in ("frente", "tras") and (i == 0 or i == fw - 1):
+                            c = clar(cam, 0.8)
+                    elif nome == "braco":
+                        c = cam if (j < 4 or face == "topo") else pele
+                        if j == 3 and face != "topo":
+                            c = det
+                    elif nome == "perna":
+                        c = sap if j >= fh - 2 or face == "baixo" else calca
+                    if c is not None:
+                        img.putpixel((fx + i, fy + j), ruido(c))
+    return img
+
+
 # ---------------------------------------------------------------- empacotar UVs
 def tamanho(c):
     _, x1, y1, z1, x2, y2, z2, _, _ = c
@@ -762,6 +859,23 @@ def gerar_c(pngs):
             e["vel"], evo, e["nivel"], e["habitat"], e["inicial"], e["id"], e["id"]))
     L.append("};")
     L.append("")
+    L.append("struct MestreDef { const char* nome; const char* titulo; const char* insignia; const char* cor; cc_uint8 tipo, count;")
+    L.append("\tcc_uint8 especies[3], niveis[3]; const cc_uint8* png; int pngLen; };")
+    for m in MESTRES:
+        data = pngs["mestre_" + m["id"]]
+        L.append("static const cc_uint8 png_mestre_%s[%d] = {" % (m["id"], len(data)))
+        for i in range(0, len(data), 20):
+            L.append("\t" + ",".join("%d" % b for b in data[i:i + 20]) + ",")
+        L.append("};")
+    L.append("#define MESTRES_COUNT %d" % len(MESTRES))
+    L.append("static const struct MestreDef mestres_def[MESTRES_COUNT] = {")
+    for m in MESTRES:
+        eq = m["equipe"] + [m["equipe"][-1]] * (3 - len(m["equipe"]))
+        L.append('\t{ "%s", "%s", "%s", "%s", TIPO_%s, %d, { %s }, { %s }, png_mestre_%s, sizeof(png_mestre_%s) },' % (
+            m["nome"], m["titulo"], m["insignia"], m["cor"], m["tipo"], len(m["equipe"]),
+            ", ".join(str(ids.index(e)) for e, _ in eq), ", ".join(str(n) for _, n in eq), m["id"], m["id"]))
+    L.append("};")
+    L.append("")
     return "\n".join(L)
 
 
@@ -774,9 +888,15 @@ def main():
         img.save(path, optimize=True)
         with open(path, "rb") as f:
             pngs[e["id"]] = f.read()
+    for m in MESTRES:
+        img = pintar_mestre(m)
+        path = os.path.join(TEX_DIR, "mestre_" + m["id"] + ".png")
+        img.save(path, optimize=True)
+        with open(path, "rb") as f:
+            pngs["mestre_" + m["id"]] = f.read()
     with open(HEADER, "w") as f:
         f.write(gerar_c(pngs))
-    print("ok: %d especies, %d planos" % (len(ESPECIES), len(PLANOS)))
+    print("ok: %d especies, %d planos, %d mestres" % (len(ESPECIES), len(PLANOS), len(MESTRES)))
 
 
 if __name__ == "__main__":

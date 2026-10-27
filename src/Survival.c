@@ -266,6 +266,8 @@ static cc_bool Survival_Tick(struct ScheduledTask2* task) {
 	if (hurtCooldown > 0) hurtCooldown -= delta;
 
 	UpdateFalling(e);
+	/* Falling out of the world (e.g. off the island in the End) */
+	if (e->Position.y < -8.0f) Damage(4);
 	if (Entity_TouchesAnyLava(e)) Damage(4);
 
 	if (HeadInWater(e)) {
@@ -304,7 +306,6 @@ static BlockID GetDrop(BlockID block) {
 	case MBLOCK_SORTE: return BLOCK_AIR; /* abre uma surpresa (Minerios.c) */
 	case LBLOCK_DIAMOND_ORE:   return LITEM_DIAMOND;
 	case LBLOCK_QUARTZ_ORE:    return LITEM_QUARTZ;
-	case LBLOCK_NETHER_PORTAL: return BLOCK_AIR;
 	case BLOCK_LEAVES: 
 		return Random_Next(&survival_rnd, 8) == 0 ? BLOCK_SAPLING : BLOCK_AIR;
 	}
@@ -397,7 +398,7 @@ static int GetBreakHits(BlockID block) {
 cc_bool Survival_CanBreak(BlockID block, int x, int y, int z) {
 	int hardness;
 	if (!survival_active) return true;
-	if (block == BLOCK_BEDROCK || block == LBLOCK_END_PORTAL) return false;
+	if (block == BLOCK_BEDROCK) return false;
 
 	/* Continuing to hit the same block? */
 	if (breakPos.x != x || breakPos.y != y || breakPos.z != z || Game.Time - lastHitTime > 0.5) {
@@ -528,6 +529,8 @@ static const struct Recipe recipes[] = {
 	{ 4, LITEM_DIAMOND,          0, BLOCK_AIR,              1, LBLOCK_DIAMOND         },
 	{ 1, LBLOCK_DIAMOND,         0, BLOCK_AIR,              4, LITEM_DIAMOND          },
 	{ 4, LBLOCK_NETHERRACK,      1, BLOCK_COAL_ORE,         4, LBLOCK_NETHER_BRICKS   },
+	{ 10, BLOCK_OBSIDIAN,        1, BLOCK_COAL_ORE,         2, LBLOCK_NETHER_PORTAL   },
+	{ 4, LITEM_ENDER_PEARL,      1, LITEM_DIAMOND,          2, LBLOCK_END_PORTAL      },
 };
 
 struct FoodRecipe {
@@ -618,6 +621,11 @@ static cc_string GetShortName(BlockID block) {
 	case BLOCK_SANDSTONE:    name = "Arenito";    break;
 	case BLOCK_CRATE:        name = "Caixote";    break;
 	case BLOCK_STONE_BRICK:  name = "Tij. pedra"; break;
+	case BLOCK_OBSIDIAN:     name = "Obsidiana";  break;
+	case LBLOCK_NETHERRACK: name = "Netherrack"; break;
+	case LBLOCK_NETHER_BRICKS: name = "Tij. Nether"; break;
+	case LITEM_ENDER_PEARL:  name = "Perola";     break;
+	case LBLOCK_DIAMOND:     name = "Bl. diamante"; break;
 	}
 	return name ? String_FromReadonly(name) : Block_UNSAFE_GetName(block);
 }

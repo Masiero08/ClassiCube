@@ -20,8 +20,12 @@ enum LateGameBlock {
 
 /* Draws the textures for these blocks into unused tiles of the given terrain atlas */
 void LateGame_PatchAtlas(struct Bitmap* bmp);
-/* Scatters diamond ore deep underground in a newly generated world */
-void LateGame_GenDiamonds(void);
+/* Adds obsidian next to lava and diamond ore deep underground in a newly generated world */
+void LateGame_GenOverworld(void);
+/* Turns a newly generated world into the Nether (netherrack, lava sea, ceiling, fortress bridges) */
+void LateGame_GenNether(void);
+/* Turns a newly generated world into the End (a floating island with obsidian pillars) */
+void LateGame_GenEnd(void);
 
 CC_END_HEADER
 #endif

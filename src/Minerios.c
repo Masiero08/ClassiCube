@@ -33,6 +33,7 @@
 #include "Errors.h"
 #include "Logger.h"
 #include "Minerios_tex.h"
+#include "LateGame.h"
 
 /* Minerios & Monstros: um mod pequeno inspirado no OreSpawn.
    Os nomes e as texturas sao originais (misc/minerios/gen_textures.py).
@@ -989,9 +990,18 @@ cc_bool Minerios_HandleClick(cc_bool place) {
 /*########################################################################################################################*
 *-------------------------------------------------------Dimensoes---------------------------------------------------------*
 *#########################################################################################################################*/
-enum { DIM_NORMAL, DIM_UTOPIA, DIM_CRISTAL, DIM_COUNT };
-static const char* const dim_nomes[DIM_COUNT]    = { "Mundo normal", "Utopia", "Dimensao de Cristal" };
-static const char* const dim_arquivos[DIM_COUNT] = { "maps/orespawn_normal.cw", "maps/orespawn_utopia.cw", "maps/orespawn_cristal.cw" };
+/* O Nether e o Fim (LateGame.c) usam o mesmo sistema, mas funcionam no modo sobrevivencia */
+/*  mesmo com o mod desligado */
+enum { DIM_NORMAL, DIM_UTOPIA, DIM_CRISTAL, DIM_NETHER, DIM_FIM, DIM_COUNT };
+static const char* const dim_nomes[DIM_COUNT]    = { "Mundo normal", "Utopia", "Dimensao de Cristal", "Nether", "O Fim" };
+static const char* const dim_arquivos[DIM_COUNT] = { 
+	"maps/orespawn_normal.cw", "maps/orespawn_utopia.cw", "maps/orespawn_cristal.cw", "maps/orespawn_nether.cw", "maps/orespawn_fim.cw"
+};
+
+/* Se as dimensoes funcionam (com o mod ou no modo sobrevivencia) */
+static cc_bool DimensoesLigadas(void) {
+	return (Minerios_Enabled || Options_GetBool("survival-mode", true)) && Server.IsSinglePlayer && World.Loaded;
+}
 
 static int  dimAtual, dimDestino = -1, dimGerando = -1;
 static int  viagemPendente = -1;
@@ -1074,6 +1084,8 @@ static void Viajar(int destino) {
 static int DimensaoDoPortal(BlockID b) {
 	if (b == MBLOCK_PORTAL_UTOPIA)  return DIM_UTOPIA;
 	if (b == MBLOCK_PORTAL_CRISTAL) return DIM_CRISTAL;
+	if (b == LBLOCK_NETHER_PORTAL)  return DIM_NETHER;
+	if (b == LBLOCK_END_PORTAL)     return DIM_FIM;
 	return -1;
 }
 
@@ -1129,13 +1141,22 @@ static void ColocarPortalVolta(void) {
 	int x = Math_Floor(e->Position.x + dir.x * 3.0f);
 	int z = Math_Floor(e->Position.z + dir.z * 3.0f);
 	int y = Math_Floor(e->Position.y);
-	BlockID portal = dimAtual == DIM_UTOPIA ? MBLOCK_PORTAL_UTOPIA : MBLOCK_PORTAL_CRISTAL;
+	BlockID portal, moldura;
+
+	switch (dimAtual)
+	{
+	case DIM_UTOPIA:  portal = MBLOCK_PORTAL_UTOPIA;  moldura = MBLOCK_RUBI;          break;
+	case DIM_CRISTAL: portal = MBLOCK_PORTAL_CRISTAL; moldura = MBLOCK_PEDRA_CRISTAL; break;
+	case DIM_NETHER:  portal = LBLOCK_NETHER_PORTAL;  moldura = BLOCK_OBSIDIAN;       break;
+	default:          portal = LBLOCK_END_PORTAL;     moldura = BLOCK_OBSIDIAN;       break;
+	}
 
 	if (!World_Contains(x, y, z) || !World_Contains(x, y + 1, z)) return;
-	if (y > 0) Game_UpdateBlock(x, y - 1, z, dimAtual == DIM_UTOPIA ? MBLOCK_RUBI : MBLOCK_PEDRA_CRISTAL);
+	/* abre espaco para o portal (no Nether ele pode cair dentro da pedra) */
+	if (y + 2 <= World.MaxY) Game_UpdateBlock(x, y + 2, z, moldura);
+	if (y > 0) Game_UpdateBlock(x, y - 1, z, moldura);
 	Game_UpdateBlock(x, y,     z, portal);
 	Game_UpdateBlock(x, y + 1, z, portal);
-	if (y + 2 <= World.MaxY) Game_UpdateBlock(x, y + 2, z, dimAtual == DIM_UTOPIA ? MBLOCK_RUBI : MBLOCK_PEDRA_CRISTAL);
 }
 
 static void AplicarCeu(int dim, cc_bool mudarAgora) {
@@ -1151,7 +1172,16 @@ static void AplicarCeu(int dim, cc_bool mudarAgora) {
 		sky    = PackedCol_Make(185, 120, 240, 255);
 		fog    = PackedCol_Make(235, 180, 250, 255);
 		clouds = PackedCol_Make(255, 205, 245, 255);
+	} else if (dim == DIM_NETHER) {
+		sky    = PackedCol_Make( 70,  15,  10, 255);
+		fog    = PackedCol_Make(110,  30,  20, 255);
+		clouds = PackedCol_Make( 70,  15,  10, 255);
+	} else if (dim == DIM_FIM) {
+		sky    = PackedCol_Make( 20,  10,  30, 255);
+		fog    = PackedCol_Make( 35,  25,  45, 255);
+		clouds = PackedCol_Make( 20,  10,  30, 255);
 	}
+	DayNight_SetMode(dim == DIM_NETHER ? DAYNIGHT_NETHER : (dim == DIM_FIM ? DAYNIGHT_END : DAYNIGHT_NORMAL));
 	/* o ciclo de dia e noite clareia e escurece a partir dessas cores */
 	DayNight_SetDayColors(sky, fog, clouds);
 	if (!mudarAgora) return;
@@ -1280,7 +1310,10 @@ static void GenSorte(int quantos) {
 
 void Minerios_PosGeracao(void) {
 	int area = World.Width * World.Length;
-	if (!Minerios_Enabled || !Game_AllowCustomBlocks) return;
+	if (!Game_AllowCustomBlocks) return;
+	if (dimGerando == DIM_NETHER) { LateGame_GenNether(); return; }
+	if (dimGerando == DIM_FIM)    { LateGame_GenEnd();    return; }
+	if (!Minerios_Enabled) return;
 
 	if (dimGerando == DIM_UTOPIA)  GerarUtopia();
 	if (dimGerando == DIM_CRISTAL) GerarCristal();
@@ -1330,7 +1363,9 @@ static void MineriosCommand_Execute(const cc_string* args, int argsCount) {
 		if (argsCount > 1 && String_CaselessEqualsConst(&args[1], "normal"))  dim = DIM_NORMAL;
 		if (argsCount > 1 && String_CaselessEqualsConst(&args[1], "utopia"))  dim = DIM_UTOPIA;
 		if (argsCount > 1 && String_CaselessEqualsConst(&args[1], "cristal")) dim = DIM_CRISTAL;
-		if (dim < 0) { Chat_AddRaw("&e/client minerios ir [normal|utopia|cristal]"); return; }
+		if (argsCount > 1 && String_CaselessEqualsConst(&args[1], "nether"))  dim = DIM_NETHER;
+		if (argsCount > 1 && String_CaselessEqualsConst(&args[1], "fim"))     dim = DIM_FIM;
+		if (dim < 0) { Chat_AddRaw("&e/client minerios ir [normal|utopia|cristal|nether|fim]"); return; }
 		viagemPendente = dim;
 		return;
 	}
@@ -1397,7 +1432,7 @@ static void Minerios_Tick(struct ScheduledTask* task) {
 	float delta = (float)task->interval;
 	int dest;
 	portalCooldown -= delta;
-	if (!Ativo() || viajando) return;
+	if (!DimensoesLigadas() || viajando) return;
 
 	if (colocarPortal) { colocarPortal = false; AcharTerraFirme(); ColocarPortalVolta(); return; }
 
@@ -1409,8 +1444,8 @@ static void Minerios_Tick(struct ScheduledTask* task) {
 		return;
 	}
 
-	/* de vez em quando aparece um enxame de mosquitos (mais na Utopia, nenhum no Cristal) */
-	if (dimAtual == DIM_CRISTAL) return;
+	/* de vez em quando aparece um enxame de mosquitos (mais na Utopia, nenhum no Cristal, Nether e Fim) */
+	if (!Ativo() || dimAtual == DIM_CRISTAL || dimAtual == DIM_NETHER || dimAtual == DIM_FIM) return;
 	mosquitoTimer -= delta;
 	if (mosquitoTimer > 0) return;
 	mosquitoTimer = (dimAtual == DIM_UTOPIA ? 40.0f : 80.0f) + Random_Float(&rnd) * 60.0f;
@@ -1431,13 +1466,13 @@ static void OnNewMapLoaded(void) {
 	int i;
 	/* No multijogador o servidor decide quais blocos existem */
 	Minerios_Enabled = Options_GetBool(MINERIOS_OPTION, true);
-	if (!Minerios_Enabled || !Server.IsSinglePlayer || !Game_AllowCustomBlocks) {
+	if (!(Minerios_Enabled || Options_GetBool("survival-mode", true)) || !Server.IsSinglePlayer || !Game_AllowCustomBlocks) {
 		AplicarCeu(DIM_NORMAL, false);
 		viajando = false; return;
 	}
 	AplicarCeu(dimAtual, false);
 
-	for (i = 0; i < MINERIOS_COUNT; i++)
+	for (i = 0; i < MINERIOS_COUNT && Minerios_Enabled; i++)
 	{
 		block = (BlockID)(MBLOCK_RUBI_MINERIO + i);
 		if (block > BLOCK_MAX_DEFINED) break;

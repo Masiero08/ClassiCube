@@ -12,6 +12,8 @@
 #include "String_.h"
 #include "World.h"
 #include "Utils.h"
+#include "ExtMath.h"
+#include "Platform.h"
 #include "LateGame_tex.h"
 
 /* Diamonds, the Nether and the End for singleplayer, inspired by newer Minecraft versions. */
@@ -146,14 +148,44 @@ static void DefineBlocks(void) {
 /*########################################################################################################################*
 *-------------------------------------------------------Generation--------------------------------------------------------*
 *#########################################################################################################################*/
+static RNGState gen_rnd;
+static BlockRaw GenGet(int x, int y, int z) { return Gen_Blocks[World_Pack(x, y, z)]; }
+static void GenSet(int x, int y, int z, BlockRaw b) { Gen_Blocks[World_Pack(x, y, z)] = b; }
+
+static cc_bool TouchesLava(int x, int y, int z) {
+	static const int offsets[6][3] = { {1,0,0}, {-1,0,0}, {0,1,0}, {0,-1,0}, {0,0,1}, {0,0,-1} };
+	BlockRaw b;
+	int i;
+	for (i = 0; i < 6; i++)
+	{
+		if (!World_Contains(x + offsets[i][0], y + offsets[i][1], z + offsets[i][2])) continue;
+		b = GenGet(x + offsets[i][0], y + offsets[i][1], z + offsets[i][2]);
+		if (b == BLOCK_LAVA || b == BLOCK_STILL_LAVA) return true;
+	}
+	return false;
+}
+
+/* Lava cools into obsidian where it touches stone (needed to build Nether portals) */
+static void GenObsidian(void) {
+	int x, y, z, maxY = World.Height / 2;
+	Gen_CurrentState = "Esfriando a lava";
+
+	for (y = 0; y < maxY; y++)
+		for (z = 0; z < World.Length; z++)
+			for (x = 0; x < World.Width; x++)
+			{
+				if (GenGet(x, y, z) != BLOCK_STONE || !TouchesLava(x, y, z)) continue;
+				if (Random_Next(&gen_rnd, 2)) GenSet(x, y, z, BLOCK_OBSIDIAN);
+			}
+}
+
 /* Diamonds are rare and only appear in small clumps near the bottom of the world */
-void LateGame_GenDiamonds(void) {
+static void GenDiamonds(void) {
 	int clumps = World.Volume / 30000;
 	int maxY   = max(4, World.Height / 6);
 	int i, j, x, y, z, index;
 	RNGState rnd;
 
-	if (!Game_AllowCustomBlocks || LBLOCK_DIAMOND_ORE > BLOCK_MAX_DEFINED) return;
 	Gen_CurrentState = "Escondendo diamantes";
 	Random_SeedFromCurrentTime(&rnd);
 
@@ -177,6 +209,177 @@ void LateGame_GenDiamonds(void) {
 			case 2: z += Random_Next(&rnd, 2) ? 1 : -1; break;
 			}
 		}
+	}
+}
+
+
+void LateGame_GenOverworld(void) {
+	if (!Game_AllowCustomBlocks || LBLOCK_END > BLOCK_MAX_DEFINED) return;
+	Random_SeedFromCurrentTime(&gen_rnd);
+	GenObsidian();
+	GenDiamonds();
+}
+
+
+/*########################################################################################################################*
+*---------------------------------------------------------Nether----------------------------------------------------------*
+*#########################################################################################################################*/
+static BlockRaw ToNether(BlockRaw b) {
+	switch (b)
+	{
+	case BLOCK_STONE: case BLOCK_DIRT: case BLOCK_GRASS: case BLOCK_COBBLE: case BLOCK_SAND: case BLOCK_GRAVEL:
+	case BLOCK_GOLD_ORE: case BLOCK_IRON_ORE: case BLOCK_COAL_ORE: case BLOCK_OBSIDIAN: case LBLOCK_DIAMOND_ORE:
+		return LBLOCK_NETHERRACK;
+	case BLOCK_WATER: case BLOCK_STILL_WATER:
+		return BLOCK_STILL_LAVA;
+	case BLOCK_LOG: case BLOCK_LEAVES: case BLOCK_SAPLING: case BLOCK_DANDELION: case BLOCK_ROSE:
+	case BLOCK_BROWN_SHROOM: case BLOCK_RED_SHROOM:
+		return BLOCK_AIR;
+	}
+	return b;
+}
+
+/* Highest block in the column that is not air */
+static int GenTop(int x, int z, int fromY) {
+	int y;
+	for (y = fromY; y > 0; y--)
+	{
+		if (GenGet(x, y, z) != BLOCK_AIR) return y;
+	}
+	return 0;
+}
+
+/* A long bridge of nether bricks with walls, lamps and ender pearls to find */
+static void GenFortressBridge(int alongX, int start, int across, int y, int len) {
+	int i, j, h, x, z, fy;
+	for (i = 0; i < len; i++)
+	{
+		for (j = -2; j <= 2; j++)
+		{
+			x = alongX ? start + i : across + j;
+			z = alongX ? across + j : start + i;
+			if (!World_Contains(x, y + 3, z)) continue;
+
+			GenSet(x, y, z, LBLOCK_NETHER_BRICKS);
+			for (h = 1; h <= 3; h++) GenSet(x, y + h, z, BLOCK_AIR);
+			/* Walls on both sides, with glowstone lamps */
+			if (j == -2 || j == 2) GenSet(x, y + 1, z, (i % 8 == 4) ? LBLOCK_GLOWSTONE : LBLOCK_NETHER_BRICKS);
+
+			/* Pillars down to the ground every 8 blocks */
+			if (i % 8 == 0 && (j == -1 || j == 1)) {
+				for (fy = y - 1; fy > 0 && GenGet(x, fy, z) != LBLOCK_NETHERRACK; fy--)
+					GenSet(x, fy, z, LBLOCK_NETHER_BRICKS);
+			}
+		}
+		/* Ender pearls lying on the bridge every now and then */
+		x = alongX ? start + i : across;
+		z = alongX ? across : start + i;
+		if (i % 16 == 10 && World_Contains(x, y + 1, z)) GenSet(x, y + 1, z, LITEM_ENDER_PEARL);
+	}
+}
+
+void LateGame_GenNether(void) {
+	int x, y, z, i, ceil, top, cx, cz, floorY;
+	int lavaY = World.Height / 2;
+	float n;
+	Gen_CurrentState = "Esquentando o Nether";
+	Random_SeedFromCurrentTime(&gen_rnd);
+
+	for (i = 0; i < World.Volume; i++) Gen_Blocks[i] = ToNether(Gen_Blocks[i]);
+
+	/* A lower lava sea than the overworld oceans, so there is more ground to walk on */
+	for (y = lavaY - 5; y < World.Height; y++)
+		for (z = 0; z < World.Length; z++)
+			for (x = 0; x < World.Width; x++)
+			{
+				if (GenGet(x, y, z) == BLOCK_STILL_LAVA) GenSet(x, y, z, BLOCK_AIR);
+			}
+
+	for (z = 0; z < World.Length; z++)
+		for (x = 0; x < World.Width; x++)
+		{
+			/* A bumpy netherrack ceiling, with glowstone hanging from it */
+			n    = Math_SinF(x * 0.21f) + Math_CosF(z * 0.17f) + Math_SinF((x + z) * 0.09f);
+			ceil = World.MaxY - 6 - (int)(n * 2.5f) - Random_Next(&gen_rnd, 2);
+			for (y = ceil; y <= World.MaxY; y++) GenSet(x, y, z, LBLOCK_NETHERRACK);
+			GenSet(x, World.MaxY, z, BLOCK_BEDROCK);
+
+			if (Random_Next(&gen_rnd, 90) == 0) {
+				for (y = ceil - 1; y > ceil - 2 - Random_Next(&gen_rnd, 4) && y > 0; y--) GenSet(x, y, z, LBLOCK_GLOWSTONE);
+			}
+
+			/* Patches of soul sand on the ground */
+			top = GenTop(x, z, ceil - 1);
+			n   = Math_SinF(x * 0.13f + 1.7f) * Math_CosF(z * 0.11f + 0.3f);
+			if (n > 0.55f && GenGet(x, top, z) == LBLOCK_NETHERRACK) GenSet(x, top, z, LBLOCK_SOUL_SAND);
+		}
+
+	/* Quartz ore in the netherrack */
+	for (i = 0; i < World.Volume / 300; i++)
+	{
+		x = Random_Next(&gen_rnd, World.Width); y = Random_Next(&gen_rnd, World.Height); z = Random_Next(&gen_rnd, World.Length);
+		if (GenGet(x, y, z) == LBLOCK_NETHERRACK) GenSet(x, y, z, LBLOCK_QUARTZ_ORE);
+	}
+
+	/* Fortress bridges crossing the lava sea */
+	GenFortressBridge(true,  8, World.Length / 3,     lavaY + 6, World.Width  - 16);
+	GenFortressBridge(false, 8, World.Width  * 2 / 3, lavaY + 9, World.Length - 16);
+
+	/* An opening in the ceiling and a safe platform where the player arrives */
+	cx = World.Width / 2; cz = World.Length / 2;
+	floorY = max(lavaY + 1, GenTop(cx, cz, World.MaxY - 16));
+	floorY = min(floorY, World.MaxY - 12);
+	for (z = cz - 2; z <= cz + 2; z++)
+		for (x = cx - 2; x <= cx + 2; x++)
+		{
+			if (!World_Contains(x, floorY, z)) continue;
+			GenSet(x, floorY, z, LBLOCK_NETHERRACK);
+			for (y = floorY + 1; y <= World.MaxY; y++) GenSet(x, y, z, BLOCK_AIR);
+		}
+}
+
+
+/*########################################################################################################################*
+*-----------------------------------------------------------End-----------------------------------------------------------*
+*#########################################################################################################################*/
+void LateGame_GenEnd(void) {
+	int cx = World.Width / 2, cz = World.Length / 2, baseY = World.Height / 2;
+	float radius = (float)(min(World.Width, World.Length) / 2 - 6);
+	int x, y, z, i, h, px, pz, thick;
+	float d, ang;
+	Gen_CurrentState = "Abrindo o Fim";
+	Random_SeedFromCurrentTime(&gen_rnd);
+	if (radius > 44) radius = 44;
+
+	Mem_Set(Gen_Blocks, BLOCK_AIR, World.Volume);
+	/* A floating island of end stone */
+	for (z = 0; z < World.Length; z++)
+		for (x = 0; x < World.Width; x++)
+		{
+			d = Math_SqrtF((float)((x - cx) * (x - cx) + (z - cz) * (z - cz)));
+			d += Math_SinF(x * 0.3f) + Math_CosF(z * 0.27f);
+			if (d >= radius) continue;
+
+			thick = 2 + (int)((1.0f - d / radius) * 14.0f);
+			for (y = baseY - thick; y <= baseY; y++)
+			{
+				if (y >= 0) GenSet(x, y, z, LBLOCK_END_STONE);
+			}
+		}
+
+	/* Tall obsidian pillars in a ring */
+	for (i = 0; i < 8; i++)
+	{
+		ang = i * 2 * MATH_PI / 8;
+		px  = cx + (int)(Math_CosF(ang) * radius * 0.6f);
+		pz  = cz + (int)(Math_SinF(ang) * radius * 0.6f);
+		h   = 10 + Random_Next(&gen_rnd, 12);
+		for (y = baseY + 1; y <= baseY + h && y < World.MaxY; y++)
+			for (z = pz - 1; z <= pz + 1; z++)
+				for (x = px - 1; x <= px + 1; x++)
+				{
+					if (World_Contains(x, y, z)) GenSet(x, y, z, BLOCK_OBSIDIAN);
+				}
 	}
 }
 

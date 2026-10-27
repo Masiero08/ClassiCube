@@ -310,6 +310,74 @@ void Survival_OnBlockPlaced(BlockID block) {
 
 
 /*########################################################################################################################*
+*-------------------------------------------------------Crafting----------------------------------------------------------*
+*#########################################################################################################################*/
+struct Recipe {
+	cc_uint8 count1; BlockID input1;
+	cc_uint8 count2; BlockID input2; /* count2 is 0 when only one input is needed */
+	cc_uint8 outCount; BlockID output;
+};
+
+static const struct Recipe recipes[] = {
+	{ 1, BLOCK_LOG,       0, BLOCK_AIR,      4, BLOCK_WOOD         },
+	{ 4, BLOCK_WOOD,      0, BLOCK_AIR,      1, BLOCK_CRATE        },
+	{ 6, BLOCK_WOOD,      0, BLOCK_AIR,      1, BLOCK_BOOKSHELF    },
+	{ 2, BLOCK_LEAVES,    0, BLOCK_AIR,      1, BLOCK_ROPE         },
+	{ 1, BLOCK_SAND,      1, BLOCK_COAL_ORE, 4, BLOCK_GLASS        },
+	{ 4, BLOCK_SAND,      0, BLOCK_AIR,      1, BLOCK_SANDSTONE    },
+	{ 1, BLOCK_COBBLE,    1, BLOCK_COAL_ORE, 4, BLOCK_STONE        },
+	{ 4, BLOCK_STONE,     0, BLOCK_AIR,      4, BLOCK_STONE_BRICK  },
+	{ 3, BLOCK_STONE,     0, BLOCK_AIR,      6, BLOCK_SLAB         },
+	{ 3, BLOCK_COBBLE,    0, BLOCK_AIR,      6, BLOCK_COBBLE_SLAB  },
+	{ 4, BLOCK_COBBLE,    1, BLOCK_LEAVES,   4, BLOCK_MOSSY_ROCKS  },
+	{ 4, BLOCK_DIRT,      1, BLOCK_COAL_ORE, 4, BLOCK_BRICK        },
+	{ 4, BLOCK_IRON_ORE,  1, BLOCK_COAL_ORE, 1, BLOCK_IRON         },
+	{ 4, BLOCK_GOLD_ORE,  1, BLOCK_COAL_ORE, 1, BLOCK_GOLD         },
+	{ 4, BLOCK_SAND,      1, BLOCK_COAL_ORE, 1, BLOCK_TNT          },
+};
+
+int Survival_RecipesCount(void) { return Array_Elems(recipes); }
+
+static cc_bool CanCraft(const struct Recipe* r) {
+	if (blockCounts[r->input1] < r->count1) return false;
+	if (r->count2 && blockCounts[r->input2] < r->count2) return false;
+	return blockCounts[r->output] + r->outCount <= MAX_BLOCK_COUNT;
+}
+
+static void AppendIngredient(cc_string* str, int count, BlockID block) {
+	cc_string name = Block_UNSAFE_GetName(block);
+	int have = blockCounts[block];
+	String_Format4(str, "%i %s %c(%i)", &count, &name, have >= count ? "&a" : "&c", &have);
+}
+
+void Survival_DescribeRecipe(int i, cc_string* str) {
+	const struct Recipe* r = &recipes[i];
+	cc_string name = Block_UNSAFE_GetName(r->output);
+	int outCount   = r->outCount;
+
+	String_Format3(str, "%c%i %s&7: ", CanCraft(r) ? "&f" : "&7", &outCount, &name);
+	AppendIngredient(str, r->count1, r->input1);
+	if (!r->count2) return;
+
+	String_AppendConst(str, " &7+ ");
+	AppendIngredient(str, r->count2, r->input2);
+}
+
+cc_bool Survival_Craft(int i) {
+	const struct Recipe* r = &recipes[i];
+	if (!survival_active || !CanCraft(r)) return false;
+
+	blockCounts[r->input1] -= r->count1;
+	if (r->count2) blockCounts[r->input2] -= r->count2;
+	blockCounts[r->output] += r->outCount;
+	AddToHotbar(r->output);
+	return true;
+}
+
+cc_bool Survival_IsActive(void) { return survival_active; }
+
+
+/*########################################################################################################################*
 *-------------------------------------------------------Activation--------------------------------------------------------*
 *#########################################################################################################################*/
 static void ApplyHacks(void) {
@@ -352,6 +420,56 @@ static struct ChatCommand SurvivalCommand = {
 	}
 };
 
+/*########################################################################################################################*
+*------------------------------------------------------Saving/Loading-----------------------------------------------------*
+*#########################################################################################################################*/
+static cc_bool loadedPending;
+static int loadedHealth;
+static cc_uint16 loadedCounts[BLOCK_COUNT];
+
+int Survival_GetHealth(void) { return health; }
+
+void Survival_GetCounts(cc_uint8* data) {
+	int i;
+	for (i = 0; i < BLOCK_COUNT; i++)
+	{
+		data[i * 2 + 0] = (cc_uint8)(blockCounts[i] >> 8);
+		data[i * 2 + 1] = (cc_uint8)(blockCounts[i]);
+	}
+}
+
+void Survival_LoadHealth(int value) {
+	loadedHealth  = value;
+	loadedPending = true;
+}
+
+void Survival_LoadCounts(const cc_uint8* data, int len) {
+	int i, count;
+	for (i = 0; i < BLOCK_COUNT && (i * 2 + 1) < len; i++)
+	{
+		count = (data[i * 2] << 8) | data[i * 2 + 1];
+		loadedCounts[i] = min(count, MAX_BLOCK_COUNT);
+	}
+	loadedPending = true;
+}
+
+static void ApplyLoadedState(void) {
+	int i;
+	if (!loadedPending) return;
+	loadedPending = false;
+	if (!survival_active) return;
+
+	if (loadedHealth > 0) health = min(loadedHealth, MAX_HEALTH);
+	Mem_Copy(blockCounts, loadedCounts, sizeof(blockCounts));
+	blockCounts[BLOCK_AIR] = 0;
+
+	for (i = BLOCK_AIR + 1; i < BLOCK_COUNT; i++)
+	{
+		if (blockCounts[i]) AddToHotbar((BlockID)i);
+	}
+}
+
+
 static void OnInit(void) {
 	Survival_Enabled = Options_GetBool(OPT_SURVIVAL, true);
 	Random_SeedFromCurrentTime(&survival_rnd);
@@ -359,16 +477,29 @@ static void OnInit(void) {
 	ScheduledTask2_Add(&survival_task);
 }
 
+static void OnNewMap(void) {
+	/* Forget state from a previous world that was loaded but not applied */
+	loadedPending = false;
+	loadedHealth  = 0;
+	Mem_Set(loadedCounts, 0, sizeof(loadedCounts));
+}
+
 static void OnNewMapLoaded(void) {
-	/* Always restart with full health and an empty inventory in a new world */
+	/* Restart with full health and an empty inventory, unless the world saved them */
 	survival_active = false;
+	/* Re-read the option so a mod selection menu can change it between worlds */
+	Survival_Enabled = Options_GetBool(OPT_SURVIVAL, true);
 	UpdateActive();
+	ApplyLoadedState();
+
+	/* Loading a world clears the HUD lines, so force them to be redrawn */
+	lastHealth = -1; lastHeldCount = -1;
 }
 
 struct IGameComponent Survival_Component = {
 	OnInit,        /* Init  */
 	NULL,          /* Free  */
 	NULL,          /* Reset */
-	NULL,          /* OnNewMap */
+	OnNewMap,      /* OnNewMap */
 	OnNewMapLoaded /* OnNewMapLoaded */
 };

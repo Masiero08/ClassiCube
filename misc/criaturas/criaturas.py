@@ -84,7 +84,74 @@ PLANOS = {
         ("braco", 4, 2, -1, 6, 5, 1, (5, 5, 0), PERNA_B),
     ],
 }
-ORDEM_PLANOS = ["raposa", "porquinho", "esquilo", "ave", "bolha"]
+
+# --- formas evoluidas: corpos diferentes, nao so maiores
+def _troca(plano, nome, nova):
+    return [nova if c[0] == nome else c for c in plano]
+
+PLANOS["raposa2"] = _troca(_troca(PLANOS["raposa"],
+    "orelha_e", ("orelha_e", -4, 13, -7, -1, 18, -6, (0, 8, -5), CABECA)),
+    "orelha_d", ("orelha_d", 1, 13, -7, 4, 18, -6, (0, 8, -5), CABECA)) + [
+    ("juba", -4, 4, -7, 4, 10, -3, (0, 0, 0), FIXO),
+]
+PLANOS["raposa3"] = [
+    ("cabeca", -4, 9, -12, 4, 16, -6, (0, 11, -7), CABECA),
+    ("focinho", -2, 9, -14, 2, 12, -12, (0, 11, -7), CABECA),
+    ("orelha_e", -4, 16, -9, -1, 20, -8, (0, 11, -7), CABECA),
+    ("orelha_d", 1, 16, -9, 4, 20, -8, (0, 11, -7), CABECA),
+    ("juba", -5, 6, -8, 5, 14, -4, (0, 0, 0), FIXO),
+    ("corpo", -3, 5, -6, 3, 11, 5, (0, 0, 0), FIXO),
+    ("perna", -3, 0, -6, -1, 5, -4, (-2, 5, -5), PERNA_A),
+    ("perna", 1, 0, -6, 3, 5, -4, (2, 5, -5), PERNA_B),
+    ("perna", -3, 0, 2, -1, 5, 4, (-2, 5, 3), PERNA_B),
+    ("perna", 1, 0, 2, 3, 5, 4, (2, 5, 3), PERNA_A),
+    ("cauda", -2, 7, 5, 2, 11, 12, (0, 9, 5), CAUDA),
+    ("chama", -1, 10, 10, 1, 15, 13, (0, 9, 5), CAUDA),
+]
+PLANOS["porquinho2"] = [c for c in PLANOS["porquinho"] if c[0] != "broto"] + [
+    ("musgo", -3, 9, -4, 3, 11, 4, (0, 0, 0), FIXO),
+    ("presa", -3, 4, -12, -2, 6, -11, (0, 7, -5), CABECA),
+    ("presa", 2, 4, -12, 3, 6, -11, (0, 7, -5), CABECA),
+]
+PLANOS["porquinho3"] = [
+    ("cabeca", -5, 5, -13, 5, 13, -6, (0, 9, -6), CABECA),
+    ("focinho", -3, 6, -14, 3, 9, -13, (0, 9, -6), CABECA),
+    ("presa", -4, 4, -14, -3, 7, -13, (0, 9, -6), CABECA),
+    ("presa", 3, 4, -14, 4, 7, -13, (0, 9, -6), CABECA),
+    ("orelha_e", -5, 13, -9, -3, 15, -8, (0, 9, -6), CABECA),
+    ("orelha_d", 3, 13, -9, 5, 15, -8, (0, 9, -6), CABECA),
+    ("corpo", -5, 3, -7, 5, 11, 6, (0, 0, 0), FIXO),
+    ("perna", -5, 0, -7, -2, 3, -4, (-3, 3, -5), PERNA_A),
+    ("perna", 2, 0, -7, 5, 3, -4, (3, 3, -5), PERNA_B),
+    ("perna", -5, 0, 3, -2, 3, 6, (-3, 3, 4), PERNA_B),
+    ("perna", 2, 0, 3, 5, 3, 6, (3, 3, 4), PERNA_A),
+    ("tronco", -1, 11, -1, 1, 15, 1, (0, 0, 0), FIXO),
+    ("copa", -3, 15, -3, 3, 19, 3, (0, 0, 0), FIXO),
+]
+PLANOS["esquilo2"] = _troca(_troca(_troca(PLANOS["esquilo"],
+    "orelha_e", ("orelha_e", -4, 14, -3, -2, 20, -2, (0, 9, -2), CABECA)),
+    "orelha_d", ("orelha_d", 2, 14, -3, 4, 20, -2, (0, 9, -2), CABECA)),
+    "cauda", ("cauda", -3, 3, 3, 3, 17, 6, (0, 4, 4), CAUDA))
+PLANOS["ave2"] = _troca(_troca(_troca(_troca(PLANOS["ave"],
+    "crista", ("crista", -1, 13, -4, 1, 18, 2, (0, 8, -1), CABECA)),
+    "asa_e", ("asa_e", -4, 2, -3, -3, 8, 4, (-3, 8, 0), ASA_E)),
+    "asa_d", ("asa_d", 3, 2, -3, 4, 8, 4, (3, 8, 0), ASA_D)),
+    "cauda", ("cauda", -2, 4, 4, 2, 5, 10, (0, 4, 4), CAUDA))
+PLANOS["bolha2"] = _troca(_troca(_troca(PLANOS["bolha"],
+    "topo", ("barbatana", -1, 8, -3, 1, 12, 4, (0, 0, 0), FIXO)),
+    "braco", ("braco", -7, 2, -1, -4, 6, 1, (-5, 6, 0), PERNA_A)),
+    "braco", ("braco", 4, 2, -1, 7, 6, 1, (5, 6, 0), PERNA_B))
+PLANOS["bolha2"][2] = ("braco", -7, 2, -1, -4, 6, 1, (-5, 6, 0), PERNA_A)
+PLANOS["bolha2"][3] = ("braco", 4, 2, -1, 7, 6, 1, (5, 6, 0), PERNA_B)
+PLANOS["pedra2"] = [
+    ("corpo", -4, 0, -4, 4, 8, 4, (0, 0, 0), FIXO),
+    ("rocha", -6, 6, -2, -3, 9, 2, (0, 0, 0), FIXO),
+    ("rocha", 3, 6, -2, 6, 9, 2, (0, 0, 0), FIXO),
+    ("topo", -2, 8, -2, 2, 9, 2, (0, 0, 0), FIXO),
+    ("braco", -7, 0, -1, -4, 6, 2, (-5, 6, 0), PERNA_A),
+    ("braco", 4, 0, -1, 7, 6, 2, (5, 6, 0), PERNA_B),
+]
+ORDEM_PLANOS = ["raposa", "porquinho", "esquilo", "ave", "bolha", "raposa2", "raposa3", "porquinho2", "porquinho3", "esquilo2", "ave2", "bolha2", "pedra2"]
 
 # ---------------------------------------------------------------- tipos
 TIPOS = ["FOGO", "AGUA", "PLANTA", "ELETRICO", "VENTO", "PEDRA"]
@@ -99,10 +166,10 @@ ESPECIES = [
     dict(id="faiscol", nome="Faiscol", cor="&6", tipo="FOGO", plano="raposa", escala=0.85,
          vida=10, dano=3, vel=4.0, evolui="labareda", nivel=5, habitat="AREIA", inicial=1,
          pal=dict(base=(240, 120, 40), barriga=(255, 225, 170), detalhe=(255, 215, 60), olho=(40, 25, 20))),
-    dict(id="labareda", nome="Labareda", cor="&6", tipo="FOGO", plano="raposa", escala=1.1,
+    dict(id="labareda", nome="Labareda", cor="&6", tipo="FOGO", plano="raposa2", escala=1.1,
          vida=16, dano=5, vel=4.5, evolui="fornalobo", nivel=10, habitat="AREIA", inicial=0,
          pal=dict(base=(220, 70, 35), barriga=(255, 210, 140), detalhe=(255, 190, 40), olho=(40, 20, 20), marcas=True)),
-    dict(id="fornalobo", nome="Fornalobo", cor="&c", tipo="FOGO", plano="raposa", escala=1.45,
+    dict(id="fornalobo", nome="Fornalobo", cor="&c", tipo="FOGO", plano="raposa3", escala=1.25,
          vida=24, dano=8, vel=4.8, evolui=None, nivel=0, habitat="AREIA", inicial=0,
          pal=dict(base=(120, 35, 30), barriga=(70, 30, 30), detalhe=(255, 150, 30), olho=(255, 220, 80), lava=True)),
     # linha de agua: bolhas
@@ -112,38 +179,38 @@ ESPECIES = [
     dict(id="marolha", nome="Marolha", cor="&b", tipo="AGUA", plano="bolha", escala=1.1,
          vida=17, dano=4, vel=3.2, evolui="tsunamor", nivel=10, habitat="AGUA", inicial=0,
          pal=dict(base=(60, 140, 235), barriga=(180, 220, 255), detalhe=(240, 250, 255), olho=(20, 25, 60), ondas=True)),
-    dict(id="tsunamor", nome="Tsunamor", cor="&9", tipo="AGUA", plano="bolha", escala=1.5,
+    dict(id="tsunamor", nome="Tsunamor", cor="&9", tipo="AGUA", plano="bolha2", escala=1.5,
          vida=26, dano=7, vel=3.2, evolui=None, nivel=0, habitat="AGUA", inicial=0,
          pal=dict(base=(35, 80, 190), barriga=(120, 180, 240), detalhe=(250, 250, 255), olho=(255, 255, 255), ondas=True, sobrancelha=True)),
     # linha de planta: porquinhos com broto
     dict(id="brotinho", nome="Brotinho", cor="&a", tipo="PLANTA", plano="porquinho", escala=0.8,
          vida=13, dano=2, vel=2.8, evolui="musgao", nivel=5, habitat="CAMPO", inicial=1,
          pal=dict(base=(150, 210, 110), barriga=(225, 245, 190), detalhe=(60, 160, 60), olho=(30, 40, 20))),
-    dict(id="musgao", nome="Musgao", cor="&a", tipo="PLANTA", plano="porquinho", escala=1.1,
+    dict(id="musgao", nome="Musgao", cor="&a", tipo="PLANTA", plano="porquinho2", escala=1.1,
          vida=20, dano=4, vel=2.6, evolui="florestauro", nivel=10, habitat="CAMPO", inicial=0,
          pal=dict(base=(110, 85, 55), barriga=(180, 150, 110), detalhe=(80, 160, 60), olho=(25, 25, 20), musgo=True)),
-    dict(id="florestauro", nome="Florestauro", cor="&2", tipo="PLANTA", plano="porquinho", escala=1.5,
+    dict(id="florestauro", nome="Florestauro", cor="&2", tipo="PLANTA", plano="porquinho3", escala=1.25,
          vida=30, dano=6, vel=2.4, evolui=None, nivel=0, habitat="CAMPO", inicial=0,
          pal=dict(base=(80, 60, 40), barriga=(140, 110, 80), detalhe=(50, 140, 50), olho=(250, 230, 120), musgo=True, flores=True)),
     # eletrico: esquilos
     dict(id="choquilo", nome="Choquilo", cor="&e", tipo="ELETRICO", plano="esquilo", escala=0.85,
          vida=9, dano=3, vel=5.0, evolui="trovesquilo", nivel=8, habitat="CAMPO", inicial=0,
          pal=dict(base=(250, 215, 70), barriga=(255, 245, 200), detalhe=(60, 60, 70), olho=(30, 30, 40), raio=True)),
-    dict(id="trovesquilo", nome="Trovesquilo", cor="&e", tipo="ELETRICO", plano="esquilo", escala=1.2,
+    dict(id="trovesquilo", nome="Trovesquilo", cor="&e", tipo="ELETRICO", plano="esquilo2", escala=1.2,
          vida=16, dano=6, vel=5.5, evolui=None, nivel=0, habitat="CAMPO", inicial=0,
          pal=dict(base=(60, 60, 75), barriga=(250, 220, 80), detalhe=(255, 230, 60), olho=(255, 240, 120), raio=True)),
     # vento: passarinhos
     dict(id="penape", nome="Penape", cor="&3", tipo="VENTO", plano="ave", escala=0.85,
          vida=8, dano=2, vel=5.0, evolui="ventania", nivel=7, habitat="ALTO", inicial=0,
          pal=dict(base=(120, 180, 240), barriga=(245, 245, 255), detalhe=(250, 180, 50), olho=(20, 20, 40))),
-    dict(id="ventania", nome="Ventania", cor="&3", tipo="VENTO", plano="ave", escala=1.3,
+    dict(id="ventania", nome="Ventania", cor="&3", tipo="VENTO", plano="ave2", escala=1.3,
          vida=15, dano=5, vel=5.5, evolui=None, nivel=0, habitat="ALTO", inicial=0,
          pal=dict(base=(50, 110, 200), barriga=(240, 240, 250), detalhe=(250, 170, 40), olho=(20, 20, 40), crista_longa=True)),
     # pedra: bolhas de pedra
     dict(id="seixo", nome="Seixo", cor="&7", tipo="PEDRA", plano="bolha", escala=0.85,
          vida=14, dano=3, vel=2.2, evolui="pedregulho", nivel=8, habitat="PEDRA", inicial=0,
          pal=dict(base=(150, 145, 140), barriga=(185, 180, 175), detalhe=(110, 105, 100), olho=(30, 30, 30), rocha=True)),
-    dict(id="pedregulho", nome="Pedregulho", cor="&8", tipo="PEDRA", plano="bolha", escala=1.35,
+    dict(id="pedregulho", nome="Pedregulho", cor="&8", tipo="PEDRA", plano="pedra2", escala=1.35,
          vida=26, dano=6, vel=2.0, evolui=None, nivel=0, habitat="PEDRA", inicial=0,
          pal=dict(base=(105, 100, 95), barriga=(140, 135, 130), detalhe=(90, 150, 70), olho=(255, 200, 60), rocha=True, sobrancelha=True)),
 ]
@@ -232,27 +299,61 @@ def rosto(esp, i, j, w, h, base, olho_y=None):
     oy = olho_y if olho_y is not None else max(1, h // 2 - 2)
     # olhos ficam a 1 pixel das bordas
     ex = [1, w - 3] if w >= 6 else [0, w - 2]
+    alto = 3 if h >= 7 else 2  # olhos mais altos em cabecas grandes
     for x0 in ex:
-        if x0 <= i < x0 + 2 and oy <= j < oy + 2:
+        if x0 <= i < x0 + 2 and oy <= j < oy + alto:
             if i == x0 and j == oy:
                 return (255, 255, 255, 255)  # brilho
+            if alto == 3 and j == oy + 2:
+                return clar(olho, 1.6) + (255,) if max(olho) < 120 else clar(olho, 0.7) + (255,)
             return olho + (255,)
     if pal.get("sobrancelha") and j == oy - 1 and (ex[0] <= i < ex[0] + 2 or ex[1] <= i < ex[1] + 2):
         return clar(base, 0.5) + (255,)
     # bochechas rosadas
-    if j == oy + 2 and (i == ex[0] - 1 or i == ex[1] + 2) and 0 <= i < w:
+    if j == oy + alto and (i == ex[0] - 1 or i == ex[1] + 2) and 0 <= i < w:
         return (250, 140, 150, 255)
-    if j == oy + 2 and (i == ex[0] or i == ex[1] + 1):
-        return (250, 150, 160, 255)
     return None
 
 
 def cor_pixel(esp, nome, face, i, j, w, h, rnd):
     pal = esp["pal"]
     base, barriga, det = pal["base"], pal["barriga"], pal["detalhe"]
-    plano = esp["plano"]
-    sombra = {"topo": 1.12, "baixo": 0.8}.get(face, 1.0)
-    c = clar(base, sombra)
+    plano = esp["plano"].rstrip("23")
+    if plano == "pedra":
+        plano = "bolha"
+    # sombreado suave: topo claro, laterais escurecem para baixo
+    if face == "topo":
+        c = clar(base, 1.12)
+    elif face == "baixo":
+        c = clar(base, 0.78)
+    else:
+        c = clar(base, 1.06 - 0.2 * j / max(1, h - 1))
+
+    # --- pecas das formas evoluidas
+    if nome == "juba":
+        if face == "frente" and j >= 2 and 2 <= i < w - 2:
+            return barriga
+        return clar(det, 1.0 - 0.15 * ((i + j) % 2))
+    if nome == "chama":
+        return (255, 110 + int(120 * (1 - j / max(1, h - 1))), 20 + rnd.randint(0, 40), 255)
+    if nome == "presa":
+        return (245, 238, 215, 255)
+    if nome == "musgo":
+        if rnd.random() < 0.07:
+            return rnd.choice([(250, 220, 70), (240, 120, 190)])
+        return mix(det, (40, 110, 40), rnd.random() * 0.5)
+    if nome == "tronco":
+        return clar((110, 80, 50), 0.9 + 0.1 * (i % 2))
+    if nome == "copa":
+        if pal.get("flores") and rnd.random() < 0.1:
+            return rnd.choice([(250, 220, 70), (240, 120, 190), (255, 255, 255)])
+        return mix(det, (30, 90, 30), rnd.random() * 0.6)
+    if nome == "barbatana":
+        return det if j < h - 1 else clar(base, 0.9)
+    if nome == "rocha":
+        if face == "topo" and rnd.random() < 0.5:
+            return mix(det, (60, 120, 50), rnd.random() * 0.4)
+        return clar(base, 0.8 + 0.15 * rnd.random())
 
     # --- detalhes comuns
     if face == "baixo" and nome in ("corpo",):

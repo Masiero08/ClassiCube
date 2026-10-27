@@ -31,7 +31,7 @@
 /*########################################################################################################################*
 *---------------------------------------------------------Modelos---------------------------------------------------------*
 *#########################################################################################################################*/
-#define MAX_PECAS 10
+#define MAX_PECAS 14
 
 struct Especie {
 	struct Model model; /* precisa ser o primeiro campo (Models.Active -> Especie) */
@@ -967,8 +967,16 @@ static void CriaturaCommand_Execute(const cc_string* args, int argsCount) {
 			if (String_CaselessEquals(&args[0], &nome)) escolha = i;
 		}
 	}
+	if (argsCount && String_CaselessEqualsConst(&args[0], "limpar")) {
+		for (i = 0; i < CRIATURAS_MAX; i++)
+		{
+			if (criaturas[i].usada && criaturas[i].selvagem) Criatura_Remover(&criaturas[i]);
+		}
+		Chat_AddRaw("&eCriaturas selvagens removidas.");
+		return;
+	}
 	if (escolha < 0 && !(argsCount && String_CaselessEqualsConst(&args[0], "todas"))) {
-		Chat_AddRaw("&e/client criatura [nome|todas] [nivel]");
+		Chat_AddRaw("&e/client criatura [nome|todas|limpar] [nivel]");
 		return;
 	}
 
@@ -999,7 +1007,7 @@ static struct ChatCommand CriaturaCommand = {
 	"Criatura", CriaturaCommand_Execute,
 	COMMAND_FLAG_SINGLEPLAYER_ONLY,
 	{
-		"&a/client criatura [nome|todas] [nivel]",
+		"&a/client criatura [nome|todas|limpar] [nivel]",
 		"&eFaz uma criatura selvagem aparecer na sua frente.",
 	}
 };

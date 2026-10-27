@@ -183,6 +183,9 @@
     <ClInclude Include="Survival.h">
       <Filter>Header Files\Entities</Filter>
     </ClInclude>
+    <ClInclude Include="DayNight.h">
+      <Filter>Header Files\Entities</Filter>
+    </ClInclude>
     <ClInclude Include="Options.h">
       <Filter>Header Files\Utils</Filter>
     </ClInclude>
@@ -402,6 +405,9 @@
       <Filter>Source Files\Map</Filter>
     </ClCompile>
     <ClCompile Include="Survival.c">
+      <Filter>Source Files\Entities</Filter>
+    </ClCompile>
+    <ClCompile Include="DayNight.c">
       <Filter>Source Files\Entities</Filter>
     </ClCompile>
     <ClCompile Include="AxisLinesRenderer.c">

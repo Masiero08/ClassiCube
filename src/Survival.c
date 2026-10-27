@@ -46,14 +46,15 @@ static float fallStartY, airLeft, hurtCooldown, regenTimer;
 static cc_bool wasFalling;
 static cc_uint16 blockCounts[BLOCK_COUNT];
 static RNGState survival_rnd;
+static void Damage(int amount);
 static int lastHealth = -1, lastHeldCount = -1, lastFood = -1;
 static int food;
 static float exhaustion, starveTimer;
 static Vec3 lastPos;
 
-enum ToolKind { TOOL_PICKAXE, TOOL_AXE, TOOL_SHOVEL, TOOL_KINDS };
+enum ToolKind { TOOL_PICKAXE, TOOL_AXE, TOOL_SHOVEL, TOOL_SWORD, TOOL_KINDS };
 #define MAX_TOOL_TIER 3
-static const char* const toolNames[TOOL_KINDS]     = { "Picareta", "Machado", "Pa" };
+static const char* const toolNames[TOOL_KINDS]     = { "Picareta", "Machado", "Pa", "Espada" };
 static const char* const tierNames[MAX_TOOL_TIER + 1] = { "", "madeira", "pedra", "ferro" };
 static const int tierUses[MAX_TOOL_TIER + 1]       = { 0, 60, 132, 251 };
 static cc_uint8 toolTier[TOOL_KINDS];
@@ -185,6 +186,8 @@ static void Die(void) {
 	LocalPlayer_DoRespawn(p);
 	ResetPlayerState();
 }
+
+void Survival_Damage(int amount) { if (survival_active) Damage(amount); }
 
 static void Damage(int amount) {
 	if (amount <= 0 || hurtCooldown > 0) return;
@@ -410,9 +413,8 @@ static void AddToHotbar(BlockID block) {
 	}
 }
 
-static void WearTool(BlockID block) {
+static void WearToolKind(int kind) {
 	cc_string name, tier;
-	int kind = GetToolKind(block);
 	if (kind < 0 || !toolTier[kind]) return;
 	if (--toolUses[kind] > 0) return;
 
@@ -420,6 +422,24 @@ static void WearTool(BlockID block) {
 	tier = String_FromReadonly(tierNames[toolTier[kind]]);
 	Chat_Add2("&cSua %s de %s quebrou!", &name, &tier);
 	toolTier[kind] = 0;
+}
+
+static void WearTool(BlockID block) { WearToolKind(GetToolKind(block)); }
+
+int Survival_AttackDamage(void) {
+	int tier;
+	if (!survival_active) return 1;
+	tier = toolTier[TOOL_SWORD];
+	if (!tier) return 1;
+
+	WearToolKind(TOOL_SWORD);
+	return 3 + tier; /* wood 4, stone 5, iron 6 */
+}
+
+void Survival_AddBlocks(BlockID block, int count) {
+	if (!survival_active || block == BLOCK_AIR) return;
+	blockCounts[block] = min(blockCounts[block] + count, MAX_BLOCK_COUNT);
+	AddToHotbar(block);
 }
 
 void Survival_OnBlockBroken(BlockID block) {
@@ -498,12 +518,15 @@ static const struct ToolRecipe tools[] = {
 	{ TOOL_PICKAXE, 1, 5, BLOCK_WOOD,   0, BLOCK_AIR  },
 	{ TOOL_AXE,     1, 5, BLOCK_WOOD,   0, BLOCK_AIR  },
 	{ TOOL_SHOVEL,  1, 3, BLOCK_WOOD,   0, BLOCK_AIR  },
+	{ TOOL_SWORD,   1, 4, BLOCK_WOOD,   0, BLOCK_AIR  },
 	{ TOOL_PICKAXE, 2, 3, BLOCK_COBBLE, 2, BLOCK_WOOD },
 	{ TOOL_AXE,     2, 3, BLOCK_COBBLE, 2, BLOCK_WOOD },
 	{ TOOL_SHOVEL,  2, 1, BLOCK_COBBLE, 2, BLOCK_WOOD },
+	{ TOOL_SWORD,   2, 2, BLOCK_COBBLE, 1, BLOCK_WOOD },
 	{ TOOL_PICKAXE, 3, 3, BLOCK_IRON,   2, BLOCK_WOOD },
 	{ TOOL_AXE,     3, 3, BLOCK_IRON,   2, BLOCK_WOOD },
 	{ TOOL_SHOVEL,  3, 1, BLOCK_IRON,   2, BLOCK_WOOD },
+	{ TOOL_SWORD,   3, 2, BLOCK_IRON,   1, BLOCK_WOOD },
 };
 
 #define FOODS_COUNT Array_Elems(foods)

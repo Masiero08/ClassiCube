@@ -62,6 +62,7 @@ add_library(classicube SHARED
         ../../src/Stream.c
         ../../src/Lighting.c
         ../../src/Survival.c
+        ../../src/DayNight.c
         ../../src/Resources.c
         ../../src/PackedCol.c
         ../../src/Screens.c

@@ -19,6 +19,7 @@
 #include "Window.h"
 #include "Entity.h"
 #include "Survival.h"
+#include "DayNight.h"
 #include "Screens.h"
 #include "Block.h"
 #include "Menus.h"
@@ -605,6 +606,7 @@ static cc_bool BindTriggered_DeleteBlock(int key, struct InputDevice* device) {
 	if (Gui.InputGrab) return false;
 	
 	MouseStatePress(MOUSE_LEFT);
+	if (DayNight_HandleAttack()) { HeldBlockRenderer_ClickAnim(true); return true; }
 	InputHandler_DeleteBlock();
 	return true;
 }

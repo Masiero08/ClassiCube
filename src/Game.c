@@ -1,5 +1,6 @@
 #include "Game.h"
 #include "Block.h"
+#include "Minerios.h"
 #include "World.h"
 #include "Lighting.h"
 #include "MapRenderer.h"
@@ -411,6 +412,7 @@ static void Game_Load(void) {
 	Game_AddComponent(&InputHandler_Component);
 	Game_AddComponent(&Camera_Component);
 	Game_AddComponent(&Blocks_Component);
+	Game_AddComponent(&Minerios_Component);
 	Game_AddComponent(&Drawer2D_Component);
 	Game_AddComponent(&SystemFonts_Component);
 

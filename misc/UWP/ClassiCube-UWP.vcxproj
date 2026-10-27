@@ -269,6 +269,7 @@
     <ClCompile Include="..\..\src\Logger.c" />
     <ClCompile Include="..\..\src\LScreens.c" />
     <ClCompile Include="..\..\src\LWeb.c" />
+    <ClCompile Include="..\..\src\Minerios.c" />
     <ClCompile Include="..\..\src\LWidgets.c" />
     <ClCompile Include="..\..\src\MapRenderer.c" />
     <ClCompile Include="..\..\src\MenuOptions.c" />

@@ -39,7 +39,8 @@
    - Rubi, titanio e uranio: minerio (aparece em mundos novos) + bloco
    - Minerio de ovo: ao quebrar, choca uma criatura; as raras sao gigantes
    - Espadas (titanio, suprema, Big Bertha) e armadura de titanio
-   - Mosquitos: enxames que voam em volta do jogador e picam
+   - Mosquitos: enxames que voam em volta do jogador e picam; as vezes vem a Rainha
+     dos Mosquitos, um chefao que chama mais mosquitos e deixa a Espada suprema
    - Bloco da sorte: ao quebrar, sai uma surpresa boa (minerios, espadas, Big Bertha)
      ou ruim (mosquitos, monstro gigante, explosao, gaiola de vidro)
    - Dimensoes Utopia e Cristal, com portais de ida e volta
@@ -306,7 +307,7 @@ struct MonstroDef {
 	int dropCount;
 };
 
-enum { M_GALINHA, M_LEITAO, M_CARNEIRO, M_ARANHA, M_ARANHA_GIGANTE, M_ZUMBI_TITAN, M_CREEPER_COLOSSO, M_GALINHA_MONSTRO, M_MOSQUITO };
+enum { M_GALINHA, M_LEITAO, M_CARNEIRO, M_ARANHA, M_ARANHA_GIGANTE, M_ZUMBI_TITAN, M_CREEPER_COLOSSO, M_GALINHA_MONSTRO, M_MOSQUITO, M_RAINHA };
 
 static const struct MonstroDef monstro_defs[] = {
 /*NOME                         MODELO      ESCALA VEL   BRAVO  VOA    CHANCE VIDA DANO DROP                    QTD */
@@ -319,6 +320,7 @@ static const struct MonstroDef monstro_defs[] = {
 { "&aCreeper Colosso",         "creeper",  3.0f,  2.2f, true,  false,  8,    45,  5,   MBLOCK_URANIO_MINERIO,  3 },
 { "&6Galinha Monstro",         "chicken",  4.5f,  3.2f, true,  false,  5,    60,  4,   MBLOCK_RUBI,            1 },
 { "&8Mosquito",                "mosquito", 0.8f,  4.5f, true,  true,   0,    2,   1,   BLOCK_AIR,              0 },
+{ "&5Rainha dos Mosquitos",    "mosquito", 3.2f,  3.2f, true,  true,   0,    80,  4,   MITEM_ESPADA_SUPREMA,   1 },
 };
 #define MONSTRO_DEFS_COUNT Array_Elems(monstro_defs)
 
@@ -473,23 +475,39 @@ static void Monstro_Atacar(struct Monstro* m, struct Entity* jogador) {
 	m->ataqueTimer = def->voa ? 2.0f : 1.5f;
 }
 
+static struct Monstro* Monstro_Criar(int tipo, Vec3 pos);
+
 static void Monstro_TickMosquito(struct Monstro* m, struct Entity* jogador, float delta) {
 	const struct MonstroDef* def = &monstro_defs[m->tipo];
 	Vec3 alvo = jogador->Position;
 
+	cc_bool rainha = m->tipo == M_RAINHA;
+	float raio = rainha ? 5.0f : 1.8f, alcance = rainha ? 1.6f : 0.8f;
+
 	/* zumbe em circulos em volta da cabeca do jogador e da rasantes para picar */
-	m->angulo += delta * 2.5f;
-	if (m->ataqueTimer > 0.6f) {
-		alvo.x += Math_CosF(m->angulo) * 1.8f;
-		alvo.z += Math_SinF(m->angulo) * 1.8f;
-		alvo.y += 1.6f + Math_SinF(m->angulo * 3.0f) * 0.4f;
+	/* (a rainha voa mais longe e mais alto, e de vez em quando chama os filhos) */
+	m->angulo += delta * (rainha ? 0.9f : 2.5f);
+	if (m->ataqueTimer > (rainha ? 1.2f : 0.6f)) {
+		alvo.x += Math_CosF(m->angulo) * raio;
+		alvo.z += Math_SinF(m->angulo) * raio;
+		alvo.y += (rainha ? 3.5f : 1.6f) + Math_SinF(m->angulo * 3.0f) * 0.4f;
 	} else {
-		alvo.y += 1.2f;
+		alvo.y += rainha ? 0.2f : 1.2f;
 	}
 	Monstro_Voar(m, alvo, def->vel, delta);
 
-	if (m->ataqueTimer <= 0 && Dist2(m->base.next.pos, alvo) < 0.8f * 0.8f) {
+	if (m->ataqueTimer <= 0 && Dist2(m->base.next.pos, alvo) < alcance * alcance) {
 		Monstro_Atacar(m, jogador);
+		if (rainha) m->ataqueTimer = 4.0f;
+	}
+
+	if (rainha && m->pensarTimer <= 0) {
+		m->pensarTimer = 9.0f;
+		if (ContarTipo(M_MOSQUITO) < 4) {
+			Monstro_Criar(M_MOSQUITO, m->base.next.pos);
+			Monstro_Criar(M_MOSQUITO, m->base.next.pos);
+			Chat_AddRaw("&5A Rainha chamou mais mosquitos!");
+		}
 	}
 }
 
@@ -551,6 +569,8 @@ static PackedCol Monstro_GetCol(struct Entity* e) {
 	IVec3_Floor(&pos, &eyePos);
 	col = Lighting.Color(pos.x, pos.y, pos.z);
 
+	/* a rainha tem a carapaca roxa */
+	if (m->tipo == M_RAINHA) col = PackedCol_Tint(col, PackedCol_Make(200, 120, 255, 255));
 	/* pisca vermelho ao levar dano */
 	if (m->hurtTimer > 0) col = PackedCol_Tint(col, PackedCol_Make(255, 80, 80, 255));
 	return col;
@@ -598,10 +618,10 @@ static struct Monstro* Monstro_Criar(int tipo, Vec3 pos) {
 	{
 		if (!monstros[i].usado) break;
 	}
-	/* sem vaga: o mais antigo volta para a terra */
+	/* sem vaga: o mais antigo volta para a terra (a rainha fica) */
 	if (i == MONSTROS_MAX) {
-		i = 0;
-		Monstro_Remover(&monstros[0]);
+		i = monstros[0].tipo == M_RAINHA ? 1 : 0;
+		Monstro_Remover(&monstros[i]);
 	}
 	m = &monstros[i];
 
@@ -611,7 +631,7 @@ static struct Monstro* Monstro_Criar(int tipo, Vec3 pos) {
 	m->usado   = true;
 	m->tipo    = tipo;
 	m->vida    = def->vidaMax;
-	m->tempo   = def->bravo ? 90.0f : 300.0f;
+	m->tempo   = tipo == M_RAINHA ? 240.0f : def->bravo ? 90.0f : 300.0f;
 	m->destino = pos;
 	m->angulo  = Random_Float(&rnd) * 2 * MATH_PI;
 	m->ataqueTimer = 1.0f; /* da um tempinho para o jogador correr */
@@ -799,6 +819,23 @@ static void AbrirSorte(int x, int y, int z) {
 	case S_EXPLOSAO: SorteExplosao(x, y, z); break;
 	default:         SorteGaiola(); break;
 	}
+}
+
+/* A Rainha dos Mosquitos chega voando de longe */
+static void SoltarRainha(void) {
+	struct Entity* jogador = &Entities.CurPlayer->Base;
+	float ang = Random_Float(&rnd) * 2 * MATH_PI;
+	struct Monstro* m;
+	Vec3 pos;
+
+	pos.x = jogador->Position.x + Math_CosF(ang) * 14.0f;
+	pos.z = jogador->Position.z + Math_SinF(ang) * 14.0f;
+	pos.y = jogador->Position.y + 6.0f;
+	if (!World_Contains(Math_Floor(pos.x), Math_Floor(pos.y), Math_Floor(pos.z))) pos = jogador->Position, pos.y += 6.0f;
+
+	m = Monstro_Criar(M_RAINHA, pos);
+	m->pensarTimer = 6.0f;
+	Chat_AddRaw("&5BZZZZZZ! &dA Rainha dos Mosquitos apareceu!");
 }
 
 static void OnBlockChanged(void* obj, IVec3 coords, BlockID old, BlockID now) {
@@ -1273,6 +1310,11 @@ static void MineriosCommand_Execute(const cc_string* args, int argsCount) {
 		return;
 	}
 
+	if (argsCount && String_CaselessEqualsConst(&args[0], "rainha")) {
+		SoltarRainha();
+		return;
+	}
+
 	if (argsCount && String_CaselessEqualsConst(&args[0], "sorte")) {
 		x = Math_Floor(jogador->Position.x + Math_SinF(yaw) * 2.5f);
 		z = Math_Floor(jogador->Position.z - Math_CosF(yaw) * 2.5f);
@@ -1339,7 +1381,7 @@ static struct ChatCommand MineriosCommand = {
 	{
 		"&a/client minerios &e- lista os blocos, itens e monstros do mod",
 		"&a/client minerios ovo [numero|todos] &e- choca um ovo na sua frente",
-		"&a/client minerios mosquitos|limpar &e- chama mosquitos / tira os monstros",
+		"&a/client minerios mosquitos|rainha|limpar &e- chama mosquitos, a rainha ou tira os monstros",
 		"&a/client minerios sorte &e- coloca um bloco da sorte na sua frente",
 		"&a/client minerios ir [normal|utopia|cristal] &e- viaja para a dimensao",
 	}
@@ -1373,6 +1415,8 @@ static void Minerios_Tick(struct ScheduledTask* task) {
 	if (mosquitoTimer > 0) return;
 	mosquitoTimer = (dimAtual == DIM_UTOPIA ? 40.0f : 80.0f) + Random_Float(&rnd) * 60.0f;
 	if (ContarTipo(M_MOSQUITO) < 4) SoltarMosquitos(3 + Random_Next(&rnd, 2));
+	/* as vezes a rainha vem junto (mais na Utopia) */
+	if (!ContarTipo(M_RAINHA) && Random_Next(&rnd, dimAtual == DIM_UTOPIA ? 6 : 12) == 0) SoltarRainha();
 }
 
 static void OnNewMap(void) {

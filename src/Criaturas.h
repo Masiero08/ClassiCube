@@ -14,5 +14,10 @@ extern struct IGameComponent Criaturas_Component;
 /* Retorna true se o clique foi numa criatura (e o bloco nao deve ser mexido). */
 cc_bool Criaturas_HandleClick(cc_bool place);
 
+/* Se o mod esta ligado no mundo atual (modo um jogador) */
+cc_bool Criaturas_Ativo(void);
+/* Abre o menu das criaturas (Diario, equipe, casulos, Mestres) */
+void Criaturas_AbrirMenu(void);
+
 CC_END_HEADER
 #endif

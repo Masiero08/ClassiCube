@@ -1599,13 +1599,13 @@ static void ModsScreen_Activated(struct LScreen* s_) {
 	struct ModsScreen* s = (struct ModsScreen*)s_;
 
 	LLabel_Add(s,    &s->lblInfo, "&eEscolha o que liga no modo um jogador", mods_lblInfo);
-	LCheckbox_Add(s, &s->cbCriaturas, "Criaturas (capturar e evoluir)",
+	LCheckbox_Add(s, &s->cbCriaturas, "Criaturas, casulos e Mestres",
 				ModsScreen_Criaturas, mods_cbCriaturas);
 	LCheckbox_Add(s, &s->cbBlocos,    "Blocos novos",
 				ModsScreen_Blocos,    mods_cbBlocos);
-	LCheckbox_Add(s, &s->cbSurvival,  "Sobrevivencia (vida e coleta)",
+	LCheckbox_Add(s, &s->cbSurvival,  "Sobrevivencia (vida, fome, noite, Nether)",
 				ModsScreen_Survival,  mods_cbSurvival);
-	LCheckbox_Add(s, &s->cbMinerios,  "Minerios e monstros",
+	LCheckbox_Add(s, &s->cbMinerios,  "Minerios, chefoes e dragoes",
 				ModsScreen_Minerios,  mods_cbMinerios);
 	LButton_Add(s, &s->btnNormal, 150, 35, "Modo normal",
 				ModsScreen_Normal,       mods_btnNormal);

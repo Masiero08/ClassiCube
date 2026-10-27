@@ -1743,6 +1743,17 @@ static struct ChatCommand EquipeCommand = {
 	}
 };
 
+static void Inicial_Escolher(int escolha) {
+	if (equipeCount) { Chat_AddRaw("&eVoce ja tem sua criatura inicial!"); return; }
+	equipe[0].especie = escolha;
+	equipe[0].nivel   = 5;
+	equipe[0].vida    = VidaMax(escolha, 5);
+	equipe[0].xp      = 0;
+	equipeCount = 1;
+	SoltarMembro(0);
+	Chat_Add2("&aVoce escolheu %c%c&a! Cuide bem dele.", especies_def[escolha].cor, especies_def[escolha].nome);
+}
+
 static void InicialCommand_Execute(const cc_string* args, int argsCount) {
 	int i, escolha = -1;
 	cc_string nome;
@@ -1771,13 +1782,7 @@ static void InicialCommand_Execute(const cc_string* args, int argsCount) {
 		return;
 	}
 
-	equipe[0].especie = escolha;
-	equipe[0].nivel   = 5;
-	equipe[0].vida    = VidaMax(escolha, 5);
-	equipe[0].xp      = 0;
-	equipeCount = 1;
-	SoltarMembro(0);
-	Chat_Add2("&aVoce escolheu %c%c&a! Cuide bem dele.", especies_def[escolha].cor, especies_def[escolha].nome);
+	Inicial_Escolher(escolha);
 }
 
 static struct ChatCommand InicialCommand = {
@@ -1892,15 +1897,24 @@ static struct ChatCommand CasuloCommand = {
 	}
 };
 
-static void MestreCommand_Execute(const cc_string* args, int argsCount) {
-	struct Entity* jogador = &Entities.CurPlayer->Base;
-	const struct MestreDef* m;
-	float yaw = jogador->Yaw * MATH_DEG2RAD, y;
-	int i, idx;
-	Vec3 pos;
+static void Mestre_Chamar(void);
+static void Mestre_Listar(void);
 
+static void MestreCommand_Execute(const cc_string* args, int argsCount) {
 	if (!criaturasLigadas) { Chat_AddRaw("&eO mod de criaturas esta desligado (menu Mods)."); return; }
 	if (argsCount && String_CaselessEqualsConst(&args[0], "chamar")) {
+		Mestre_Chamar();
+		return;
+	}
+	Mestre_Listar();
+}
+
+static void Mestre_Chamar(void) {
+	struct Entity* jogador = &Entities.CurPlayer->Base;
+	float yaw = jogador->Yaw * MATH_DEG2RAD, y;
+	int idx;
+	Vec3 pos;
+	{
 		idx = Mestre_Proximo();
 		if (idx < 0) { Chat_AddRaw("&dVoce ja venceu todos os Mestres!"); return; }
 		if (luta.ativa) { Chat_AddRaw("&eTermine a batalha atual primeiro."); return; }
@@ -1910,9 +1924,12 @@ static void MestreCommand_Execute(const cc_string* args, int argsCount) {
 			Math_Floor(jogador->Position.y) - 16, false, &y)) { Chat_AddRaw("&eNao achei chao na sua frente."); return; }
 		pos.x = Math_Floor(pos.x) + 0.5f; pos.z = Math_Floor(pos.z) + 0.5f; pos.y = y;
 		Mestre_Aparecer(idx, pos);
-		return;
 	}
+}
 
+static void Mestre_Listar(void) {
+	const struct MestreDef* m;
+	int i;
 	Chat_AddRaw("&fMestres de Bioma:");
 	for (i = 0; i < MESTRES_COUNT; i++)
 	{
@@ -1945,6 +1962,142 @@ static struct ChatCommand MestreCommand = {
 		"&a/client mestre chamar &e- chama o proximo Mestre para batalhar",
 	}
 };
+
+/*########################################################################################################################*
+*----------------------------------------------------------Menu-----------------------------------------------------------*
+*#########################################################################################################################*/
+/* Menu das criaturas (botao "Criaturas..." no menu de pausa), para jogar sem digitar comandos */
+enum { MENU_PRINCIPAL, MENU_INICIAL, MENU_EQUIPE };
+static int menuAtual;
+static int menuIniciais[ESPECIES_COUNT], menuIniciaisCount;
+
+cc_bool Criaturas_Ativo(void) { return Ativo(); }
+
+static void Menu_Fechar(void) {
+	struct Screen* tela = Gui_GetInputGrab();
+	if (tela) Gui_Remove(tela);
+}
+
+static void Menu_Add(struct StringsBuffer* entries, const cc_string* str) { StringsBuffer_Add(entries, str); }
+
+static void Menu_Carregar(struct StringsBuffer* entries) {
+	cc_string str; char strBuffer[STRING_SIZE];
+	const struct EspecieDef* def;
+	int i;
+
+	if (menuAtual == MENU_INICIAL) {
+		menuIniciaisCount = 0;
+		for (i = 0; i < ESPECIES_COUNT; i++)
+		{
+			def = &especies_def[i];
+			if (!def->inicial) continue;
+			menuIniciais[menuIniciaisCount++] = i;
+			String_InitArray(str, strBuffer);
+			String_Format3(&str, "%c%c &7- %c", def->cor, def->nome, tipoNomes[def->tipo]);
+			Menu_Add(entries, &str);
+		}
+		return;
+	}
+	if (menuAtual == MENU_EQUIPE) {
+		for (i = 0; i < equipeCount; i++)
+		{
+			def = &especies_def[equipe[i].especie];
+			String_InitArray(str, strBuffer);
+			String_Format3(&str, "%c%c &fNv.%i ", def->cor, def->nome, &equipe[i].nivel);
+			if (i == membroAtivo)          String_AppendConst(&str, "&a(fora)");
+			else if (equipe[i].vida <= 0)  String_AppendConst(&str, "&8(cansada)");
+			else                           String_AppendConst(&str, "&7(no casulo)");
+			Menu_Add(entries, &str);
+		}
+		String_InitArray(str, strBuffer);
+		String_AppendConst(&str, "&eGuardar a criatura no casulo");
+		Menu_Add(entries, &str);
+		return;
+	}
+
+	/* principal */
+	String_InitArray(str, strBuffer);
+	String_AppendConst(&str, "Diario das Criaturas");
+	Menu_Add(entries, &str);
+
+	String_InitArray(str, strBuffer);
+	String_AppendConst(&str, equipeCount ? "Minha equipe" : "&aEscolher criatura inicial");
+	Menu_Add(entries, &str);
+
+	String_InitArray(str, strBuffer);
+	String_AppendConst(&str, "Casulo: ");
+	if (casuloEscolhido < 0) String_AppendConst(&str, "&fautomatico");
+	else { String_AppendConst(&str, casuloCores[casuloEscolhido]); String_AppendConst(&str, casuloNomes[casuloEscolhido]); }
+	String_Format3(&str, " &7(R%i M%i S%i)", &casulos[CASULO_REFORCADO], &casulos[CASULO_MARE], &casulos[CASULO_MESTRE]);
+	Menu_Add(entries, &str);
+
+	String_InitArray(str, strBuffer);
+	String_AppendConst(&str, "Chamar Mestre de Bioma");
+	Menu_Add(entries, &str);
+
+	String_InitArray(str, strBuffer);
+	String_AppendConst(&str, "Mestres e insignias");
+	Menu_Add(entries, &str);
+}
+
+static void Menu_Mostrar(int menu);
+
+static void Menu_Clique(int i) {
+	if (menuAtual == MENU_INICIAL) {
+		Menu_Fechar();
+		if (i < menuIniciaisCount) Inicial_Escolher(menuIniciais[i]);
+		return;
+	}
+	if (menuAtual == MENU_EQUIPE) {
+		Menu_Fechar();
+		if (i == equipeCount) { SoltarMembro(-1); Chat_AddRaw("&eSua criatura voltou para o casulo."); return; }
+		if (i > equipeCount) return;
+		if (equipe[i].vida <= 0) { Chat_AddRaw("&eEssa criatura esta descansando no casulo. Espere ela recuperar a vida."); return; }
+		if (i == membroAtivo) { Chat_AddRaw("&eEssa criatura ja esta fora do casulo."); return; }
+		SoltarMembro(i);
+		Chat_Add2("&eVai, %c%c&e!", especies_def[equipe[i].especie].cor, especies_def[equipe[i].especie].nome);
+		return;
+	}
+
+	switch (i)
+	{
+	case 0:
+		Menu_Fechar();
+		Diario_Abrir();
+		break;
+	case 1:
+		Menu_Mostrar(equipeCount ? MENU_EQUIPE : MENU_INICIAL);
+		break;
+	case 2:
+		/* troca o casulo: automatico > comum > reforcado > mare > mestre > automatico */
+		casuloEscolhido++;
+		if (casuloEscolhido >= CASULO_COUNT) casuloEscolhido = -1;
+		Casulos_Salvar();
+		Menu_Mostrar(MENU_PRINCIPAL);
+		break;
+	case 3:
+		Menu_Fechar();
+		Mestre_Chamar();
+		break;
+	case 4:
+		Menu_Fechar();
+		Mestre_Listar();
+		break;
+	}
+}
+
+static void Menu_Mostrar(int menu) {
+	static const char* const titulos[] = { "Criaturas", "Escolha sua criatura inicial", "Minha equipe" };
+	Menu_Fechar();
+	menuAtual = menu;
+	ModListScreen_Show(titulos[menu], "Fechar", Menu_Carregar, Menu_Clique);
+}
+
+void Criaturas_AbrirMenu(void) {
+	if (!Ativo()) { Chat_AddRaw("&eO mod de criaturas esta desligado (menu Mods)."); return; }
+	Menu_Mostrar(MENU_PRINCIPAL);
+}
+
 
 /*########################################################################################################################*
 *--------------------------------------------------------Componente-------------------------------------------------------*

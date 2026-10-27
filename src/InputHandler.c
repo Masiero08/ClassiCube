@@ -18,6 +18,8 @@
 #include "Event.h"
 #include "Window.h"
 #include "Entity.h"
+#include "Survival.h"
+#include "DayNight.h"
 #include "Screens.h"
 #include "Block.h"
 #include "Menus.h"
@@ -413,19 +415,22 @@ static void InputHandler_DeleteBlock(void) {
 
 	old = World_GetBlock(pos.x, pos.y, pos.z);
 	if (Blocks.Draw[old] == DRAW_GAS || !Blocks.CanDelete[old]) return;
+	if (!Survival_CanBreak(old, pos.x, pos.y, pos.z)) return;
 
 	Game_ChangeBlock(pos.x, pos.y, pos.z, BLOCK_AIR);
+	Survival_OnBlockBroken(old);
 	Event_RaiseBlock(&UserEvents.BlockChanged, pos, old, BLOCK_AIR);
 }
 
 static void InputHandler_PlaceBlock(void) {
 	IVec3 pos;
-	BlockID old, block;
+	BlockID old, block, held;
 	pos = Game_SelectedPos.translatedPos;
 	if (!Game_SelectedPos.valid || !World_Contains(pos.x, pos.y, pos.z)) return;
 
 	old   = World_GetBlock(pos.x, pos.y, pos.z);
-	block = Inventory_SelectedBlock;
+	held  = Inventory_SelectedBlock;
+	block = held;
 	if (AutoRotate_Enabled) block = AutoRotate_RotateBlock(block);
 
 	if (Game_CanPick(old) || !Blocks.CanPlace[block]) return;
@@ -436,8 +441,10 @@ static void InputHandler_PlaceBlock(void) {
 	if (Blocks.Collide[old] == COLLIDE_NONE && !Blocks.CanDelete[old]) return;
 
 	if (!CheckIsFree(block)) return;
+	if (!Survival_CanPlace(held)) return;
 
 	Game_ChangeBlock(pos.x, pos.y, pos.z, block);
+	Survival_OnBlockPlaced(held);
 	Event_RaiseBlock(&UserEvents.BlockChanged, pos, old, block);
 }
 
@@ -599,6 +606,7 @@ static cc_bool BindTriggered_DeleteBlock(int key, struct InputDevice* device) {
 	if (Gui.InputGrab) return false;
 	
 	MouseStatePress(MOUSE_LEFT);
+	if (DayNight_HandleAttack()) { HeldBlockRenderer_ClickAnim(true); return true; }
 	InputHandler_DeleteBlock();
 	return true;
 }

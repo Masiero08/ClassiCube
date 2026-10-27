@@ -17,6 +17,8 @@
 #include "TexturePack.h"
 #include "Utils.h"
 #include "Audio.h"
+#include "Survival.h"
+#include "DayNight.h"
 
 #ifdef CC_BUILD_FILESYSTEM
 static struct LocationUpdate* spawn_point;
@@ -682,8 +684,24 @@ static void Cw_Callback_1(struct NbtTag* tag) {
 }
 
 static void Cw_Callback_2(struct NbtTag* tag) {
+	cc_uint8* arr;
 	if (IsTag(tag->parent, "MapGenerator")) {
 		if (IsTag(tag, "Seed")) { World.Seed = NbtTag_I32(tag); return; }
+		return;
+	}
+	if (IsTag(tag->parent, "Survival")) {
+		if (IsTag(tag, "Health")) { Survival_LoadHealth(NbtTag_U8(tag)); return; }
+		if (IsTag(tag, "Food"))   { Survival_LoadFood(NbtTag_U8(tag));   return; }
+		if (IsTag(tag, "Time"))   { DayNight_SetTime(NbtTag_I32(tag));  return; }
+		if (IsTag(tag, "Tools")) {
+			arr = NbtTag_U8_Array(tag, SURVIVAL_TOOLS_SIZE);
+			if (arr) Survival_LoadTools(arr, tag->dataSize);
+			return;
+		}
+		if (IsTag(tag, "Counts")) {
+			arr = NbtTag_U8_Array(tag, 0);
+			if (arr) Survival_LoadCounts(arr, tag->dataSize);
+		}
 		return;
 	}
 	if (!IsTag(tag->parent, "Spawn")) return;
@@ -1618,6 +1636,25 @@ cc_result Cw_Save(struct Stream* stream) {
 		if ((res = Stream_Write(stream, World.Blocks2, World.Volume))) return res;
 	}
 #endif
+
+	if (Survival_IsActive()) {
+		static cc_uint8 counts[BLOCK_COUNT * 2];
+		Survival_GetCounts(counts);
+
+		cur = buffer;
+		cur = Nbt_WriteDict(cur,  "Survival");
+		cur = Nbt_WriteUInt8(cur, "Health", Survival_GetHealth());
+		cur = Nbt_WriteUInt8(cur, "Food",   Survival_GetFood());
+		cur = Nbt_WriteInt32(cur, "Time",   DayNight_GetTime());
+		cur = Nbt_WriteArray(cur, "Tools",  SURVIVAL_TOOLS_SIZE);
+		Survival_GetTools(cur); cur += SURVIVAL_TOOLS_SIZE;
+		cur = Nbt_WriteArray(cur, "Counts", sizeof(counts));
+
+		if ((res = Stream_Write(stream, buffer, (int)(cur - buffer)))) return res;
+		if ((res = Stream_Write(stream, counts, sizeof(counts))))      return res;
+		buffer[0] = NBT_END;
+		if ((res = Stream_Write(stream, buffer, 1)))                   return res;
+	}
 
 	cur = buffer;
 	cur = Nbt_WriteDict(cur, "Metadata");

@@ -180,6 +180,12 @@
     <ClInclude Include="Lighting.h">
       <Filter>Header Files\Map</Filter>
     </ClInclude>
+    <ClInclude Include="Survival.h">
+      <Filter>Header Files\Entities</Filter>
+    </ClInclude>
+    <ClInclude Include="DayNight.h">
+      <Filter>Header Files\Entities</Filter>
+    </ClInclude>
     <ClInclude Include="Options.h">
       <Filter>Header Files\Utils</Filter>
     </ClInclude>
@@ -397,6 +403,12 @@
     </ClCompile>
     <ClCompile Include="Lighting.c">
       <Filter>Source Files\Map</Filter>
+    </ClCompile>
+    <ClCompile Include="Survival.c">
+      <Filter>Source Files\Entities</Filter>
+    </ClCompile>
+    <ClCompile Include="DayNight.c">
+      <Filter>Source Files\Entities</Filter>
     </ClCompile>
     <ClCompile Include="AxisLinesRenderer.c">
       <Filter>Source Files\SelectionBox</Filter>

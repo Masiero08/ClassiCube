@@ -412,6 +412,7 @@
     <ClInclude Include="Inventory.h" />
     <ClInclude Include="IsometricDrawer.h" />
     <ClInclude Include="Lighting.h" />
+    <ClInclude Include="Survival.h" />
     <ClInclude Include="Generator.h" />
     <ClInclude Include="MapRenderer.h" />
     <ClInclude Include="Options.h" />
@@ -615,6 +616,7 @@
     <ClCompile Include="IsometricDrawer.c" />
     <ClCompile Include="Input.c" />
     <ClCompile Include="Lighting.c" />
+    <ClCompile Include="Survival.c" />
     <ClCompile Include="Entity.c" />
     <ClCompile Include="MapRenderer.c" />
     <ClCompile Include="Options.c" />

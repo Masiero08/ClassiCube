@@ -175,6 +175,7 @@ static void SwitchToDirectConnect(void* w) { DirectConnectScreen_SetActive(); }
 static void SwitchToMain(void* w)          { MainScreen_SetActive(); }
 static void SwitchToSettings(void* w)      { SettingsScreen_SetActive(); }
 static void SwitchToThemes(void* w)        { ThemesScreen_SetActive(); }
+static void SwitchToMods(void* w)          { ModsScreen_SetActive(); }
 static void SwitchToUpdates(void* w)       { UpdatesScreen_SetActive(); }
 
 
@@ -706,14 +707,14 @@ static void SwitchToSplitScreen(void* w) { SplitScreen_SetActive(); }
 *#########################################################################################################################*/
 static struct MainScreen {
 	LScreen_Layout
-	struct LButton btnLogin, btnResume, btnDirect, btnSPlayer, btnSplit;
+	struct LButton btnLogin, btnResume, btnDirect, btnSPlayer, btnSplit, btnMods;
 	struct LButton btnRegister, btnOptions, btnUpdates;
 	struct LInput iptUsername, iptPassword;
 	struct LLabel lblStatus, lblUpdate;
 	cc_bool signingIn;
 } MainScreen CC_BIG_VAR;
 
-#define MAINSCREEN_MAX_WIDGETS 12
+#define MAINSCREEN_MAX_WIDGETS 13
 static struct LWidget* main_widgets[MAINSCREEN_MAX_WIDGETS];
 
 LAYOUTS main_iptUsername[] = { { ANCHOR_CENTRE_MIN, -140 }, { ANCHOR_CENTRE, -120 } };
@@ -724,7 +725,8 @@ LAYOUTS main_lblStatus[] = { { ANCHOR_CENTRE,   0 }, { ANCHOR_CENTRE,  20 } };
 
 LAYOUTS main_btnResume[]  = { { ANCHOR_CENTRE, 90 }, { ANCHOR_CENTRE, -25 } };
 LAYOUTS main_btnDirect[]  = { { ANCHOR_CENTRE,  0 }, { ANCHOR_CENTRE,  60 } };
-LAYOUTS main_btnSPlayer[] = { { ANCHOR_CENTRE,  0 }, { ANCHOR_CENTRE, 110 } };
+LAYOUTS main_btnSPlayer[] = { { ANCHOR_CENTRE, -55 }, { ANCHOR_CENTRE, 110 } };
+LAYOUTS main_btnMods[]    = { { ANCHOR_CENTRE,  78 }, { ANCHOR_CENTRE, 110 } };
 LAYOUTS main_btnSplit[]   = { { ANCHOR_CENTRE,  0 }, { ANCHOR_CENTRE, 160 } };
 
 LAYOUTS main_btnRegister[] = { { ANCHOR_MIN,    6 }, { ANCHOR_MAX,  6 } };
@@ -869,12 +871,14 @@ static void MainScreen_Activated(struct LScreen* s_) {
 	LButton_Add(s, &s->btnDirect,  200, 35, "Direct connect", 
 				SwitchToDirectConnect,   main_btnDirect);
 #endif
-	LButton_Add(s, &s->btnSPlayer, 200, 35, "Singleplayer",
+	LButton_Add(s, &s->btnSPlayer, 145, 35, "Singleplayer",
 				MainScreen_Singleplayer, main_btnSPlayer);
 #ifdef CC_BUILD_SPLITSCREEN
 	LButton_Add(s, &s->btnSplit,   200, 35, "Splitscreen (WIP)", 
 				SwitchToSplitScreen,     main_btnSplit);
 #endif
+	LButton_Add(s, &s->btnMods,    100, 35, "Mods",
+				SwitchToMods,            main_btnMods);
 
 	if (Process_OpenSupported) {
 		LButton_Add(s, &s->btnRegister, 100, 35, "Register", 
@@ -1534,6 +1538,100 @@ void SettingsScreen_SetActive(void) {
 
 	s->Activated      = SettingsScreen_Activated;
 	s->title          = "Options";
+	s->onEscapeWidget = (struct LWidget*)&s->btnBack;
+
+	Launcher_SetScreen((struct LScreen*)s);
+}
+
+
+/*########################################################################################################################*
+*-----------------------------------------------------------ModsScreen----------------------------------------------------*
+*#########################################################################################################################*/
+/* Escolhe entre o modo normal e os mods feitos para este fork (so valem no modo um jogador). */
+/* Cada mod le a propria opcao quando o mundo carrega. */
+static struct ModsScreen {
+	LScreen_Layout
+	struct LCheckbox cbCriaturas, cbBlocos, cbSurvival, cbMinerios;
+	struct LButton btnNormal, btnTodos, btnJogar, btnBack;
+	struct LLabel  lblInfo;
+} ModsScreen CC_BIG_VAR;
+
+#define MODS_SCREEN_MAX_WIDGETS 9
+static struct LWidget* mods_widgets[MODS_SCREEN_MAX_WIDGETS];
+
+#define MODS_OPT_CRIATURAS "mod-criaturas"
+#define MODS_OPT_BLOCOS    "mod-blocos"
+#define MODS_OPT_SURVIVAL  "survival-mode"
+#define MODS_OPT_MINERIOS  "mod-minerios"
+
+LAYOUTS mods_lblInfo[]     = { { ANCHOR_CENTRE,        0 }, { ANCHOR_CENTRE, -150 } };
+LAYOUTS mods_cbCriaturas[] = { { ANCHOR_CENTRE_MIN, -150 }, { ANCHOR_CENTRE, -115 } };
+LAYOUTS mods_cbBlocos[]    = { { ANCHOR_CENTRE_MIN, -150 }, { ANCHOR_CENTRE,  -80 } };
+LAYOUTS mods_cbSurvival[]  = { { ANCHOR_CENTRE_MIN, -150 }, { ANCHOR_CENTRE,  -45 } };
+LAYOUTS mods_cbMinerios[]  = { { ANCHOR_CENTRE_MIN, -150 }, { ANCHOR_CENTRE,  -10 } };
+LAYOUTS mods_btnNormal[]   = { { ANCHOR_CENTRE,      -80 }, { ANCHOR_CENTRE,   40 } };
+LAYOUTS mods_btnTodos[]    = { { ANCHOR_CENTRE,       80 }, { ANCHOR_CENTRE,   40 } };
+LAYOUTS mods_btnJogar[]    = { { ANCHOR_CENTRE,        0 }, { ANCHOR_CENTRE,   90 } };
+LAYOUTS mods_btnBack[]     = { { ANCHOR_CENTRE,        0 }, { ANCHOR_CENTRE,  140 } };
+
+static void ModsScreen_Criaturas(struct LCheckbox* w) { Options_SetBool(MODS_OPT_CRIATURAS, w->value); }
+static void ModsScreen_Blocos(struct LCheckbox* w)    { Options_SetBool(MODS_OPT_BLOCOS,    w->value); }
+static void ModsScreen_Survival(struct LCheckbox* w)  { Options_SetBool(MODS_OPT_SURVIVAL,  w->value); }
+static void ModsScreen_Minerios(struct LCheckbox* w)  { Options_SetBool(MODS_OPT_MINERIOS,  w->value); }
+
+static void ModsScreen_SetAll(cc_bool value) {
+	struct ModsScreen* s = &ModsScreen;
+	Options_SetBool(MODS_OPT_CRIATURAS, value);
+	Options_SetBool(MODS_OPT_BLOCOS,    value);
+	Options_SetBool(MODS_OPT_SURVIVAL,  value);
+	Options_SetBool(MODS_OPT_MINERIOS,  value);
+
+	LCheckbox_Set(&s->cbCriaturas, value);
+	LCheckbox_Set(&s->cbBlocos,    value);
+	LCheckbox_Set(&s->cbSurvival,  value);
+	LCheckbox_Set(&s->cbMinerios,  value);
+	LBackend_Redraw();
+}
+static void ModsScreen_Normal(void* w) { ModsScreen_SetAll(false); }
+static void ModsScreen_Todos(void* w)  { ModsScreen_SetAll(true);  }
+
+static void ModsScreen_Activated(struct LScreen* s_) {
+	struct ModsScreen* s = (struct ModsScreen*)s_;
+
+	LLabel_Add(s,    &s->lblInfo, "&eEscolha o que liga no modo um jogador", mods_lblInfo);
+	LCheckbox_Add(s, &s->cbCriaturas, "Criaturas (capturar e evoluir)",
+				ModsScreen_Criaturas, mods_cbCriaturas);
+	LCheckbox_Add(s, &s->cbBlocos,    "Blocos novos",
+				ModsScreen_Blocos,    mods_cbBlocos);
+	LCheckbox_Add(s, &s->cbSurvival,  "Sobrevivencia (vida e coleta)",
+				ModsScreen_Survival,  mods_cbSurvival);
+	LCheckbox_Add(s, &s->cbMinerios,  "Minerios e monstros",
+				ModsScreen_Minerios,  mods_cbMinerios);
+	LButton_Add(s, &s->btnNormal, 150, 35, "Modo normal",
+				ModsScreen_Normal,       mods_btnNormal);
+	LButton_Add(s, &s->btnTodos,  150, 35, "Ligar todos",
+				ModsScreen_Todos,        mods_btnTodos);
+	LButton_Add(s, &s->btnJogar,  200, 35, "Jogar",
+				MainScreen_Singleplayer, mods_btnJogar);
+	LButton_Add(s, &s->btnBack,    80, 35, "Voltar",
+				SwitchToMain,            mods_btnBack);
+
+	LCheckbox_Set(&s->cbCriaturas, Options_GetBool(MODS_OPT_CRIATURAS, true));
+	LCheckbox_Set(&s->cbBlocos,    Options_GetBool(MODS_OPT_BLOCOS,    true));
+	LCheckbox_Set(&s->cbSurvival,  Options_GetBool(MODS_OPT_SURVIVAL,  true));
+	LCheckbox_Set(&s->cbMinerios,  Options_GetBool(MODS_OPT_MINERIOS,  true));
+}
+
+void ModsScreen_SetActive(void) {
+	struct ModsScreen* s = &ModsScreen;
+	LScreen_Reset((struct LScreen*)s);
+
+	s->widgets    = mods_widgets;
+	s->maxWidgets = Array_Elems(mods_widgets);
+
+	s->Activated      = ModsScreen_Activated;
+	s->title          = "Mods";
+	s->onEnterWidget  = (struct LWidget*)&s->btnJogar;
 	s->onEscapeWidget = (struct LWidget*)&s->btnBack;
 
 	Launcher_SetScreen((struct LScreen*)s);

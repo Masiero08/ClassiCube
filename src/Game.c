@@ -16,6 +16,7 @@
 #include "Utils.h"
 #include "Logger.h"
 #include "Entity.h"
+#include "Criaturas.h"
 #include "Chat.h"
 #include "Commands.h"
 #include "Drawer2D.h"
@@ -434,6 +435,7 @@ static void Game_Load(void) {
 	Game_AddComponent(&Server_Component);
 	Game_AddComponent(&Protocol_Component);
 	Game_AddComponent(&Entities_Component);
+	Game_AddComponent(&Criaturas_Component);
 
 	Game_AddComponent(&Gui_Component);
 	Game_AddComponent(&Selections_Component);

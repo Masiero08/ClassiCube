@@ -18,6 +18,7 @@
 #include "Event.h"
 #include "Window.h"
 #include "Entity.h"
+#include "Survival.h"
 #include "Screens.h"
 #include "Block.h"
 #include "Menus.h"
@@ -413,8 +414,10 @@ static void InputHandler_DeleteBlock(void) {
 
 	old = World_GetBlock(pos.x, pos.y, pos.z);
 	if (Blocks.Draw[old] == DRAW_GAS || !Blocks.CanDelete[old]) return;
+	if (!Survival_CanBreak(old)) return;
 
 	Game_ChangeBlock(pos.x, pos.y, pos.z, BLOCK_AIR);
+	Survival_OnBlockBroken(old);
 	Event_RaiseBlock(&UserEvents.BlockChanged, pos, old, BLOCK_AIR);
 }
 
@@ -436,8 +439,10 @@ static void InputHandler_PlaceBlock(void) {
 	if (Blocks.Collide[old] == COLLIDE_NONE && !Blocks.CanDelete[old]) return;
 
 	if (!CheckIsFree(block)) return;
+	if (!Survival_CanPlace(block)) return;
 
 	Game_ChangeBlock(pos.x, pos.y, pos.z, block);
+	Survival_OnBlockPlaced(block);
 	Event_RaiseBlock(&UserEvents.BlockChanged, pos, old, block);
 }
 

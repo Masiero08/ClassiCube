@@ -414,6 +414,7 @@
     <ClInclude Include="Lighting.h" />
     <ClInclude Include="ModernBlocks.h" />
     <ClInclude Include="ModernBlocks_tex.h" />
+    <ClInclude Include="Survival.h" />
     <ClInclude Include="Generator.h" />
     <ClInclude Include="MapRenderer.h" />
     <ClInclude Include="Options.h" />
@@ -618,6 +619,7 @@
     <ClCompile Include="Input.c" />
     <ClCompile Include="Lighting.c" />
     <ClCompile Include="ModernBlocks.c" />
+    <ClCompile Include="Survival.c" />
     <ClCompile Include="Entity.c" />
     <ClCompile Include="MapRenderer.c" />
     <ClCompile Include="Options.c" />

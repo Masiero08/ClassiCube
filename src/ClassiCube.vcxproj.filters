@@ -185,6 +185,8 @@
     </ClInclude>
     <ClInclude Include="ModernBlocks_tex.h">
       <Filter>Header Files\Map</Filter>
+    <ClInclude Include="Survival.h">
+      <Filter>Header Files\Entities</Filter>
     </ClInclude>
     <ClInclude Include="Options.h">
       <Filter>Header Files\Utils</Filter>
@@ -406,6 +408,8 @@
     </ClCompile>
     <ClCompile Include="ModernBlocks.c">
       <Filter>Source Files\Map</Filter>
+    <ClCompile Include="Survival.c">
+      <Filter>Source Files\Entities</Filter>
     </ClCompile>
     <ClCompile Include="AxisLinesRenderer.c">
       <Filter>Source Files\SelectionBox</Filter>

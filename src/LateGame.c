@@ -14,6 +14,15 @@
 #include "Utils.h"
 #include "ExtMath.h"
 #include "Platform.h"
+#include "Entity.h"
+#include "EntityComponents.h"
+#include "Model.h"
+#include "Graphics.h"
+#include "Stream.h"
+#include "Chat.h"
+#include "Camera.h"
+#include "Survival.h"
+#include "DayNight.h"
 #include "LateGame_tex.h"
 
 /* Diamonds, the Nether and the End for singleplayer, inspired by newer Minecraft versions. */
@@ -385,14 +394,342 @@ void LateGame_GenEnd(void) {
 
 
 /*########################################################################################################################*
+*------------------------------------------------------Ender Dragon-------------------------------------------------------*
+*#########################################################################################################################*/
+/* A boss that circles the End island and swoops at the player. When defeated it leaves */
+/*  an exit portal back to the overworld and a dragon egg on a bedrock pillar. */
+#define DRAGON_ID      248
+#define DRAGON_HEALTH  100
+#define DRAGON_SCALE   3.0f
+#define DRAGON_PARTS   10
+#define DRAGON_REACH   7.0f
+
+static struct ModelVertex dragon_vertices[DRAGON_PARTS * MODEL_BOX_VERTICES];
+static struct ModelPart dragon_body, dragon_neck, dragon_head, dragon_tail, dragon_wingL, dragon_wingR, dragon_legs[4];
+static struct ModelTex dragon_tex = { "dragao_fim.png", SKIN_64x64 };
+static struct Model dragon_model;
+static cc_bool dragon_registered;
+
+static void MakeBox(struct ModelPart* part, int u, int v, int x1, int y1, int z1, int x2, int y2, int z2, float rx, float ry, float rz) {
+	struct BoxDesc desc;
+	desc.texX  = u; desc.texY = v;
+	desc.sizeX = x2 - x1; desc.sizeY = y2 - y1; desc.sizeZ = z2 - z1;
+	desc.x1 = x1 / 16.0f; desc.y1 = y1 / 16.0f; desc.z1 = z1 / 16.0f;
+	desc.x2 = x2 / 16.0f; desc.y2 = y2 / 16.0f; desc.z2 = z2 / 16.0f;
+	desc.rotX = rx / 16.0f; desc.rotY = ry / 16.0f; desc.rotZ = rz / 16.0f;
+	BoxDesc_BuildBox(part, &desc);
+}
+
+/* Model faces -Z (head at the front), see the skin layout in misc/late_game/gen_textures.py */
+static void Dragon_MakeParts(void) {
+	MakeBox(&dragon_body,  0, 13,  -4,  8,  -8,  4, 14,  10, 0, 11,   0);
+	MakeBox(&dragon_neck,  0, 52,  -2, 10, -14,  2, 14,  -8, 0, 12,  -8);
+	MakeBox(&dragon_head, 32, 37,  -3,  9, -22,  3, 15, -14, 0, 12, -14);
+	MakeBox(&dragon_tail,  0, 37,  -2,  9,  10,  2, 12,  22, 0, 10,  10);
+	MakeBox(&dragon_wingL, 0,  0,   4, 13,  -6, 24, 14,   6,  4, 13.5f, 0);
+	MakeBox(&dragon_wingR, 0,  0, -24, 13,  -6, -4, 14,   6, -4, 13.5f, 0);
+	MakeBox(&dragon_legs[0], 20, 52, -4, 2, -7, -2, 8, -5, -3, 8, -6);
+	MakeBox(&dragon_legs[1], 20, 52,  2, 2, -7,  4, 8, -5,  3, 8, -6);
+	MakeBox(&dragon_legs[2], 20, 52, -4, 2,  5, -2, 8,  7, -3, 8,  6);
+	MakeBox(&dragon_legs[3], 20, 52,  2, 2,  5,  4, 8,  7,  3, 8,  6);
+}
+
+static void Dragon_CheckTexture(void) {
+	static const cc_string name = String_FromConst("dragao_fim.png");
+	struct Stream mem;
+	if (dragon_tex.texID) return;
+
+	Stream_ReadonlyMemory(&mem, (void*)late_dragonPng, sizeof(late_dragonPng));
+	Game_UpdateTexture(&dragon_tex.texID, &mem, &name, &dragon_tex.skinType, NULL);
+}
+
+static void Dragon_Draw(struct Entity* e) {
+	float flap = Math_SinF((float)Game.Time * 3.0f) * 0.7f;
+	float sway = Math_SinF((float)Game.Time * 1.5f) * 0.25f;
+	int i;
+
+	Dragon_CheckTexture();
+	Model_ApplyTexture(e);
+	Model_LockVB(e, DRAGON_PARTS * MODEL_BOX_VERTICES);
+
+	Model_DrawPart(&dragon_body);
+	Model_DrawPart(&dragon_neck);
+	Model_DrawRotate(sway * 0.4f, 0, 0, &dragon_head, false);
+	Model_DrawRotate(0, sway, 0, &dragon_tail, false);
+	Model_DrawRotate(0, 0,  flap, &dragon_wingL, false);
+	Model_DrawRotate(0, 0, -flap, &dragon_wingR, false);
+	for (i = 0; i < 4; i++) Model_DrawRotate(0.6f, 0, 0, &dragon_legs[i], false);
+
+	Model_UnlockVB();
+	Gfx_DrawVb_IndexedTris(DRAGON_PARTS * MODEL_BOX_VERTICES);
+}
+
+static float Dragon_GetNameY(struct Entity* e) { return 16 / 16.0f; }
+static float Dragon_GetEyeY(struct Entity* e)  { return 12 / 16.0f; }
+static void  Dragon_GetSize(struct Entity* e)  { Vec3_Set(e->Size, 16 / 16.0f, 14 / 16.0f, 16 / 16.0f); }
+static void  Dragon_GetBounds(struct Entity* e) {
+	Vec3_Set(e->ModelAABB.Min, -24 / 16.0f,  2 / 16.0f, -22 / 16.0f);
+	Vec3_Set(e->ModelAABB.Max,  24 / 16.0f, 15 / 16.0f,  22 / 16.0f);
+}
+
+static void Dragon_RegisterModel(void) {
+	if (dragon_registered) return;
+	dragon_registered = true;
+	Model_RegisterTexture(&dragon_tex);
+
+	dragon_model.name       = "dragao_fim";
+	dragon_model.vertices   = dragon_vertices;
+	dragon_model.defaultTex = &dragon_tex;
+	dragon_model.MakeParts  = Dragon_MakeParts;
+	dragon_model.Draw       = Dragon_Draw;
+	dragon_model.GetNameY   = Dragon_GetNameY;
+	dragon_model.GetEyeY    = Dragon_GetEyeY;
+	dragon_model.GetCollisionSize = Dragon_GetSize;
+	dragon_model.GetPickingBounds = Dragon_GetBounds;
+
+	Model_Init(&dragon_model);
+	dragon_model.usesSkin    = false;
+	dragon_model.maxVertices = DRAGON_PARTS * MODEL_BOX_VERTICES;
+	Model_Register(&dragon_model);
+}
+
+struct Dragon {
+	struct Entity base;
+	cc_bool used, swooping;
+	int health, lastShownHealth;
+	float angle, swoopTimer, attackTimer, hurtTimer;
+};
+static struct Dragon dragon;
+static RNGState dragon_rnd;
+
+static void EndCenter(int* cx, int* cy, int* cz) {
+	*cx = World.Width / 2; *cy = World.Height / 2; *cz = World.Length / 2;
+}
+
+/* The exit portal's bedrock pillar marks a dragon that was already defeated */
+static cc_bool Dragon_WasDefeated(void) {
+	int cx, cy, cz;
+	EndCenter(&cx, &cy, &cz);
+	return World_Contains(cx, cy + 1, cz) && World_GetBlock(cx, cy + 1, cz) == BLOCK_BEDROCK;
+}
+
+static void Dragon_ShowHealth(void) {
+	cc_string str; char strBuffer[STRING_SIZE];
+	int i, filled;
+	if (dragon.lastShownHealth == dragon.health) return;
+	dragon.lastShownHealth = dragon.health;
+
+	if (!dragon.used) { Chat_AddOf(&String_Empty, MSG_TYPE_EXTRASTATUS_1); return; }
+	String_InitArray(str, strBuffer);
+	String_AppendConst(&str, "&5Ender Dragon &d");
+	filled = (dragon.health * 20 + DRAGON_HEALTH - 1) / DRAGON_HEALTH;
+	for (i = 0; i < 20; i++)
+	{
+		if (i == filled) String_AppendConst(&str, "&8");
+		String_Append(&str, '|');
+	}
+	Chat_AddOf(&str, MSG_TYPE_EXTRASTATUS_1);
+}
+
+static void Dragon_Remove(void) {
+	if (!dragon.used) return;
+	Entities_Remove(DRAGON_ID);
+	dragon.used = false;
+	Dragon_ShowHealth();
+}
+
+/* Exit portal on bedrock in the middle of the island, with the egg on a pillar */
+static void Dragon_BuildExit(void) {
+	int cx, cy, cz, x, y, z, d2;
+	EndCenter(&cx, &cy, &cz);
+
+	for (z = cz - 3; z <= cz + 3; z++)
+		for (x = cx - 3; x <= cx + 3; x++)
+		{
+			d2 = (x - cx) * (x - cx) + (z - cz) * (z - cz);
+			if (d2 > 10 || !World_Contains(x, cy + 1, z)) continue;
+			Game_UpdateBlock(x, cy, z, BLOCK_BEDROCK);
+			for (y = cy + 1; y <= cy + 6; y++) Game_UpdateBlock(x, y, z, BLOCK_AIR);
+			Game_UpdateBlock(x, cy + 1, z, d2 > 4 ? BLOCK_BEDROCK : LBLOCK_END_PORTAL);
+		}
+
+	for (y = cy + 1; y <= cy + 4; y++) Game_UpdateBlock(cx, y, cz, BLOCK_BEDROCK);
+	Game_UpdateBlock(cx, cy + 5, cz, LBLOCK_DRAGON_EGG);
+}
+
+static void Dragon_MoveTowards(Vec3 target, float speed, float delta) {
+	struct Entity* e = &dragon.base;
+	Vec3 pos = e->next.pos, dir;
+	float len, step;
+
+	Vec3_Sub(&dir, &target, &pos);
+	len = Math_SqrtF(Vec3_LengthSquared(&dir));
+	if (len < 0.01f) return;
+	step = min(speed * delta, len);
+
+	pos.x += dir.x / len * step;
+	pos.y += dir.y / len * step;
+	pos.z += dir.z / len * step;
+	e->next.pos  = pos;
+	e->next.yaw  = Math_Atan2f(dir.x, -dir.z) * MATH_RAD2DEG;
+	e->next.rotY = e->next.yaw;
+}
+
+static void Dragon_Tick(struct Entity* e, float delta) {
+	struct Entity* player = &Entities.CurPlayer->Base;
+	Vec3 target, rel;
+	int cx, cy, cz;
+	float dist;
+
+	e->prev = e->next;
+	EndCenter(&cx, &cy, &cz);
+	if (dragon.hurtTimer   > 0) dragon.hurtTimer   -= delta;
+	if (dragon.attackTimer > 0) dragon.attackTimer -= delta;
+	dragon.swoopTimer -= delta;
+
+	Vec3_Sub(&rel, &player->Position, &e->next.pos);
+	dist = Math_SqrtF(Vec3_LengthSquared(&rel));
+
+	if (dragon.swooping) {
+		/* Dives at the player, bites, then climbs back up */
+		target = player->Position; target.y += 1.0f;
+		Dragon_MoveTowards(target, 13.0f, delta);
+
+		if (dist < 3.5f && dragon.attackTimer <= 0) {
+			Survival_Damage(5);
+			dragon.attackTimer = 1.5f;
+			player->Velocity.x += rel.x / (dist + 0.1f) * 1.2f;
+			player->Velocity.z += rel.z / (dist + 0.1f) * 1.2f;
+			player->Velocity.y  = 0.6f;
+			dragon.swooping = false;
+		}
+		if (dragon.swoopTimer < 4.0f) dragon.swooping = false;
+	} else {
+		/* Circles around the pillars */
+		dragon.angle += delta * 0.3f;
+		target.x = cx + Math_CosF(dragon.angle) * 22.0f;
+		target.z = cz + Math_SinF(dragon.angle) * 22.0f;
+		target.y = cy + 16.0f + Math_SinF(dragon.angle * 3.0f) * 4.0f;
+		Dragon_MoveTowards(target, 9.0f, delta);
+
+		if (dragon.swoopTimer <= 0) {
+			dragon.swoopTimer = 9.0f + Random_Float(&dragon_rnd) * 5.0f;
+			if (dist < 60.0f) dragon.swooping = true;
+		}
+	}
+}
+
+static void Dragon_Despawn(struct Entity* e) {
+	if (e->Flags & ENTITY_FLAG_HAS_MODELVB) Gfx_DeleteScratchVb(&e->ModelVB);
+}
+
+static void Dragon_SetLocation(struct Entity* e, struct LocationUpdate* update) {
+	if (update->flags & LU_HAS_POS) {
+		e->prev.pos = update->pos; e->next.pos = update->pos;
+	}
+}
+
+static PackedCol Dragon_GetCol(struct Entity* e) {
+	if (dragon.hurtTimer > 0) return PackedCol_Make(255, 90, 90, 255);
+	return PackedCol_Make(230, 230, 230, 255);
+}
+
+static void Dragon_RenderModel(struct Entity* e, float delta, float t) {
+	Vec3_Lerp(&e->Position, &e->prev.pos, &e->next.pos, t);
+	Entity_LerpAngles(e, t);
+	e->ShouldRender = Model_ShouldRender(e);
+	if (e->ShouldRender) Model_Render(e->Model, e);
+}
+
+static cc_bool Dragon_ShouldRenderName(struct Entity* e) { return false; }
+
+static const struct EntityVTABLE dragon_VTABLE = {
+	Dragon_Tick,        Dragon_Despawn,         Dragon_SetLocation, Dragon_GetCol,
+	Dragon_RenderModel, Dragon_ShouldRenderName
+};
+
+static void Dragon_Spawn(void) {
+	struct Entity* e = &dragon.base;
+	int cx, cy, cz;
+	Vec3 pos;
+	if (dragon.used || Entities.List[DRAGON_ID]) return;
+	Dragon_RegisterModel();
+	EndCenter(&cx, &cy, &cz);
+
+	Mem_Set(&dragon, 0, sizeof(dragon));
+	Entity_Init(e);
+	e->VTABLE = &dragon_VTABLE;
+	e->Model  = Model_Get(&(cc_string)String_FromConst("dragao_fim"));
+	Vec3_Set(e->ModelScale, DRAGON_SCALE, DRAGON_SCALE, DRAGON_SCALE);
+	Entity_UpdateModelBounds(e);
+
+	pos.x = cx + 22.0f; pos.y = cy + 16.0f; pos.z = (float)cz;
+	e->prev.pos = pos; e->next.pos = pos; e->Position = pos;
+
+	dragon.used        = true;
+	dragon.health      = DRAGON_HEALTH;
+	dragon.swoopTimer  = 8.0f;
+	dragon.lastShownHealth = -1;
+	Entities.List[DRAGON_ID] = e;
+	Dragon_ShowHealth();
+	Chat_AddOf(&(cc_string)String_FromConst("&5O Ender Dragon acordou!"), MSG_TYPE_ANNOUNCEMENT);
+}
+
+cc_bool LateGame_HandleAttack(void) {
+	struct Entity* player;
+	Vec3 eye, dir, center, rel;
+	float t, d2;
+
+	if (!dragon.used || !Survival_IsActive()) return false;
+	player = &Entities.CurPlayer->Base;
+	eye    = Entity_GetEyePosition(player);
+	dir    = Vec3_GetDirVector(player->Yaw * MATH_DEG2RAD, player->Pitch * MATH_DEG2RAD + Camera.TiltPitch);
+
+	center    = dragon.base.Position;
+	center.y += 11 / 16.0f * DRAGON_SCALE;
+	Vec3_Sub(&rel, &center, &eye);
+	t = rel.x * dir.x + rel.y * dir.y + rel.z * dir.z;
+	if (t < 0 || t > DRAGON_REACH) return false;
+	d2 = Vec3_LengthSquared(&rel) - t * t;
+	if (d2 > 2.5f * 2.5f) return false;
+
+	dragon.health   -= Survival_AttackDamage();
+	dragon.hurtTimer = 0.3f;
+	Dragon_ShowHealth();
+	if (dragon.health > 0) return true;
+
+	dragon.health = 0;
+	Dragon_Remove();
+	Dragon_BuildExit();
+	Chat_AddOf(&(cc_string)String_FromConst("&5O Ender Dragon foi derrotado!"), MSG_TYPE_ANNOUNCEMENT);
+	Chat_AddRaw("&dUm portal de volta apareceu no centro da ilha.");
+	return true;
+}
+
+static cc_bool Dragon_TaskTick(struct ScheduledTask2* task) {
+	cc_bool inEnd = World.Loaded && Survival_IsActive() && DayNight_GetMode() == DAYNIGHT_END;
+	if (!inEnd) { Dragon_Remove(); return true; }
+	if (!dragon.used && !Dragon_WasDefeated()) Dragon_Spawn();
+	return true;
+}
+static struct ScheduledTask2 dragon_task = { 0, 1.0f, Dragon_TaskTick };
+
+
+/*########################################################################################################################*
 *--------------------------------------------------------Component--------------------------------------------------------*
 *#########################################################################################################################*/
+static void OnInit(void) {
+	Random_SeedFromCurrentTime(&dragon_rnd);
+	ScheduledTask2_Add(&dragon_task);
+}
+
+static void OnNewMap(void) { Dragon_Remove(); }
 static void OnNewMapLoaded(void) { DefineBlocks(); }
 
 struct IGameComponent LateGame_Component = {
-	NULL,          /* Init  */
+	OnInit,        /* Init  */
 	NULL,          /* Free  */
 	NULL,          /* Reset */
-	NULL,          /* OnNewMap */
+	OnNewMap,      /* OnNewMap */
 	OnNewMapLoaded /* OnNewMapLoaded */
 };

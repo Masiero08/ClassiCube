@@ -490,6 +490,7 @@ static cc_bool DayNight_Tick(struct ScheduledTask2* task) {
 static struct ScheduledTask2 daynight_task = { 0, 1.0f / 20, DayNight_Tick };
 
 int  DayNight_GetTime(void)      { return (int)timeOfDay; }
+int  DayNight_GetMode(void)      { return dayNightMode; }
 void DayNight_SetTime(int value) { timeOfDay = (float)(value % (int)CYCLE_SECONDS); if (timeOfDay < 0) timeOfDay = 0; }
 
 static void TimeCommand_Execute(const cc_string* args, int argsCount) {

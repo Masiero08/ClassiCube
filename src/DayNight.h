@@ -18,6 +18,8 @@ void DayNight_SetDayColors(PackedCol sky, PackedCol fog, PackedCol clouds);
 enum DayNightMode { DAYNIGHT_NORMAL, DAYNIGHT_NETHER, DAYNIGHT_END };
 /* Sets how the sky and monsters behave (other dimensions have no day/night cycle) */
 void DayNight_SetMode(int mode);
+/* Current mode (see DayNightMode) */
+int  DayNight_GetMode(void);
 /* Seconds since sunrise, for saving the world */
 int  DayNight_GetTime(void);
 /* Restores the time of day read from a saved world */

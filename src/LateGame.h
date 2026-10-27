@@ -26,6 +26,8 @@ void LateGame_GenOverworld(void);
 void LateGame_GenNether(void);
 /* Turns a newly generated world into the End (a floating island with obsidian pillars) */
 void LateGame_GenEnd(void);
+/* Hits the Ender Dragon if the player is looking at it. Returns whether it was hit */
+cc_bool LateGame_HandleAttack(void);
 
 CC_END_HEADER
 #endif

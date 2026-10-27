@@ -10,8 +10,8 @@ extern struct IGameComponent Survival_Component;
 /* Whether the user has enabled survival mode for singleplayer */
 extern cc_bool Survival_Enabled;
 
-/* Whether the player is allowed to break the given block */
-cc_bool Survival_CanBreak(BlockID block);
+/* Whether the player has hit the given block enough times to break it */
+cc_bool Survival_CanBreak(BlockID block, int x, int y, int z);
 /* Called after the player has broken the given block */
 void Survival_OnBlockBroken(BlockID block);
 /* Whether the player has any of the given block left to place */

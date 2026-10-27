@@ -80,9 +80,30 @@ static void UpdateHeldText(void) {
 	Chat_AddOf(&str, MSG_TYPE_BOTTOMRIGHT_1);
 }
 
+static IVec3 breakPos;
+static int breakHits;
+static double lastHitTime;
+
+static void UpdateBreakText(int hits, int hardness) {
+	cc_string str; char strBuffer[STRING_SIZE];
+	int i;
+	String_InitArray(str, strBuffer);
+
+	if (hits) {
+		String_AppendConst(&str, "&7Quebrando &a");
+		for (i = 0; i < hardness; i++)
+		{
+			if (i == hits) String_AppendConst(&str, "&8");
+			String_Append(&str, '|');
+		}
+	}
+	Chat_AddOf(&str, MSG_TYPE_BOTTOMRIGHT_3);
+}
+
 static void ClearHUD(void) {
 	Chat_AddOf(&String_Empty, MSG_TYPE_BOTTOMRIGHT_1);
 	Chat_AddOf(&String_Empty, MSG_TYPE_BOTTOMRIGHT_2);
+	Chat_AddOf(&String_Empty, MSG_TYPE_BOTTOMRIGHT_3);
 	lastHealth = -1; lastHeldCount = -1;
 }
 
@@ -161,6 +182,8 @@ static cc_bool Survival_Tick(struct ScheduledTask2* task) {
 
 	if (!survival_active || !World.Loaded || !p) return true;
 	e = &p->Base;
+	/* Stopped hitting the block being broken */
+	if (breakHits && Game.Time - lastHitTime > 0.5) { breakHits = 0; UpdateBreakText(0, 0); }
 	if (hurtCooldown > 0) hurtCooldown -= delta;
 
 	UpdateFalling(e);
@@ -203,8 +226,50 @@ static BlockID GetDrop(BlockID block) {
 	return block;
 }
 
-cc_bool Survival_CanBreak(BlockID block) {
-	return !survival_active || block != BLOCK_BEDROCK;
+/* Returns how many hits (0.25 seconds apart while held) it takes to break the given block */
+static int GetHardness(BlockID block) {
+	if (Blocks.Draw[block] == DRAW_SPRITE) return 1;
+
+	switch (block)
+	{
+	case BLOCK_LEAVES: case BLOCK_GLASS: case BLOCK_SNOW: case BLOCK_TNT:
+		return 1;
+	case BLOCK_DIRT: case BLOCK_GRASS: case BLOCK_SAND: case BLOCK_GRAVEL: case BLOCK_SPONGE:
+		return 2;
+	case BLOCK_WOOD: case BLOCK_LOG: case BLOCK_BOOKSHELF: case BLOCK_CRATE:
+		return 4;
+	case BLOCK_GOLD_ORE: case BLOCK_IRON_ORE: case BLOCK_COAL_ORE:
+	case BLOCK_GOLD: case BLOCK_IRON:
+		return 8;
+	case BLOCK_OBSIDIAN:
+		return 24;
+	}
+	/* Cloth (wool) blocks */
+	if (block >= BLOCK_RED && block <= BLOCK_WHITE) return 2;
+	if (block >= BLOCK_LIGHT_PINK && block <= BLOCK_TURQUOISE) return 2;
+	return 6;
+}
+
+cc_bool Survival_CanBreak(BlockID block, int x, int y, int z) {
+	int hardness;
+	if (!survival_active) return true;
+	if (block == BLOCK_BEDROCK) return false;
+
+	/* Continuing to hit the same block? */
+	if (breakPos.x != x || breakPos.y != y || breakPos.z != z || Game.Time - lastHitTime > 0.5) {
+		breakHits = 0;
+		breakPos.x = x; breakPos.y = y; breakPos.z = z;
+	}
+	lastHitTime = Game.Time;
+	hardness    = GetHardness(block);
+
+	if (++breakHits < hardness) {
+		UpdateBreakText(breakHits, hardness);
+		return false;
+	}
+	breakHits = 0;
+	UpdateBreakText(0, hardness);
+	return true;
 }
 
 /* Puts a newly collected block into the first hotbar slot that has nothing left to place */

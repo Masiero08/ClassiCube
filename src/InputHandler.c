@@ -414,7 +414,7 @@ static void InputHandler_DeleteBlock(void) {
 
 	old = World_GetBlock(pos.x, pos.y, pos.z);
 	if (Blocks.Draw[old] == DRAW_GAS || !Blocks.CanDelete[old]) return;
-	if (!Survival_CanBreak(old)) return;
+	if (!Survival_CanBreak(old, pos.x, pos.y, pos.z)) return;
 
 	Game_ChangeBlock(pos.x, pos.y, pos.z, BLOCK_AIR);
 	Survival_OnBlockBroken(old);

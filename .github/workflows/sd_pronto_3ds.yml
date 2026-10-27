@@ -1,0 +1,62 @@
+name: Pasta pronta para o SD (3DS)
+# Compila o .cia e monta a pasta do cartao SD com as texturas e sons
+on:
+  push:
+    branches:
+      - claude/project-thread-l9icv3
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.ref }}-sd-pronto
+  cancel-in-progress: true
+
+jobs:
+  build:
+    timeout-minutes: 10
+    runs-on: ubuntu-latest
+    container:
+      image: devkitpro/devkitarm:latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Compile 3DS build
+        shell: bash
+        run: |
+          LATEST_FLAG=-DCC_COMMIT_SHA=\\\"${GITHUB_SHA::9}\\\"
+          make 3ds EXTRA_CFLAGS="$LATEST_FLAG"
+
+      - name: Montar pasta do cartao SD
+        shell: bash
+        run: |
+          D=sd-card-pronto
+          mkdir -p $D/cias $D/3ds/ClassiCube/texpacks $D/3ds/ClassiCube/audio
+          cp ClassiCube-3ds.cia $D/cias/ClassiCube-3ds.cia
+          cp misc/cc_textures.zip $D/3ds/ClassiCube/texpacks/classicube.zip
+          cp misc/cc_audio.zip    $D/3ds/ClassiCube/audio/classicube.zip
+          echo "${GITHUB_SHA}" > $D/3ds/ClassiCube/versao.txt
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: SD-pronto-3DS
+          path: sd-card-pronto
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v5
+        with:
+          name: SD-pronto-3DS
+          path: sd-card-pronto
+      - name: Guardar no branch sd-card-pronto
+        shell: bash
+        run: |
+          cd sd-card-pronto
+          git init -q -b sd-card-pronto
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          git add -A
+          git commit -q -m "Pasta pronta para o SD (${GITHUB_SHA::9})"
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" sd-card-pronto

@@ -416,8 +416,8 @@ static void Skins_Register(void) {
 /*########################################################################################################################*
 *-------------------------------------------------------Monstros----------------------------------------------------------*
 *#########################################################################################################################*/
-#define MONSTROS_MAX     15
-#define MONSTRO_ID_BASE  225 /* 200-224 ficam com Criaturas do Bioma, 240-247 com os monstros da noite */
+#define MONSTROS_MAX     14
+#define MONSTRO_ID_BASE  226 /* 200-225 ficam com Criaturas do Bioma, 240-247 com os monstros da noite */
 #define DIST_SUMIR       (48.0f * 48.0f)
 #define DIST_SUMIR_CHEFE (96.0f * 96.0f)
 

@@ -34,8 +34,9 @@
 /*########################################################################################################################*
 *--------------------------------------------------------Blocos-----------------------------------------------------------*
 *#########################################################################################################################*/
-/* Primeiro tile do atlas usado (os de 96 em diante ficam com os blocos modernos) */
-#define MINERIOS_TILE_BASE  160
+/* Primeiro tile do atlas usado: 88-94 ficam vazios no pacote padrao, os de 96 em diante */
+/* ficam com os blocos modernos, e o atlas reserva (16x8 tiles) so vai ate o 127 */
+#define MINERIOS_TILE_BASE  88
 /* Primeiro ID de bloco usado (66-93 ficam com os blocos modernos) */
 #define MINERIOS_BLOCK_BASE 100
 #define T(tex) (MINERIOS_TILE_BASE + MTX_##tex)

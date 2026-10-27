@@ -5,6 +5,9 @@
 */
 CC_BEGIN_HEADER
 
+/* Option (default true) that controls whether the blocks are added to worlds */
+#define OPT_MODERN_BLOCKS "mod-blocos"
+
 struct Bitmap;
 struct IGameComponent;
 extern struct IGameComponent ModernBlocks_Component;

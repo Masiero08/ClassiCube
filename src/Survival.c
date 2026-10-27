@@ -300,6 +300,7 @@ static BlockID GetDrop(BlockID block) {
 	case BLOCK_GLASS:  return BLOCK_AIR;
 	case BLOCK_ICE:    return BLOCK_AIR;
 	case BLOCK_FIRE:   return BLOCK_AIR;
+	case MBLOCK_SORTE: return BLOCK_AIR; /* abre uma surpresa (Minerios.c) */
 	case BLOCK_LEAVES: 
 		return Random_Next(&survival_rnd, 8) == 0 ? BLOCK_SAPLING : BLOCK_AIR;
 	}
@@ -509,6 +510,7 @@ static const struct Recipe recipes[] = {
 	{ 3, MBLOCK_TITANIO,         0, BLOCK_AIR,              1, MITEM_ARMADURA_TITANIO },
 	{ 1, MBLOCK_URANIO,          4, BLOCK_GOLD,             2, MBLOCK_PORTAL_UTOPIA   },
 	{ 1, MBLOCK_RUBI,            4, BLOCK_GLASS,            2, MBLOCK_PORTAL_CRISTAL  },
+	{ 1, MBLOCK_RUBI_MINERIO,    2, BLOCK_GOLD_ORE,         1, MBLOCK_SORTE           },
 };
 
 struct FoodRecipe {

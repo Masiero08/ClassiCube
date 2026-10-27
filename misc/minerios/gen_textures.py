@@ -163,6 +163,36 @@ def block_uranium():
     return im
 
 
+def lucky_block():
+    """Bloco da sorte: dourado, com um ponto de interrogacao vermelho e brilhos"""
+    base = (235, 185, 40)
+    im = noise(base, 0.05, 31); px = im.load()
+    for i in range(S):
+        px[i, 0] = shade(base, 1.35); px[0, i] = shade(base, 1.35)
+        px[i, 1] = shade(base, 1.15); px[1, i] = shade(base, 1.15)
+        px[i, S - 1] = shade(base, 0.5); px[S - 1, i] = shade(base, 0.5)
+        px[i, S - 2] = shade(base, 0.72); px[S - 2, i] = shade(base, 0.72)
+    q = ["  ####  ",
+         " ##  ## ",
+         " ##  ## ",
+         "     ## ",
+         "    ##  ",
+         "   ##   ",
+         "   ##   ",
+         "        ",
+         "   ##   ",
+         "   ##   "]
+    red, dark = (200, 30, 40, 255), (110, 15, 20, 255)
+    for y, row in enumerate(q):
+        for x, c in enumerate(row):
+            if c != "#": continue
+            px[4 + x, 3 + y] = red
+            below = q[y + 1][x + 1] if y + 1 < len(q) and x + 1 < len(row) else " "
+            if below != "#": px[5 + x, 4 + y] = dark
+    for x, y in ((3, 3), (12, 11), (3, 12)): px[x, y] = (255, 250, 210, 255)
+    return im
+
+
 # ------------------------------------------------------------------ itens
 def outline(im, color):
     """Contorno escuro em volta dos pixels opacos (para itens ficarem legiveis)"""
@@ -364,6 +394,7 @@ TEXTURES = [
     ("CRYSTAL_LOG",    crystal_log),
     ("CRYSTAL_LEAVES", crystal_leaves),
     ("CRYSTAL_CLUSTER", crystal_cluster),
+    ("LUCKY_BLOCK",    lucky_block),
 ]
 
 def main():

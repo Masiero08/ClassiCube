@@ -6,7 +6,8 @@ CC_BEGIN_HEADER
 /* Mod "Minerios & Monstros" (inspirado no OreSpawn) para o modo um jogador:
    minerios de rubi, titanio e uranio com seus blocos, o minerio de ovo
    (choca uma criatura, as vezes gigante), espadas famosas (titanio, suprema
-   e a Big Bertha), armadura de titanio, mosquitos e as dimensoes Utopia e Cristal.
+   e a Big Bertha), armadura de titanio, mosquitos, blocos da sorte e as dimensoes
+   Utopia e Cristal.
 */
 struct Bitmap;
 struct IGameComponent;
@@ -19,6 +20,7 @@ enum MineriosBloco {
 	MITEM_ESPADA_TITANIO, MITEM_ESPADA_SUPREMA, MITEM_BIG_BERTHA, MITEM_ARMADURA_TITANIO,
 	MBLOCK_PORTAL_UTOPIA, MBLOCK_PORTAL_CRISTAL,
 	MBLOCK_PEDRA_CRISTAL, MBLOCK_GRAMA_CRISTAL, MBLOCK_TRONCO_CRISTAL, MBLOCK_FOLHAS_CRISTAL, MBLOCK_CRISTAL,
+	MBLOCK_SORTE,
 	MBLOCK_FIM
 };
 

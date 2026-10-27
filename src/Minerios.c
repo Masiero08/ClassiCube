@@ -40,6 +40,8 @@
    - Minerio de ovo: ao quebrar, choca uma criatura; as raras sao gigantes
    - Espadas (titanio, suprema, Big Bertha) e armadura de titanio
    - Mosquitos: enxames que voam em volta do jogador e picam
+   - Bloco da sorte: ao quebrar, sai uma surpresa boa (minerios, espadas, Big Bertha)
+     ou ruim (mosquitos, monstro gigante, explosao, gaiola de vidro)
    - Dimensoes Utopia e Cristal, com portais de ida e volta
 */
 cc_bool Minerios_Enabled = true;
@@ -53,7 +55,7 @@ static cc_bool Ativo(void) { return Minerios_Enabled && Server.IsSinglePlayer &&
 /* Tiles livres do atlas (vazios no pacote padrao e dentro das 8 linhas do atlas reserva). */
 /* 96-126 ficam com os blocos modernos. */
 static const cc_uint8 minerios_tiles[MINERIOS_TEX_COUNT] = {
-	88, 89, 90, 91, 92, 93, 94, 87, 95, 127, 27, 43, 44, 45, 46, 59, 60, 61, 62
+	88, 89, 90, 91, 92, 93, 94, 87, 95, 127, 27, 43, 44, 45, 46, 59, 60, 61, 62, 63
 };
 #define T(tex) MTX_##tex
 
@@ -83,6 +85,7 @@ static const struct MinerioDef minerio_defs[MBLOCK_FIM - MBLOCK_RUBI_MINERIO] = 
 { "Tronco de cristal",     T(CRYSTAL_LOG),         T(CRYSTAL_LOG),          T(CRYSTAL_LOG),         DRAW_OPAQUE,      COLLIDE_SOLID, SOUND_WOOD,  0 },
 { "Folhas de cristal",     T(CRYSTAL_LEAVES),      T(CRYSTAL_LEAVES),       T(CRYSTAL_LEAVES),      DRAW_TRANSPARENT, COLLIDE_SOLID, SOUND_GRASS, 0 },
 { "Cristal",               T(CRYSTAL_CLUSTER),     T(CRYSTAL_CLUSTER),      T(CRYSTAL_CLUSTER),     DRAW_SPRITE,      COLLIDE_NONE,  SOUND_GLASS, FANCY_LIGHTING_MAX_LEVEL },
+{ "Bloco da sorte",        T(LUCKY_BLOCK),         T(LUCKY_BLOCK),          T(LUCKY_BLOCK),         DRAW_OPAQUE,      COLLIDE_SOLID, SOUND_WOOD,  FANCY_LIGHTING_MAX_LEVEL / 3 },
 };
 #define MINERIOS_COUNT Array_Elems(minerio_defs)
 #define Def(block) (&minerio_defs[(block) - MBLOCK_RUBI_MINERIO])
@@ -414,7 +417,7 @@ static void Monstro_Andar(struct Monstro* m, Vec3 alvo, float vel, float delta) 
 	passo = min(vel * delta, len);
 	nx = pos.x + dx / len * passo;
 	nz = pos.z + dz / len * passo;
-	e->next.yaw  = Math_Atan2f(dx, -dz) * MATH_RAD2DEG;
+	e->next.yaw  = Math_Atan2f(-dz, dx) * MATH_RAD2DEG; /* Math_Atan2f(x, y) = atan2(y, x) */
 	e->next.rotY = e->next.yaw;
 
 	if (!AcharChao(Math_Floor(nx), Math_Floor(nz), Math_Floor(pos.y + 0.5f) + 2, Math_Floor(pos.y) - 4, &novoY)) {
@@ -440,7 +443,7 @@ static void Monstro_Voar(struct Monstro* m, Vec3 alvo, float vel, float delta) {
 	novo.x = pos.x + dx / len * passo;
 	novo.y = pos.y + dy / len * passo;
 	novo.z = pos.z + dz / len * passo;
-	e->next.yaw  = Math_Atan2f(dx, -dz) * MATH_RAD2DEG;
+	e->next.yaw  = Math_Atan2f(-dz, dx) * MATH_RAD2DEG; /* Math_Atan2f(x, y) = atan2(y, x) */
 	e->next.rotY = e->next.yaw;
 
 	if (!World_Contains(Math_Floor(novo.x), Math_Floor(novo.y), Math_Floor(novo.z))) return;
@@ -664,11 +667,150 @@ static void SoltarMosquitos(int quantos) {
 	Chat_AddRaw("&8Bzzzz... &7um enxame de mosquitos chegou!");
 }
 
+
+/*########################################################################################################################*
+*----------------------------------------------------Bloco da sorte-------------------------------------------------------*
+*#########################################################################################################################*/
+/* Ganha um bloco ou item: vai para o inventario na sobrevivencia, ou aparece no lugar do bloco da sorte */
+static void SorteDar(int x, int y, int z, BlockID bloco, int quantos) {
+	cc_string nome = Block_UNSAFE_GetName(bloco);
+
+	if (Survival_IsActive()) {
+		Survival_AddBlocks(bloco, quantos);
+	} else {
+		Game_UpdateBlock(x, y, z, bloco);
+	}
+	Chat_Add2("&aSorte! &fVoce ganhou %i %s", &quantos, &nome);
+}
+
+static void SorteExplosao(int x, int y, int z) {
+	int dx, dy, dz;
+	BlockID b;
+
+	for (dy = -2; dy <= 2; dy++)
+		for (dz = -2; dz <= 2; dz++)
+			for (dx = -2; dx <= 2; dx++)
+			{
+				if (dx * dx + dy * dy + dz * dz > 5) continue;
+				if (!World_Contains(x + dx, y + dy, z + dz)) continue;
+				b = World_GetBlock(x + dx, y + dy, z + dz);
+				if (b == BLOCK_BEDROCK || b == BLOCK_AIR) continue;
+				Game_UpdateBlock(x + dx, y + dy, z + dz, BLOCK_AIR);
+			}
+	DanoJogador(6);
+	Chat_AddRaw("&cAzar! &fO bloco da sorte explodiu!");
+}
+
+/* Uma gaiola de vidro em volta do jogador (da para quebrar e sair) */
+static void SorteGaiola(void) {
+	struct Entity* jogador = &Entities.CurPlayer->Base;
+	int px = Math_Floor(jogador->Position.x);
+	int py = Math_Floor(jogador->Position.y);
+	int pz = Math_Floor(jogador->Position.z);
+	int dx, dy, dz;
+
+	for (dy = -1; dy <= 2; dy++)
+		for (dz = -1; dz <= 1; dz++)
+			for (dx = -1; dx <= 1; dx++)
+			{
+				if (dx == 0 && dz == 0 && dy >= 0 && dy <= 1) continue;
+				if (!World_Contains(px + dx, py + dy, pz + dz)) continue;
+				if (World_GetBlock(px + dx, py + dy, pz + dz) != BLOCK_AIR) continue;
+				Game_UpdateBlock(px + dx, py + dy, pz + dz, BLOCK_GLASS);
+			}
+	Chat_AddRaw("&cAzar! &fVoce ficou preso numa gaiola de vidro!");
+}
+
+/* Uma torre de ouro sobe do chao */
+static void SorteTorre(int x, int y, int z) {
+	int i;
+	for (i = 0; i < 6; i++)
+	{
+		if (!World_Contains(x, y + i, z) || World_GetBlock(x, y + i, z) != BLOCK_AIR) break;
+		Game_UpdateBlock(x, y + i, z, BLOCK_GOLD);
+	}
+	Chat_AddRaw("&aSorte! &fUma torre de ouro!");
+}
+
+/* Um anel de flores em volta do bloco */
+static void SorteJardim(int x, int y, int z) {
+	int dx, dz;
+	for (dz = -2; dz <= 2; dz++)
+		for (dx = -2; dx <= 2; dx++)
+		{
+			if (!World_Contains(x + dx, y, z + dz) || World_GetBlock(x + dx, y, z + dz) != BLOCK_AIR) continue;
+			if (!y || !Solido(World_GetBlock(x + dx, y - 1, z + dz))) continue;
+			Game_UpdateBlock(x + dx, y, z + dz, (dx + dz) & 1 ? BLOCK_ROSE : BLOCK_DANDELION);
+		}
+	Chat_AddRaw("&aSorte! &fFlores brotaram em volta!");
+}
+
+enum {
+	S_RUBI, S_TITANIO, S_URANIO, S_ESPADA_TITANIO, S_ARMADURA, S_ESPADA_SUPREMA, S_BIG_BERTHA,
+	S_TORRE, S_FILHOTES, S_JARDIM, S_OVOS,
+	S_MOSQUITOS, S_GIGANTE, S_EXPLOSAO, S_GAIOLA, S_SORTE_COUNT
+};
+/* Chance de cada surpresa (de um total de 100) */
+static const cc_uint8 sorte_chances[S_SORTE_COUNT] = {
+	12, 10, 7, 7, 5, 3, 1,
+	7, 8, 6, 7,
+	9, 6, 7, 5
+};
+
+/* Abre um bloco da sorte quebrado em (x, y, z) */
+static void AbrirSorte(int x, int y, int z) {
+	int i, r = Random_Next(&rnd, 100);
+	Vec3 pos;
+
+	for (i = 0; i < S_SORTE_COUNT - 1; i++)
+	{
+		if (r < sorte_chances[i]) break;
+		r -= sorte_chances[i];
+	}
+
+	switch (i)
+	{
+	case S_RUBI:            SorteDar(x, y, z, MBLOCK_RUBI_MINERIO,    5); break;
+	case S_TITANIO:         SorteDar(x, y, z, MBLOCK_TITANIO_MINERIO, 4); break;
+	case S_URANIO:          SorteDar(x, y, z, MBLOCK_URANIO_MINERIO,  3); break;
+	case S_ESPADA_TITANIO:  SorteDar(x, y, z, MITEM_ESPADA_TITANIO,   1); break;
+	case S_ARMADURA:        SorteDar(x, y, z, MITEM_ARMADURA_TITANIO, 1); break;
+	case S_ESPADA_SUPREMA:  SorteDar(x, y, z, MITEM_ESPADA_SUPREMA,   1); break;
+	case S_BIG_BERTHA:
+		Chat_AddRaw("&6SUPER SORTE!!! &fA lendaria Big Bertha!");
+		SorteDar(x, y, z, MITEM_BIG_BERTHA, 1); break;
+	case S_TORRE:   SorteTorre(x, y, z);  break;
+	case S_JARDIM:  SorteJardim(x, y, z); break;
+	case S_FILHOTES:
+		Chat_AddRaw("&aSorte! &fFilhotes apareceram!");
+		for (r = 0; r < 3; r++)
+		{
+			Vec3_Set(pos, x + 0.5f + (r - 1) * 1.2f, (float)y, z + 0.5f);
+			Monstro_Criar(Random_Next(&rnd, 3), pos); /* galinha, leitao ou carneiro */
+		}
+		break;
+	case S_OVOS:
+		SorteDar(x, y, z, MBLOCK_OVO_MINERIO, 3); break;
+	case S_MOSQUITOS:
+		Chat_AddRaw("&cAzar! &fO bloco estava cheio de mosquitos!");
+		SoltarMosquitos(5); break;
+	case S_GIGANTE:
+		ChocarOvo(x, y, z, M_ARANHA_GIGANTE + Random_Next(&rnd, 4)); break;
+	case S_EXPLOSAO: SorteExplosao(x, y, z); break;
+	default:         SorteGaiola(); break;
+	}
+}
+
 static void OnBlockChanged(void* obj, IVec3 coords, BlockID old, BlockID now) {
-	if (!Minerios_Enabled) return;
-	if (!Server.IsSinglePlayer || old != MBLOCK_OVO_MINERIO || now != BLOCK_AIR) return;
-	if (!Block_IsCustomDefined(MBLOCK_OVO_MINERIO)) return;
-	ChocarOvo(coords.x, coords.y, coords.z, -1);
+	if (!Minerios_Enabled || !Server.IsSinglePlayer || now != BLOCK_AIR) return;
+	if (old != MBLOCK_OVO_MINERIO && old != MBLOCK_SORTE) return;
+	if (!Block_IsCustomDefined(old)) return;
+
+	if (old == MBLOCK_SORTE) {
+		AbrirSorte(coords.x, coords.y, coords.z);
+	} else {
+		ChocarOvo(coords.x, coords.y, coords.z, -1);
+	}
 }
 
 
@@ -1083,9 +1225,29 @@ static void GerarCristal(void) {
 	}
 }
 
+/* Blocos da sorte espalhados pelo chao (muitos mais na Utopia) */
+static void GenSorte(int quantos) {
+	int i, x, y, z;
+	BlockRaw chao;
+	for (i = 0; i < quantos; i++)
+	{
+		x = Random_Next(&rnd, World.Width);
+		z = Random_Next(&rnd, World.Length);
+		y = GenTopo(x, z);
+		chao = GenGet(x, y, z);
+		if (y + 1 > World.MaxY) continue;
+		if (chao != BLOCK_GRASS && chao != BLOCK_SAND && chao != MBLOCK_GRAMA_CRISTAL) continue;
+		GenSet(x, y + 1, z, MBLOCK_SORTE);
+	}
+}
+
 void Minerios_PosGeracao(void) {
+	int area = World.Width * World.Length;
+	if (!Minerios_Enabled || !Game_AllowCustomBlocks) return;
+
 	if (dimGerando == DIM_UTOPIA)  GerarUtopia();
 	if (dimGerando == DIM_CRISTAL) GerarCristal();
+	GenSorte(dimGerando == DIM_UTOPIA ? area / 500 : area / 2500);
 }
 
 
@@ -1108,6 +1270,16 @@ static void MineriosCommand_Execute(const cc_string* args, int argsCount) {
 
 	if (argsCount && String_CaselessEqualsConst(&args[0], "mosquitos")) {
 		SoltarMosquitos(4);
+		return;
+	}
+
+	if (argsCount && String_CaselessEqualsConst(&args[0], "sorte")) {
+		x = Math_Floor(jogador->Position.x + Math_SinF(yaw) * 2.5f);
+		z = Math_Floor(jogador->Position.z - Math_CosF(yaw) * 2.5f);
+		i = Math_Floor(jogador->Position.y);
+		if (!World_Contains(x, i, z)) return;
+		Game_UpdateBlock(x, i, z, MBLOCK_SORTE);
+		Chat_AddRaw("&eUm bloco da sorte apareceu na sua frente. Quebre para abrir!");
 		return;
 	}
 
@@ -1167,9 +1339,9 @@ static struct ChatCommand MineriosCommand = {
 	{
 		"&a/client minerios &e- lista os blocos, itens e monstros do mod",
 		"&a/client minerios ovo [numero|todos] &e- choca um ovo na sua frente",
-		"&a/client minerios mosquitos &e- chama um enxame de mosquitos",
+		"&a/client minerios mosquitos|limpar &e- chama mosquitos / tira os monstros",
+		"&a/client minerios sorte &e- coloca um bloco da sorte na sua frente",
 		"&a/client minerios ir [normal|utopia|cristal] &e- viaja para a dimensao",
-		"&a/client minerios limpar &e- remove os monstros",
 	}
 };
 
@@ -1247,6 +1419,7 @@ static void OnNewMapLoaded(void) {
 	portalCooldown = 3.0f;
 	Chat_Add1("&dVoce chegou em: &f%c", dim_nomes[dimAtual]);
 }
+
 
 static void Minerios_Init(void) {
 	Minerios_Enabled = Options_GetBool(MINERIOS_OPTION, true);

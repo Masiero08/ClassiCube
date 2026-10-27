@@ -1,4 +1,5 @@
 #include "Survival.h"
+#include "Minerios.h"
 #include "Block.h"
 #include "BlockID.h"
 #include "Chat.h"
@@ -146,6 +147,10 @@ static void Damage(int amount) {
 	hurtCooldown = 0.5f;
 	regenTimer   = 0;
 	if (health <= 0) Die();
+}
+
+void Survival_Damage(int amount) {
+	if (survival_active) Damage(amount);
 }
 
 static cc_bool HeadInWater(struct Entity* e) {
@@ -334,6 +339,16 @@ static const struct Recipe recipes[] = {
 	{ 4, BLOCK_IRON_ORE,  1, BLOCK_COAL_ORE, 1, BLOCK_IRON         },
 	{ 4, BLOCK_GOLD_ORE,  1, BLOCK_COAL_ORE, 1, BLOCK_GOLD         },
 	{ 4, BLOCK_SAND,      1, BLOCK_COAL_ORE, 1, BLOCK_TNT          },
+	/* Minerios & Monstros (inspirado no OreSpawn) */
+	{ 4, MBLOCK_RUBI_MINERIO,    0, BLOCK_AIR,              1, MBLOCK_RUBI            },
+	{ 4, MBLOCK_TITANIO_MINERIO, 0, BLOCK_AIR,              1, MBLOCK_TITANIO         },
+	{ 4, MBLOCK_URANIO_MINERIO,  0, BLOCK_AIR,              1, MBLOCK_URANIO          },
+	{ 3, MBLOCK_TITANIO_MINERIO, 1, BLOCK_WOOD,             1, MITEM_ESPADA_TITANIO   },
+	{ 2, MBLOCK_RUBI,            1, MITEM_ESPADA_TITANIO,   1, MITEM_ESPADA_SUPREMA   },
+	{ 2, MBLOCK_URANIO,          1, MITEM_ESPADA_SUPREMA,   1, MITEM_BIG_BERTHA       },
+	{ 3, MBLOCK_TITANIO,         0, BLOCK_AIR,              1, MITEM_ARMADURA_TITANIO },
+	{ 1, MBLOCK_URANIO,          4, BLOCK_GOLD,             2, MBLOCK_PORTAL_UTOPIA   },
+	{ 1, MBLOCK_RUBI,            4, BLOCK_GLASS,            2, MBLOCK_PORTAL_CRISTAL  },
 };
 
 int Survival_RecipesCount(void) { return Array_Elems(recipes); }

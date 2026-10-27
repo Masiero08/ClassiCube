@@ -20,6 +20,7 @@
 #include "Entity.h"
 #include "Survival.h"
 #include "Criaturas.h"
+#include "Minerios.h"
 #include "Screens.h"
 #include "Block.h"
 #include "Menus.h"
@@ -607,6 +608,7 @@ static cc_bool BindTriggered_DeleteBlock(int key, struct InputDevice* device) {
 	
 	MouseStatePress(MOUSE_LEFT);
 	if (Criaturas_HandleClick(false)) { HeldBlockRenderer_ClickAnim(true); return true; }
+	if (Minerios_HandleClick(false))  { HeldBlockRenderer_ClickAnim(true); return true; }
 	InputHandler_DeleteBlock();
 	return true;
 }
@@ -616,6 +618,7 @@ static cc_bool BindTriggered_PlaceBlock(int key, struct InputDevice* device) {
 	
 	MouseStatePress(MOUSE_RIGHT);
 	if (Criaturas_HandleClick(true)) { HeldBlockRenderer_ClickAnim(false); return true; }
+	if (Minerios_HandleClick(true))  { HeldBlockRenderer_ClickAnim(false); return true; }
 	InputHandler_PlaceBlock();
 	return true;
 }

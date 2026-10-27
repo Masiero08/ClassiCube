@@ -18,6 +18,8 @@ void Survival_OnBlockBroken(BlockID block);
 cc_bool Survival_CanPlace(BlockID block);
 /* Called after the player has placed the given block */
 void Survival_OnBlockPlaced(BlockID block);
+/* Takes away health from the player (does nothing outside survival mode) */
+void Survival_Damage(int amount);
 /* Whether survival mode is currently being played (enabled and in singleplayer) */
 cc_bool Survival_IsActive(void);
 

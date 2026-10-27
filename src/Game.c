@@ -416,6 +416,8 @@ static void Game_Load(void) {
 	Game_AddComponent(&Camera_Component);
 	Game_AddComponent(&Blocks_Component);
 	Game_AddComponent(&ModernBlocks_Component);
+	/* antes da sobrevivencia: leva a vida e os blocos do jogador entre as dimensoes */
+	Game_AddComponent(&Minerios_Component);
 	Game_AddComponent(&Survival_Component);
 	Game_AddComponent(&Drawer2D_Component);
 	Game_AddComponent(&SystemFonts_Component);
@@ -423,7 +425,6 @@ static void Game_Load(void) {
 	Game_AddComponent(&Chat_Component);
 	Game_AddComponent(&Commands_Component);
 	Game_AddComponent(&Particles_Component);
-	Game_AddComponent(&Minerios_Component);
 	Game_AddComponent(&TabList_Component);
 	Game_AddComponent(&Models_Component);
 	Game_AddComponent(&Http_Component);

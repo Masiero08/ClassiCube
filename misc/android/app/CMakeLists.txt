@@ -61,6 +61,7 @@ add_library(classicube SHARED
         ../../src/LWeb.c
         ../../src/Stream.c
         ../../src/Lighting.c
+        ../../src/ModernBlocks.c
         ../../src/Resources.c
         ../../src/PackedCol.c
         ../../src/Screens.c

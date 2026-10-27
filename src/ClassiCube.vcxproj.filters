@@ -180,6 +180,12 @@
     <ClInclude Include="Lighting.h">
       <Filter>Header Files\Map</Filter>
     </ClInclude>
+    <ClInclude Include="ModernBlocks.h">
+      <Filter>Header Files\Map</Filter>
+    </ClInclude>
+    <ClInclude Include="ModernBlocks_tex.h">
+      <Filter>Header Files\Map</Filter>
+    </ClInclude>
     <ClInclude Include="Options.h">
       <Filter>Header Files\Utils</Filter>
     </ClInclude>
@@ -396,6 +402,9 @@
       <Filter>Source Files\SelectionBox</Filter>
     </ClCompile>
     <ClCompile Include="Lighting.c">
+      <Filter>Source Files\Map</Filter>
+    </ClCompile>
+    <ClCompile Include="ModernBlocks.c">
       <Filter>Source Files\Map</Filter>
     </ClCompile>
     <ClCompile Include="AxisLinesRenderer.c">

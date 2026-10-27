@@ -30,7 +30,9 @@ jobs:
           D=sd-card-pronto
           mkdir -p $D/cias $D/3ds/ClassiCube/texpacks $D/3ds/ClassiCube/audio
           cp ClassiCube-3ds.cia $D/cias/ClassiCube-3ds.cia
-          cp misc/cc_textures.zip $D/3ds/ClassiCube/texpacks/classicube.zip
+          # texturas novas (Remaster) como padrao; as antigas ficam como opcao no menu de texturas
+          cp misc/remaster/remaster.zip $D/3ds/ClassiCube/texpacks/classicube.zip
+          cp misc/cc_textures.zip       $D/3ds/ClassiCube/texpacks/classico.zip
           cp misc/cc_audio.zip    $D/3ds/ClassiCube/audio/classicube.zip
           echo "${GITHUB_SHA}" > $D/3ds/ClassiCube/versao.txt
 

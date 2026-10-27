@@ -423,12 +423,13 @@ static void InputHandler_DeleteBlock(void) {
 
 static void InputHandler_PlaceBlock(void) {
 	IVec3 pos;
-	BlockID old, block;
+	BlockID old, block, held;
 	pos = Game_SelectedPos.translatedPos;
 	if (!Game_SelectedPos.valid || !World_Contains(pos.x, pos.y, pos.z)) return;
 
 	old   = World_GetBlock(pos.x, pos.y, pos.z);
-	block = Inventory_SelectedBlock;
+	held  = Inventory_SelectedBlock;
+	block = held;
 	if (AutoRotate_Enabled) block = AutoRotate_RotateBlock(block);
 
 	if (Game_CanPick(old) || !Blocks.CanPlace[block]) return;
@@ -439,10 +440,10 @@ static void InputHandler_PlaceBlock(void) {
 	if (Blocks.Collide[old] == COLLIDE_NONE && !Blocks.CanDelete[old]) return;
 
 	if (!CheckIsFree(block)) return;
-	if (!Survival_CanPlace(block)) return;
+	if (!Survival_CanPlace(held)) return;
 
 	Game_ChangeBlock(pos.x, pos.y, pos.z, block);
-	Survival_OnBlockPlaced(block);
+	Survival_OnBlockPlaced(held);
 	Event_RaiseBlock(&UserEvents.BlockChanged, pos, old, block);
 }
 

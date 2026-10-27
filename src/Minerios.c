@@ -29,6 +29,7 @@
 #include "Deflate.h"
 #include "Stream.h"
 #include "Survival.h"
+#include "Particle.h"
 #include "DayNight.h"
 #include "Errors.h"
 #include "Logger.h"
@@ -469,7 +470,7 @@ struct Monstro {
 	struct Entity base;
 	cc_bool usado, domado;
 	int tipo, vida, comida;
-	float tempo, pensarTimer, ataqueTimer, hurtTimer, angulo, especialTimer, correndo;
+	float tempo, pensarTimer, ataqueTimer, hurtTimer, angulo, especialTimer, correndo, congelado;
 	Vec3 destino;
 };
 static struct Monstro monstros[MONSTROS_MAX];
@@ -780,6 +781,7 @@ static void Monstro_Tick(struct Entity* e, float delta) {
 
 	m->especialTimer -= delta;
 	m->correndo      -= delta;
+	m->congelado     -= delta;
 	if (m->domado) m->tempo = 600.0f; /* o dragao domado nunca vai embora */
 
 	d2 = Dist2XZ(pos, jogador->Position);
@@ -794,7 +796,7 @@ static void Monstro_Tick(struct Entity* e, float delta) {
 		alcance = 0.9f + def->escala * 0.6f;
 		if (def->chefe) Chefe_Especial(m, jogador, d2);
 		if (d2 > alcance * alcance) {
-			Monstro_Andar(m, jogador->Position, def->vel * (m->correndo > 0 ? 2.2f : 1.0f), delta);
+			Monstro_Andar(m, jogador->Position, def->vel * (m->correndo > 0 ? 2.2f : 1.0f) * (m->congelado > 0 ? 0.3f : 1.0f), delta);
 		} else if (m->ataqueTimer <= 0) {
 			Monstro_Atacar(m, jogador);
 		}
@@ -830,6 +832,8 @@ static PackedCol Monstro_GetCol(struct Entity* e) {
 	IVec3_Floor(&pos, &eyePos);
 	col = Lighting.Color(pos.x, pos.y, pos.z);
 
+	/* congelado pelo sopro do dragao de gelo */
+	if (m->congelado > 0) col = PackedCol_Tint(col, PackedCol_Make(140, 200, 255, 255));
 	/* a rainha tem a carapaca roxa */
 	if (m->tipo == M_RAINHA) col = PackedCol_Tint(col, PackedCol_Make(200, 120, 255, 255));
 	/* pisca vermelho ao levar dano */
@@ -1350,6 +1354,52 @@ static void DragaoClique(struct Monstro* m, BlockID held) {
 	Chat_AddRaw("&aO dragao agora e seu! &eEle te segue e briga com os monstros. Aperte colocar nele para montar.");
 }
 
+static float soproTimer;
+
+/* Montado, o botao de quebrar faz o dragao soprar na direcao que o jogador olha: */
+/* fogo (mais dano), gelo (deixa os monstros lentos) ou o sopro verde do Esmeralda */
+static void SoproDragao(void) {
+	struct Entity* jogador = &Entities.CurPlayer->Base;
+	struct Monstro* dragao = DragaoDomado();
+	const struct MonstroDef* def;
+	Vec3 eye, dir, pos, d;
+	BlockID efeito;
+	IVec3 bloco;
+	float len;
+	int i, dano;
+
+	if (!dragao || soproTimer > 0) return;
+	def = &monstro_defs[dragao->tipo];
+	soproTimer = 1.0f;
+
+	eye = Entity_GetEyePosition(jogador);
+	dir = Vec3_GetDirVector(jogador->Yaw * MATH_DEG2RAD, jogador->Pitch * MATH_DEG2RAD);
+	efeito = dragao->tipo == M_DRAGAO_FOGO ? BLOCK_LAVA : dragao->tipo == M_DRAGAO_GELO ? BLOCK_ICE : BLOCK_LEAVES;
+	dano   = dragao->tipo == M_DRAGAO_FOGO ? def->dano * 2 : def->dano;
+
+	/* rastro de particulas */
+	for (i = 2; i <= 10; i += 2)
+	{
+		Vec3_Mul1(&pos, &dir, (float)i);
+		Vec3_AddBy(&pos, &eye);
+		IVec3_Floor(&bloco, &pos);
+		Particles_BreakBlockEffect(bloco, efeito, BLOCK_AIR);
+	}
+
+	for (i = 0; i < MONSTROS_MAX; i++)
+	{
+		struct Monstro* m = &monstros[i];
+		if (!m->usado || m->domado || EhDragao(m->tipo)) continue;
+		Vec3_Sub(&d, &m->base.next.pos, &eye);
+		d.y += 0.5f;
+		len = Math_SqrtF(Vec3_LengthSquared(&d)) + 0.01f;
+		if (len > 12.0f || (d.x * dir.x + d.y * dir.y + d.z * dir.z) / len < 0.85f) continue;
+
+		Monstro_Dano(m, dano, eye, 1.5f);
+		if (dragao->tipo == M_DRAGAO_GELO && m->usado) m->congelado = 4.0f;
+	}
+}
+
 cc_bool Minerios_HandleClick(cc_bool place) {
 	struct Entity* jogador;
 	struct Monstro* m;
@@ -1375,6 +1425,7 @@ cc_bool Minerios_HandleClick(cc_bool place) {
 		return true;
 	}
 
+	if (montado) { SoproDragao(); return true; }
 	jogador = &Entities.CurPlayer->Base;
 	if ((held == MITEM_BIG_BERTHA || held == MITEM_DEVASTADORA) && GolpeEmArea(held)) return true;
 
@@ -1847,10 +1898,46 @@ static struct ChatCommand MineriosCommand = {
 *#########################################################################################################################*/
 static float mosquitoTimer = 30.0f;
 
+/* Barra de vida do chefao mais perto, no canto de cima da tela */
+static cc_bool barraVisivel;
+static void AtualizarBarraChefe(void) {
+	struct Entity* jogador = &Entities.CurPlayer->Base;
+	struct Monstro* chefe = NULL;
+	float d, melhor = 48.0f * 48.0f;
+	cc_string str; char strBuffer[STRING_SIZE];
+	int i, cheio;
+
+	for (i = 0; i < MONSTROS_MAX; i++)
+	{
+		struct Monstro* m = &monstros[i];
+		if (!m->usado || !monstro_defs[m->tipo].chefe) continue;
+		d = Dist2(m->base.next.pos, jogador->Position);
+		if (d < melhor) { melhor = d; chefe = m; }
+	}
+
+	if (!chefe) {
+		if (barraVisivel) Chat_AddOf(&String_Empty, MSG_TYPE_EXTRASTATUS_2);
+		barraVisivel = false; return;
+	}
+	String_InitArray(str, strBuffer);
+	String_AppendConst(&str, monstro_defs[chefe->tipo].nome);
+	String_AppendConst(&str, " &c");
+	cheio = (max(0, chefe->vida) * 20 + monstro_defs[chefe->tipo].vidaMax - 1) / monstro_defs[chefe->tipo].vidaMax;
+	for (i = 0; i < 20; i++)
+	{
+		if (i == cheio) String_AppendConst(&str, "&8");
+		String_Append(&str, '|');
+	}
+	Chat_AddOf(&str, MSG_TYPE_EXTRASTATUS_2);
+	barraVisivel = true;
+}
+
 static void Minerios_Tick(struct ScheduledTask* task) {
 	float delta = (float)task->interval;
 	int dest;
 	portalCooldown -= delta;
+	soproTimer     -= delta;
+	if (Ativo()) AtualizarBarraChefe();
 	if (!DimensoesLigadas() || viajando) return;
 
 	if (colocarPortal) { colocarPortal = false; AcharTerraFirme(); ColocarPortalVolta(); return; }
@@ -1931,6 +2018,7 @@ static void OnNewMapLoaded(void) {
 	portalCooldown = 3.0f;
 	Chat_Add1("&dVoce chegou em: &f%c", dim_nomes[dimAtual]);
 }
+
 
 
 static void Minerios_Init(void) {

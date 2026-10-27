@@ -374,6 +374,291 @@ def mosquito_png():
     import io
     buf = io.BytesIO(); im.save(buf, "PNG"); return buf.getvalue(), im
 
+# --------------------------------------------------- chefoes e dragao
+def trofeu_ferrao():
+    """Ferrao da Rainha dos Mosquitos: agulha roxa com base escura"""
+    im = new(); px = im.load()
+    for i in range(12):
+        x, y = 2 + i, 13 - i
+        px[x, y] = (200, 120, 255, 255) if i > 3 else (90, 40, 120, 255)
+        if i < 9: px[x + 1, y] = (130, 60, 180, 255)
+    for x, y in ((2, 11), (3, 12), (1, 13), (4, 14), (2, 14), (1, 12)):
+        px[x, y] = (60, 25, 80, 255)
+    px[14, 1] = (255, 230, 255, 255)
+    return outline(im, (30, 10, 40, 255))
+
+def trofeu_nucleo():
+    """Nucleo de titanio: moldura metalica com um brilho ciano no meio"""
+    im = new(); px = im.load()
+    for y in range(3, 13):
+        for x in range(3, 13):
+            d = max(abs(x - 7.5), abs(y - 7.5))
+            if d > 4: px[x, y] = (150, 165, 185, 255) if (x + y) % 2 else (110, 120, 140, 255)
+            elif d > 2.5: px[x, y] = (40, 120, 150, 255)
+            else: px[x, y] = (150, 255, 255, 255) if d < 1.5 else (60, 200, 230, 255)
+    for x, y in ((3, 3), (12, 3), (3, 12), (12, 12)): px[x, y] = (230, 240, 250, 255)
+    return outline(im, (30, 35, 45, 255))
+
+def trofeu_olho():
+    """Olho de cristal: gema violeta com pupila clara"""
+    im = new(); px = im.load()
+    for y in range(S):
+        for x in range(S):
+            dx, dy = (x - 7.5) / 6.5, (y - 7.5) / 4.5
+            r = dx * dx + dy * dy
+            if r > 1: continue
+            c = (150, 70, 220) if r > 0.55 else (200, 140, 255)
+            if r < 0.18: c = (240, 250, 255)
+            if r < 0.05: c = (40, 10, 60)
+            px[x, y] = c + (255,)
+    px[5, 5] = (255, 255, 255, 255)
+    return outline(im, (40, 15, 70, 255))
+
+def trofeu_coracao():
+    """Coracao de uranio: coracao verde que brilha"""
+    im = new(); px = im.load()
+    shape = ["  ##   ##  ",
+             " #### #### ",
+             "###########",
+             "###########",
+             " ######### ",
+             "  #######  ",
+             "   #####   ",
+             "    ###    ",
+             "     #     "]
+    for y, row in enumerate(shape):
+        for x, c in enumerate(row):
+            if c != "#": continue
+            g = (90, 230, 50) if (x + y) % 3 else (170, 255, 110)
+            if y < 3 and x in (2, 3, 7): g = (220, 255, 190)
+            px[3 + x, 4 + y] = g + (255,)
+    return outline(im, (15, 50, 10, 255))
+
+def altar(cor, simbolo, seed):
+    """Altar de chefao: pedra escura com uma runa colorida"""
+    base = (70, 65, 75)
+    im = noise(base, 0.12, seed); px = im.load()
+    for i in range(S):
+        px[i, 0] = px[0, i] = shade(base, 1.4)
+        px[i, S - 1] = px[S - 1, i] = shade(base, 0.5)
+        px[i, 3] = px[i, 12] = shade(base, 0.7)
+    for y, row in enumerate(simbolo):
+        for x, c in enumerate(row):
+            if c == "#": px[4 + x, 5 + y] = cor + (255,)
+    return im
+
+def altar_rainha(): return altar((200, 120, 255), ["  #  #  ", "   ##   ", "########", "   ##   ", "  #  #  ", "        "], 41)
+def altar_golem():  return altar((90, 220, 240),  ["########", "#  ##  #", "#      #", "# #### #", "#      #", "########"], 42)
+def altar_aranha(): return altar((235, 170, 255), ["#  ##  #", " # ## # ", "  ####  ", " # ## # ", "#  ##  #", "        "], 43)
+def altar_creeper(): return altar((110, 240, 60), ["##    ##", "##    ##", "   ##   ", "  ####  ", "  #  #  ", "        "], 44)
+
+def item_devastadora():
+    """Espada Devastadora: lamina enorme dourada e vermelha, com runas de todos os chefoes"""
+    im = new(); px = im.load()
+    for y in range(S):
+        for x in range(S):
+            p, t = x + y, x - y
+            if abs(p - 15) <= 3 and -8 <= t <= 15 - abs(p - 15):
+                c = (255, 215, 70) if p < 14 else ((255, 150, 40) if p <= 16 else (190, 50, 30))
+                px[x, y] = c + (255,)
+    for i, c in zip((2, 4, 6, 8), ((200, 120, 255), (90, 220, 240), (235, 170, 255), (110, 240, 60))):
+        px[6 + i, 9 - i] = c + (255,)
+    for d in range(-3, 4):
+        x, y = 3 + d, 12 + d
+        if 0 <= x < S and 0 <= y < S: px[x, y] = (40, 20, 50, 255)
+    for i in range(3): px[2 - i, 13 + i] = (120, 40, 30, 255)
+    return outline(im, (40, 10, 10, 255))
+
+def ovo_dragao():
+    """Ovo de dragao: ovo grande com escamas verdes e laranja"""
+    im = new(); px = im.load()
+    for y in range(1, 16):
+        for x in range(S):
+            dx, dy = (x - 7.5) / 5.5, (y - 9) / 6.8
+            if dy < 0: dx *= 1.25
+            if dx * dx + dy * dy > 1: continue
+            c = (40, 140, 110) if (x + 2 * (y // 2)) % 4 else (25, 95, 80)
+            if (y % 4 == 1) and x % 3 == 0: c = (240, 150, 40)
+            if dx < -0.4 and dy < -0.1: c = shade(c, 1.35)[:3]
+            px[x, y] = c + (255,)
+    return outline(im, (10, 40, 30, 255))
+
+# ------------------------------------------- skins proprias dos monstros
+# Caixas de cada modelo padrao do ClassiCube (u, v, tamanho x, y, z, girada, papel).
+# So a posicao das caixas vem do jogo; o desenho e todo feito aqui.
+MODELOS = {
+    "humano": (64, 64, [(0, 0, 8, 8, 8, 0, "cabeca"), (16, 16, 8, 12, 4, 0, "corpo"),
+                        (40, 16, 4, 12, 4, 0, "braco"), (32, 48, 4, 12, 4, 0, "braco"),
+                        (0, 16, 4, 12, 4, 0, "perna"), (16, 48, 4, 12, 4, 0, "perna")]),
+    "galinha": (64, 32, [(0, 0, 4, 6, 3, 0, "cabeca"), (14, 0, 4, 2, 2, 0, "bico"), (14, 4, 2, 2, 2, 0, "barbela"),
+                         (0, 9, 6, 6, 7, 1, "corpo"), (24, 13, 1, 4, 6, 0, "asa"), (32, 0, 6, 8, 0, 0, "pe")]),
+    "porco": (64, 32, [(0, 0, 8, 8, 8, 0, "cabeca"), (28, 8, 10, 8, 16, 1, "corpo"), (0, 16, 4, 6, 4, 0, "perna")]),
+    "carneiro": (64, 32, [(0, 0, 6, 6, 8, 0, "cabeca"), (28, 8, 8, 6, 16, 1, "corpo"), (0, 16, 4, 12, 4, 0, "perna")]),
+    "creeper": (64, 32, [(0, 0, 8, 8, 8, 0, "cabeca"), (16, 16, 8, 12, 4, 0, "corpo"), (0, 16, 4, 6, 4, 0, "perna")]),
+    "aranha": (64, 32, [(32, 4, 8, 8, 8, 0, "cabeca"), (0, 0, 6, 6, 6, 0, "corpo"), (0, 12, 10, 8, 12, 0, "corpo"),
+                        (18, 0, 16, 2, 2, 0, "perna")]),
+}
+
+def caixa_rect(u, v, sx, sy, sz, girada):
+    if girada: return u, v, 2 * (sy + sx), sy + sz
+    return u, v, 2 * (sz + sx), sz + sy
+
+def frente(u, v, sx, sy, sz):
+    return u + sz, v + sz, sx, sy
+
+def pintar_skin(modelo, cores, rosto, padrao, seed):
+    W, H, caixas = MODELOS[modelo]
+    im = Image.new("RGBA", (W, H), (0, 0, 0, 0)); px = im.load(); rnd = random.Random(seed)
+    for (u, v, sx, sy, sz, girada, papel) in caixas:
+        x0, y0, w, h = (u, v, 6, 8) if papel == "pe" else caixa_rect(u, v, sx, sy, sz, girada)
+        base = cores.get(papel, cores["corpo"])
+        for y in range(y0, min(H, y0 + h)):
+            for x in range(x0, min(W, x0 + w)):
+                c = shade(base, 0.86 + rnd.random() * 0.24)
+                c = padrao(papel, x - x0, y - y0, c, rnd) or c
+                px[x, y] = c
+        if papel == "cabeca":
+            fx, fy, fw, fh = frente(u, v, sx, sy, sz)
+            rosto(px, fx, fy, fw, fh)
+    return im
+
+def png_bytes(im):
+    import io
+    buf = io.BytesIO(); im.save(buf, "PNG"); return buf.getvalue()
+
+def olhos(cor, linha=0.35, brilho=None, boca=None, n=2):
+    def f(px, x, y, w, h):
+        ey = y + int(h * linha)
+        if n == 2:
+            xs = (x + max(1, w // 4) - 1, x + w - max(1, w // 4))
+        else:
+            xs = tuple(x + 1 + i * (w - 2) // (n - 1) for i in range(n))
+        for ex in xs:
+            px[ex, ey] = cor + (255,)
+            if w >= 8: px[ex, ey + 1] = shade(cor, 0.7)
+            if brilho: px[ex, ey - 1 if w >= 8 else ey] = brilho + (255,) if w >= 8 else px[ex, ey]
+        if boca:
+            by = y + int(h * 0.7)
+            for bx in range(x + w // 3, x + w - w // 3): px[bx, by] = boca + (255,)
+    return f
+
+def listras(cor, cada=3, papeis=("corpo",)):
+    def f(papel, x, y, c, rnd):
+        if papel in papeis and (y % cada == 0): return shade(cor, 0.9 + rnd.random() * 0.2)
+    return f
+
+def manchas(cor, chance, papeis=("corpo", "cabeca", "perna", "braco")):
+    def f(papel, x, y, c, rnd):
+        if papel in papeis and ((x // 2) * 7 + (y // 2) * 13) % 11 < chance: return shade(cor, 0.9 + rnd.random() * 0.2)
+    return f
+
+def placas(cor):
+    def f(papel, x, y, c, rnd):
+        if x % 4 == 0 or y % 4 == 0: return shade(cor, 0.8)
+        if x % 4 == 1 and y % 4 == 1: return (230, 240, 250, 255)
+    return f
+
+def facetas(cor):
+    def f(papel, x, y, c, rnd):
+        if (x + y) % 5 == 0: return shade(cor, 1.3)
+        if (x - y) % 7 == 0: return shade(cor, 0.7)
+    return f
+
+def veias(cor):
+    def f(papel, x, y, c, rnd):
+        if (x * 3 + y * 5) % 9 == 0 or (x + 2 * y) % 13 == 0: return cor + (255,)
+    return f
+
+def coroa(cor):
+    base = veias((150, 255, 90))
+    def f(papel, x, y, c, rnd):
+        if papel == "cabeca" and 8 <= y <= 10: return cor + (255,) if (x % 4) else (230, 40, 60, 255)
+        if papel == "cabeca" and y < 8 and x >= 8 and x < 16: return shade(cor, 0.9)
+        return base(papel, x, y, c, rnd)
+    return f
+
+def nada(papel, x, y, c, rnd): return None
+
+SKINS = [
+    ("GALINHA",        "galinha",  {"corpo": (190, 150, 230), "cabeca": (200, 165, 235), "bico": (250, 160, 40), "barbela": (60, 140, 230), "asa": (160, 120, 210), "pe": (250, 160, 40)},
+                       olhos((20, 20, 30), 0.3), manchas((240, 220, 255), 2), 1),
+    ("LEITAO",         "porco",    {"corpo": (240, 205, 160), "cabeca": (240, 205, 160), "perna": (200, 150, 110)},
+                       olhos((30, 20, 20), 0.3, boca=(150, 80, 60)), manchas((140, 85, 50), 3), 2),
+    ("CARNEIRO",       "carneiro", {"corpo": (170, 210, 240), "cabeca": (60, 60, 80), "perna": (60, 60, 80)},
+                       olhos((240, 240, 255), 0.35), manchas((215, 235, 255), 4, ("corpo",)), 3),
+    ("ARANHA",         "aranha",   {"corpo": (35, 45, 80), "cabeca": (30, 35, 60), "perna": (25, 30, 50)},
+                       olhos((255, 150, 40), 0.3, n=4), manchas((240, 130, 40), 2, ("corpo",)), 4),
+    ("ARANHA_GIGANTE", "aranha",   {"corpo": (150, 25, 30), "cabeca": (60, 15, 20), "perna": (40, 10, 15)},
+                       olhos((255, 230, 60), 0.3, n=4), listras((20, 10, 10), 3), 5),
+    ("ZUMBI_TITAN",    "humano",   {"corpo": (95, 110, 90), "cabeca": (105, 120, 95), "braco": (90, 105, 85), "perna": (70, 80, 70)},
+                       olhos((255, 140, 30), 0.4, boca=(40, 30, 25)), manchas((60, 95, 50), 3), 6),
+    ("CREEPER_COLOSSO", "creeper", {"corpo": (95, 110, 140), "cabeca": (105, 120, 150), "perna": (80, 90, 115)},
+                       olhos((80, 230, 255), 0.35, boca=(30, 40, 60)), manchas((50, 60, 85), 4), 7),
+    ("GALINHA_MONSTRO", "galinha", {"corpo": (35, 30, 35), "cabeca": (45, 35, 40), "bico": (90, 90, 95), "barbela": (220, 20, 40), "asa": (60, 20, 25), "pe": (90, 90, 95)},
+                       olhos((255, 230, 40), 0.3), manchas((190, 30, 40), 2), 8),
+    ("GOLEM_TITANIO",  "humano",   {"corpo": (150, 165, 185), "cabeca": (165, 180, 200), "braco": (140, 155, 175), "perna": (120, 130, 150)},
+                       olhos((60, 240, 255), 0.4, boca=(40, 50, 70)), placas((150, 165, 185)), 9),
+    ("ARANHA_CRISTAL", "aranha",   {"corpo": (150, 80, 210), "cabeca": (120, 60, 180), "perna": (180, 120, 240)},
+                       olhos((255, 255, 255), 0.3, n=4), facetas((170, 100, 230)), 10),
+    ("REI_CREEPER",    "creeper",  {"corpo": (40, 70, 35), "cabeca": (45, 80, 40), "perna": (30, 55, 28)},
+                       olhos((180, 255, 90), 0.5, boca=(150, 255, 80)), coroa((250, 200, 40)), 11),
+]
+
+# ------------------------------------------------------- dragao manso
+# x1,y1,z1, x2,y2,z2 (1/16 de bloco), u,v, anim, pivo x,y,z (1/32 de bloco), cor
+# anim: 1/2 = asas batendo, 5/6 = pernas andando, 7 = rabo balancando
+DRAGAO_PARTES = [
+    ("corpo",   -4, 6, -7,   4, 13, 7,   0, 0,   0, 0, 0, 0,       (40, 140, 110)),
+    ("pescoco", -2, 10, -13, 2, 14, -7,  26, 32, 0, 0, 0, 0,       (40, 140, 110)),
+    ("cabeca",  -3, 11, -20, 3, 16, -13, 0, 32,  0, 0, 0, 0,       (45, 150, 115)),
+    ("focinho", -2, 11, -24, 2, 14, -20, 48, 21, 0, 0, 0, 0,       (45, 150, 115)),
+    ("chifre_e", 2, 16, -15, 3, 19, -14, 56, 0,  0, 0, 0, 0,       (240, 225, 190)),
+    ("chifre_d",-3, 16, -15,-2, 19, -14, 56, 0,  0, 0, 0, 0,       (240, 225, 190)),
+    ("rabo1",   -2, 7, 7,    2, 11, 15,  0, 44,  7, 0, 18, 14,     (40, 140, 110)),
+    ("rabo2",   -1, 8, 15,   1, 11, 23,  24, 44, 7, 0, 18, 14,     (35, 125, 100)),
+    ("asa_e",    4, 12, -5,  18, 13, 5,  0, 21,  1, 8, 25, 0,      (230, 110, 50)),
+    ("asa_d",  -18, 12, -5, -4, 13, 5,   0, 21,  2, -8, 25, 0,     (230, 110, 50)),
+    ("perna1",   1, 0, -6,   4, 6, -3,   44, 0,  5, 5, 12, -9,     (35, 120, 95)),
+    ("perna2",  -4, 0, -6,  -1, 6, -3,   44, 0,  6, -5, 12, -9,    (35, 120, 95)),
+    ("perna3",   1, 0, 3,    4, 6, 6,    44, 0,  6, 5, 12, 9,      (35, 120, 95)),
+    ("perna4",  -4, 0, 3,   -1, 6, 6,    44, 0,  5, -5, 12, 9,     (35, 120, 95)),
+]
+
+def dragao_png():
+    W, H = 64, 64
+    im = Image.new("RGBA", (W, H), (0, 0, 0, 0)); px = im.load()
+    for parte in DRAGAO_PARTES:
+        n, x1, y1, z1, x2, y2, z2, u, v, anim = parte[:10]; cor = parte[13]
+        sx, sy, sz = x2 - x1, y2 - y1, z2 - z1
+        w, h = 2 * (sx + sz), sz + sy
+        rnd = random.Random(sum(map(ord, n)))
+        for yy in range(v, min(H, v + h)):
+            for xx in range(u, min(W, u + w)):
+                c = shade(cor, 0.85 + rnd.random() * 0.3)
+                if n.startswith("asa"):
+                    # membrana com ossos
+                    c = shade(cor, 0.95 + rnd.random() * 0.1) if (xx - u) % 5 else (120, 60, 30, 255)
+                elif (xx + (yy // 2) * 2) % 4 == 0:
+                    c = shade(cor, 0.7)  # escamas
+                px[xx, yy] = c
+        if n == "corpo":
+            # barriga creme (face de baixo: u+sz+sx .. u+sz+2sx, v .. v+sz)
+            for yy in range(v, v + sz):
+                for xx in range(u + sz + sx, u + sz + 2 * sx):
+                    px[xx, yy] = shade((235, 215, 160), 0.9 + rnd.random() * 0.15)
+            # espinhos dourados no topo
+            for yy in range(v, v + sz, 2):
+                px[u + sz + sx // 2, yy] = (250, 200, 60, 255)
+        if n == "cabeca":
+            # olhos amarelos dos dois lados e na frente
+            fx, fy = u + sz, v + sz
+            px[fx + 1, fy + 1] = px[fx + sx - 2, fy + 1] = (255, 220, 40, 255)
+            px[u + 2, v + sz + 1] = px[u + sz + sx + 4, v + sz + 1] = (255, 220, 40, 255)
+        if n == "focinho":
+            fx, fy = u + sz, v + sz
+            px[fx, fy] = px[fx + sx - 1, fy] = (20, 20, 20, 255)
+    return png_bytes(im), im
+
 TEXTURES = [
     ("ORE_RUBY",       ore_ruby),
     ("ORE_TITANIUM",   ore_titanium),
@@ -395,6 +680,16 @@ TEXTURES = [
     ("CRYSTAL_LEAVES", crystal_leaves),
     ("CRYSTAL_CLUSTER", crystal_cluster),
     ("LUCKY_BLOCK",    lucky_block),
+    ("TROFEU_FERRAO",  trofeu_ferrao),
+    ("TROFEU_NUCLEO",  trofeu_nucleo),
+    ("TROFEU_OLHO",    trofeu_olho),
+    ("TROFEU_CORACAO", trofeu_coracao),
+    ("ALTAR_RAINHA",   altar_rainha),
+    ("ALTAR_GOLEM",    altar_golem),
+    ("ALTAR_ARANHA",   altar_aranha),
+    ("ALTAR_CREEPER",  altar_creeper),
+    ("ESPADA_DEVASTADORA", item_devastadora),
+    ("OVO_DRAGAO",     ovo_dragao),
 ]
 
 def main():
@@ -419,16 +714,45 @@ def main():
         fp.write("static const cc_uint8 minerios_texSobrePedra[MINERIOS_TEX_COUNT] = { %s };\n"
                  % ", ".join("1" if n.startswith("ORE") else "0" for n, _ in imgs))
 
-        png, _ = mosquito_png()
-        fp.write("\n/* Modelo do mosquito: x1,y1,z1, x2,y2,z2 (1/16 de bloco), u,v na textura, anim (1/2 = asas) */\n")
-        fp.write("#define MOSQUITO_PARTES %d\n" % len(MOSQ_PARTES))
-        fp.write("static const cc_int8 mosquito_partes[MOSQUITO_PARTES][9] = {\n")
-        for n, x1, y1, z1, x2, y2, z2, u, v, anim, cor in MOSQ_PARTES:
-            fp.write("\t{ %d, %d, %d, %d, %d, %d, %d, %d, %d }, /* %s */\n" % (x1, y1, z1, x2, y2, z2, u, v, anim, n))
-        fp.write("};\n")
-        fp.write("static const cc_uint8 mosquito_png[%d] = {\n" % len(png))
-        for i in range(0, len(png), 24):
-            fp.write("\t" + ",".join(str(b) for b in png[i:i + 24]) + ",\n")
+        def modelo(nome, partes, png, piv):
+            N = nome.upper()
+            fp.write("\n#define %s_PARTES %d\n" % (N, len(partes)))
+            fp.write("static const cc_int8 %s_partes[%s_PARTES][12] = {\n" % (nome, N))
+            for parte in partes:
+                n, x1, y1, z1, x2, y2, z2, u, v, anim = parte[:10]
+                px_, py_, pz_ = piv(parte)
+                fp.write("\t{ %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d }, /* %s */\n"
+                         % (x1, y1, z1, x2, y2, z2, u, v, anim, px_, py_, pz_, n))
+            fp.write("};\n")
+            fp.write("static const cc_uint8 %s_png[%d] = {\n" % (nome, len(png)))
+            for i in range(0, len(png), 24):
+                fp.write("\t" + ",".join(str(b) for b in png[i:i + 24]) + ",\n")
+            fp.write("};\n")
+
+        def piv_mosquito(p):
+            n, x1, y1, z1, x2, y2, z2, u, v, anim = p[:10]
+            if anim >= 3: return x1 + x2, 2 * y2, z1 + z2   # pernas: onde encostam no corpo
+            if anim == 1: return 4, 18, 0                     # asas: onde encostam no torax
+            if anim == 2: return -4, 18, 0
+            return 0, 0, 0
+
+        fp.write("\n/* Modelos proprios: x1,y1,z1, x2,y2,z2 (1/16 de bloco), u,v na textura, anim, pivo x,y,z (1/32 de bloco) */\n")
+        modelo("mosquito", MOSQ_PARTES, mosquito_png()[0], piv_mosquito)
+        modelo("dragao", DRAGAO_PARTES, dragao_png()[0], lambda p: p[10:13])
+
+        fp.write("\n/* Skins proprias dos monstros (modelos padrao, desenho original) */\n")
+        fp.write("#define MINERIOS_SKINS %d\n" % len(SKINS))
+        for i, sk in enumerate(SKINS):
+            fp.write("#define SKIN_%s %d\n" % (sk[0], i))
+        for sk in SKINS:
+            png = png_bytes(pintar_skin(sk[1], sk[2], sk[3], sk[4], sk[5]))
+            fp.write("static const cc_uint8 skin_%s_png[%d] = {\n" % (sk[0].lower(), len(png)))
+            for i in range(0, len(png), 24):
+                fp.write("\t" + ",".join(str(b) for b in png[i:i + 24]) + ",\n")
+            fp.write("};\n")
+        fp.write("static const struct { const cc_uint8* data; int len; } minerios_skins[MINERIOS_SKINS] = {\n")
+        for sk in SKINS:
+            fp.write("\t{ skin_%s_png, sizeof(skin_%s_png) },\n" % (sk[0].lower(), sk[0].lower()))
         fp.write("};\n")
     if len(sys.argv) > 2:
         stone = noise((125, 125, 125), 0.12, 1)
@@ -438,6 +762,10 @@ def main():
             prev.paste(tile, (i * S, 0))
         prev.resize((S * len(imgs) * 8, S * 8), Image.NEAREST).save(sys.argv[2])
         mosquito_png()[1].resize((64 * 8, 32 * 8), Image.NEAREST).save(sys.argv[2].replace(".png", "_mosquito.png"))
+        dragao_png()[1].resize((64 * 6, 64 * 6), Image.NEAREST).save(sys.argv[2].replace(".png", "_dragao.png"))
+        for sk in SKINS:
+            im = pintar_skin(sk[1], sk[2], sk[3], sk[4], sk[5])
+            im.resize((im.width * 6, im.height * 6), Image.NEAREST).save(sys.argv[2].replace(".png", "_skin_%s.png" % sk[0].lower()))
 
 if __name__ == "__main__":
     main()

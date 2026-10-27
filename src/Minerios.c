@@ -40,7 +40,11 @@
    - Minerio de ovo: ao quebrar, choca uma criatura; as raras sao gigantes
    - Espadas (titanio, suprema, Big Bertha) e armadura de titanio
    - Mosquitos: enxames que voam em volta do jogador e picam; as vezes vem a Rainha
-     dos Mosquitos, um chefao que chama mais mosquitos e deixa a Espada suprema
+     dos Mosquitos, o primeiro chefao
+   - Chefoes em ordem (Rainha, Golem de Titanio, Aranha de Cristal, Rei Creeper): cada um
+     deixa um trofeu que faz o altar do proximo; o ultimo trofeu faz a Espada Devastadora
+   - Dragao: nasce do ovo de dragao, e domado com rubis e da para montar e voar
+   - Skins proprias para todos os monstros (misc/minerios/gen_textures.py)
    - Bloco da sorte: ao quebrar, sai uma surpresa boa (minerios, espadas, Big Bertha)
      ou ruim (mosquitos, monstro gigante, explosao, gaiola de vidro)
    - Dimensoes Utopia e Cristal, com portais de ida e volta
@@ -56,7 +60,9 @@ static cc_bool Ativo(void) { return Minerios_Enabled && Server.IsSinglePlayer &&
 /* Tiles livres do atlas (vazios no pacote padrao e dentro das 8 linhas do atlas reserva). */
 /* 96-126 ficam com os blocos modernos. */
 static const cc_uint8 minerios_tiles[MINERIOS_TEX_COUNT] = {
-	88, 89, 90, 91, 92, 93, 94, 87, 95, 127, 27, 43, 44, 45, 46, 59, 60, 61, 62, 63
+	88, 89, 90, 91, 92, 93, 94, 87, 95, 127, 27, 43, 44, 45, 46, 59, 60, 61, 62, 63,
+	/* chefoes e dragao: alem das 8 linhas do atlas reserva (o pacote padrao tem 16) */
+	160, 161, 162, 163, 164, 165, 166, 167, 168, 169
 };
 #define T(tex) MTX_##tex
 
@@ -87,11 +93,25 @@ static const struct MinerioDef minerio_defs[MBLOCK_FIM - MBLOCK_RUBI_MINERIO] = 
 { "Folhas de cristal",     T(CRYSTAL_LEAVES),      T(CRYSTAL_LEAVES),       T(CRYSTAL_LEAVES),      DRAW_TRANSPARENT, COLLIDE_SOLID, SOUND_GRASS, 0 },
 { "Cristal",               T(CRYSTAL_CLUSTER),     T(CRYSTAL_CLUSTER),      T(CRYSTAL_CLUSTER),     DRAW_SPRITE,      COLLIDE_NONE,  SOUND_GLASS, FANCY_LIGHTING_MAX_LEVEL },
 { "Bloco da sorte",        T(LUCKY_BLOCK),         T(LUCKY_BLOCK),          T(LUCKY_BLOCK),         DRAW_OPAQUE,      COLLIDE_SOLID, SOUND_WOOD,  FANCY_LIGHTING_MAX_LEVEL / 3 },
+{ "Ferrao da Rainha",      T(TROFEU_FERRAO),       T(TROFEU_FERRAO),        T(TROFEU_FERRAO),       DRAW_SPRITE,      COLLIDE_NONE,  SOUND_METAL, 0 },
+{ "Nucleo de titanio",     T(TROFEU_NUCLEO),       T(TROFEU_NUCLEO),        T(TROFEU_NUCLEO),       DRAW_SPRITE,      COLLIDE_NONE,  SOUND_METAL, 0 },
+{ "Olho de cristal",       T(TROFEU_OLHO),         T(TROFEU_OLHO),          T(TROFEU_OLHO),         DRAW_SPRITE,      COLLIDE_NONE,  SOUND_GLASS, 0 },
+{ "Coracao de uranio",     T(TROFEU_CORACAO),      T(TROFEU_CORACAO),       T(TROFEU_CORACAO),      DRAW_SPRITE,      COLLIDE_NONE,  SOUND_GLASS, 0 },
+{ "Altar da Rainha",       T(ALTAR_RAINHA),        T(ALTAR_RAINHA),         T(ALTAR_RAINHA),        DRAW_OPAQUE,      COLLIDE_SOLID, SOUND_STONE, FANCY_LIGHTING_MAX_LEVEL / 3 },
+{ "Altar do Golem",        T(ALTAR_GOLEM),         T(ALTAR_GOLEM),          T(ALTAR_GOLEM),         DRAW_OPAQUE,      COLLIDE_SOLID, SOUND_STONE, FANCY_LIGHTING_MAX_LEVEL / 3 },
+{ "Altar da Aranha",       T(ALTAR_ARANHA),        T(ALTAR_ARANHA),         T(ALTAR_ARANHA),        DRAW_OPAQUE,      COLLIDE_SOLID, SOUND_STONE, FANCY_LIGHTING_MAX_LEVEL / 3 },
+{ "Altar do Rei Creeper",  T(ALTAR_CREEPER),       T(ALTAR_CREEPER),        T(ALTAR_CREEPER),       DRAW_OPAQUE,      COLLIDE_SOLID, SOUND_STONE, FANCY_LIGHTING_MAX_LEVEL / 3 },
+{ "Espada Devastadora",    T(ESPADA_DEVASTADORA),  T(ESPADA_DEVASTADORA),   T(ESPADA_DEVASTADORA),  DRAW_SPRITE,      COLLIDE_NONE,  SOUND_METAL, FANCY_LIGHTING_MAX_LEVEL / 2 },
+{ "Ovo de dragao",         T(OVO_DRAGAO),          T(OVO_DRAGAO),           T(OVO_DRAGAO),          DRAW_SPRITE,      COLLIDE_NONE,  SOUND_STONE, 0 },
 };
 #define MINERIOS_COUNT Array_Elems(minerio_defs)
 #define Def(block) (&minerio_defs[(block) - MBLOCK_RUBI_MINERIO])
 
-static cc_bool EhItem(BlockID b) { return b >= MITEM_ESPADA_TITANIO && b <= MITEM_ARMADURA_TITANIO; }
+static cc_bool EhItem(BlockID b) {
+	return (b >= MITEM_ESPADA_TITANIO && b <= MITEM_ARMADURA_TITANIO) ||
+		(b >= MITEM_FERRAO && b <= MITEM_CORACAO) || b == MITEM_DEVASTADORA;
+}
+static cc_bool EhAltar(BlockID b) { return b >= MBLOCK_ALTAR_RAINHA && b <= MBLOCK_ALTAR_CREEPER; }
 
 const struct MinerioVeio Minerios_Veios[] = {
 	{ 0.30f, "Carving ruby ore",     MBLOCK_RUBI_MINERIO    },
@@ -192,71 +212,103 @@ void Minerios_PatchAtlas(struct Bitmap* bmp) {
 
 
 /*########################################################################################################################*
-*---------------------------------------------------Modelo do mosquito----------------------------------------------------*
+*----------------------------------------------------Modelos proprios-----------------------------------------------------*
 *#########################################################################################################################*/
+/* Modelos feitos de caixas (tabelas geradas em Minerios_tex.h) */
+struct ModeloProprio {
+	const char* nome;
+	const cc_int8 (*partes)[12];
+	int count;
+	const cc_uint8* png; int pngLen;
+	float asaVel, asaAbertura;
+	struct ModelVertex* vertices;
+	struct ModelPart* modelPartes;
+	struct ModelTex tex;
+	struct Model model;
+};
+
 static struct ModelVertex mosquito_vertices[MOSQUITO_PARTES * MODEL_BOX_VERTICES];
 static struct ModelPart   mosquito_modelPartes[MOSQUITO_PARTES];
-static struct ModelTex    mosquito_tex = { "mosquito.png", SKIN_64x32 };
-static struct Model       mosquito_model;
+static struct ModelVertex dragao_vertices[DRAGAO_PARTES * MODEL_BOX_VERTICES];
+static struct ModelPart   dragao_modelPartes[DRAGAO_PARTES];
 
-static void Mosquito_MakeParts(void) {
+static struct ModeloProprio modelos[] = {
+	{ "mosquito",     mosquito_partes, MOSQUITO_PARTES, mosquito_png, sizeof(mosquito_png), 45.0f, 0.7f,
+		mosquito_vertices, mosquito_modelPartes, { "mosquito.png", SKIN_64x32 } },
+	{ "dragao_manso", dragao_partes,   DRAGAO_PARTES,   dragao_png,   sizeof(dragao_png),    6.0f, 0.6f,
+		dragao_vertices,   dragao_modelPartes,   { "dragao_manso.png", SKIN_64x64 } },
+};
+#define MODELO_MOSQUITO (&modelos[0])
+#define MODELO_DRAGAO   (&modelos[1])
+
+static struct ModeloProprio* ModeloAtivo(void) {
+	int i;
+	for (i = 0; i < Array_Elems(modelos); i++)
+	{
+		if (Models.Active == &modelos[i].model) return &modelos[i];
+	}
+	return &modelos[0];
+}
+
+static void ModeloProprio_MakeParts(void) {
+	struct ModeloProprio* mp = ModeloAtivo();
 	struct BoxDesc desc;
 	int i;
 
-	for (i = 0; i < MOSQUITO_PARTES; i++)
+	for (i = 0; i < mp->count; i++)
 	{
-		const cc_int8* p = mosquito_partes[i];
+		const cc_int8* p = mp->partes[i];
 		desc.texX  = p[6]; desc.texY  = p[7];
 		desc.sizeX = p[3] - p[0]; desc.sizeY = p[4] - p[1]; desc.sizeZ = p[5] - p[2];
 		desc.x1 = p[0] / 16.0f; desc.y1 = p[1] / 16.0f; desc.z1 = p[2] / 16.0f;
 		desc.x2 = p[3] / 16.0f; desc.y2 = p[4] / 16.0f; desc.z2 = p[5] / 16.0f;
-		if (p[8] >= 3) {
-			/* pernas giram em volta de onde encostam no corpo */
-			desc.rotX = (p[0] + p[3]) / 32.0f;
-			desc.rotY = p[4] / 16.0f;
-			desc.rotZ = (p[2] + p[5]) / 32.0f;
-		} else {
-			/* asas giram em volta do ponto onde encostam no torax */
-			desc.rotX = (p[8] == 1 ? 2 : p[8] == 2 ? -2 : 0) / 16.0f;
-			desc.rotY = 9 / 16.0f;
-			desc.rotZ = 0;
-		}
-		BoxDesc_BuildBox(&mosquito_modelPartes[i], &desc);
+		/* ponto em volta do qual a parte gira (asas no corpo, pernas no quadril) */
+		desc.rotX = p[9] / 32.0f; desc.rotY = p[10] / 32.0f; desc.rotZ = p[11] / 32.0f;
+		BoxDesc_BuildBox(&mp->modelPartes[i], &desc);
 	}
 }
 
-static void Mosquito_CheckTexture(void) {
-	static const cc_string name = String_FromConst("mosquito.png");
+static void ModeloProprio_CheckTexture(struct ModeloProprio* mp) {
+	cc_string name;
 	struct Stream mem;
-	if (mosquito_tex.texID) return;
+	if (mp->tex.texID) return;
 
-	Stream_ReadonlyMemory(&mem, (void*)mosquito_png, sizeof(mosquito_png));
-	Game_UpdateTexture(&mosquito_tex.texID, &mem, &name, &mosquito_tex.skinType, NULL);
+	name = String_FromReadonly(mp->tex.name);
+	Stream_ReadonlyMemory(&mem, (void*)mp->png, mp->pngLen);
+	Game_UpdateTexture(&mp->tex.texID, &mem, &name, &mp->tex.skinType, NULL);
 }
 
-static void Mosquito_Draw(struct Entity* e) {
-	/* bate as asas bem rapido */
-	float asa = Math_SinF((float)Game.Time * 45.0f) * 0.7f;
-	int i;
+static void ModeloProprio_Draw(struct Entity* e) {
+	struct ModeloProprio* mp = ModeloAtivo();
+	/* bate as asas (o mosquito bem rapido, o dragao devagar) */
+	float asa  = Math_SinF((float)Game.Time * mp->asaVel) * mp->asaAbertura;
+	float rabo = Math_SinF((float)Game.Time * 2.0f) * 0.3f;
+	int i, verts = mp->count * MODEL_BOX_VERTICES;
 
-	Mosquito_CheckTexture();
+	ModeloProprio_CheckTexture(mp);
 	Model_ApplyTexture(e);
-	Model_LockVB(e, MOSQUITO_PARTES * MODEL_BOX_VERTICES);
+	Model_LockVB(e, verts);
 
-	for (i = 0; i < MOSQUITO_PARTES; i++)
+	for (i = 0; i < mp->count; i++)
 	{
-		switch (mosquito_partes[i][8])
+		struct ModelPart* part = &mp->modelPartes[i];
+		switch (mp->partes[i][8])
 		{
-		case 1:  Model_DrawRotate(0, 0, -asa, &mosquito_modelPartes[i], false); break;
-		case 2:  Model_DrawRotate(0, 0,  asa, &mosquito_modelPartes[i], false); break;
+		case 1:  Model_DrawRotate(0, 0, -asa, part, false); break;
+		case 2:  Model_DrawRotate(0, 0,  asa, part, false); break;
 		/* pernas abertas para os lados, como um mosquito pousando */
-		case 3:  Model_DrawRotate(0, 0,  0.75f, &mosquito_modelPartes[i], false); break;
-		case 4:  Model_DrawRotate(0, 0, -0.75f, &mosquito_modelPartes[i], false); break;
-		default: Model_DrawPart(&mosquito_modelPartes[i]); break;
+		case 3:  Model_DrawRotate(0, 0,  0.75f, part, false); break;
+		case 4:  Model_DrawRotate(0, 0, -0.75f, part, false); break;
+		/* pernas andando */
+		case 5:  Model_DrawRotate(e->Anim.LeftLegX,  0, 0, part, false); break;
+		case 6:  Model_DrawRotate(e->Anim.RightLegX, 0, 0, part, false); break;
+		/* rabo balancando */
+		case 7:  Model_DrawRotate(0, rabo, 0, part, false); break;
+		default: Model_DrawPart(part); break;
 		}
 	}
 	Model_UnlockVB();
-	Gfx_DrawVb_IndexedTris(MOSQUITO_PARTES * MODEL_BOX_VERTICES);
+	Gfx_DrawVb_IndexedTris(verts);
 }
 
 static float Mosquito_GetNameY(struct Entity* e) { return 12 / 16.0f; }
@@ -268,32 +320,85 @@ static void  Mosquito_GetBounds(struct Entity* e) {
 	Vec3_Set(e->ModelAABB.Max,  6 / 16.0f, 11 / 16.0f, 8 / 16.0f);
 }
 
-static void Mosquito_Register(void) {
-	Model_RegisterTexture(&mosquito_tex);
+static float Dragao_GetNameY(struct Entity* e) { return 20 / 16.0f; }
+static float Dragao_GetEyeY(struct Entity* e)  { return 14 / 16.0f; }
+static void  Dragao_GetSize(struct Entity* e)  { Vec3_Set(e->Size, 12 / 16.0f, 14 / 16.0f, 12 / 16.0f); }
+static void  Dragao_GetBounds(struct Entity* e) {
+	Vec3_Set(e->ModelAABB.Min, -8 / 16.0f, 0, -24 / 16.0f);
+	Vec3_Set(e->ModelAABB.Max,  8 / 16.0f, 19 / 16.0f, 23 / 16.0f);
+}
 
-	mosquito_model.name       = "mosquito";
-	mosquito_model.vertices   = mosquito_vertices;
-	mosquito_model.defaultTex = &mosquito_tex;
-	mosquito_model.MakeParts  = Mosquito_MakeParts;
-	mosquito_model.Draw       = Mosquito_Draw;
-	mosquito_model.GetNameY   = Mosquito_GetNameY;
-	mosquito_model.GetEyeY    = Mosquito_GetEyeY;
-	mosquito_model.GetCollisionSize = Mosquito_GetSize;
-	mosquito_model.GetPickingBounds = Mosquito_GetBounds;
+static void ModeloProprio_Register(struct ModeloProprio* mp, float (*nameY)(struct Entity* e),
+					float (*eyeY)(struct Entity* e), void (*size)(struct Entity* e), void (*bounds)(struct Entity* e)) {
+	struct Model* m = &mp->model;
+	Model_RegisterTexture(&mp->tex);
 
-	Model_Init(&mosquito_model);
-	mosquito_model.usesSkin    = false;
-	mosquito_model.maxVertices = MOSQUITO_PARTES * MODEL_BOX_VERTICES;
-	Model_Register(&mosquito_model);
+	m->name       = mp->nome;
+	m->vertices   = mp->vertices;
+	m->defaultTex = &mp->tex;
+	m->MakeParts  = ModeloProprio_MakeParts;
+	m->Draw       = ModeloProprio_Draw;
+	m->GetNameY   = nameY;
+	m->GetEyeY    = eyeY;
+	m->GetCollisionSize = size;
+	m->GetPickingBounds = bounds;
+
+	Model_Init(m);
+	m->usesSkin    = false;
+	m->maxVertices = mp->count * MODEL_BOX_VERTICES;
+	Model_Register(m);
+}
+
+static void Modelos_Register(void) {
+	ModeloProprio_Register(MODELO_MOSQUITO, Mosquito_GetNameY, Mosquito_GetEyeY, Mosquito_GetSize, Mosquito_GetBounds);
+	ModeloProprio_Register(MODELO_DRAGAO,   Dragao_GetNameY,   Dragao_GetEyeY,   Dragao_GetSize,   Dragao_GetBounds);
+}
+
+
+/*########################################################################################################################*
+*---------------------------------------------------Skins dos monstros----------------------------------------------------*
+*#########################################################################################################################*/
+/* Skins proprias para os modelos padrao (galinha, porco, aranha...), para os monstros nao */
+/* ficarem iguais aos do jogo normal. Ficam registradas como texturas de modelo, entao sao */
+/* recriadas sozinhas se o contexto grafico for perdido. */
+static struct ModelTex skins_tex[MINERIOS_SKINS];
+
+static GfxResourceID SkinTex(int i, cc_uint8* skinType) {
+	struct ModelTex* tex = &skins_tex[i];
+	cc_string name;
+	struct Stream mem;
+
+	if (!tex->texID) {
+		name = String_FromReadonly(tex->name);
+		Stream_ReadonlyMemory(&mem, (void*)minerios_skins[i].data, minerios_skins[i].len);
+		Game_UpdateTexture(&tex->texID, &mem, &name, &tex->skinType, NULL);
+	}
+	*skinType = tex->skinType;
+	return tex->texID;
+}
+
+static void Skins_Register(void) {
+	static const char* nomes[MINERIOS_SKINS] = {
+		"m_galinha.png", "m_leitao.png", "m_carneiro.png", "m_aranha.png", "m_aranha_gigante.png",
+		"m_zumbi_titan.png", "m_creeper_colosso.png", "m_galinha_monstro.png",
+		"m_golem_titanio.png", "m_aranha_cristal.png", "m_rei_creeper.png"
+	};
+	int i;
+	for (i = 0; i < MINERIOS_SKINS; i++)
+	{
+		skins_tex[i].name = nomes[i];
+		Model_RegisterTexture(&skins_tex[i]);
+	}
 }
 
 
 /*########################################################################################################################*
 *-------------------------------------------------------Monstros----------------------------------------------------------*
 *#########################################################################################################################*/
-#define MONSTROS_MAX     8
-#define MONSTRO_ID_BASE  232 /* 200-223 ficam com Criaturas do Bioma, 240-247 com os monstros da noite */
+#define MONSTROS_MAX     15
+#define MONSTRO_ID_BASE  225 /* 200-224 ficam com Criaturas do Bioma, 240-247 com os monstros da noite */
 #define DIST_SUMIR       (48.0f * 48.0f)
+#define DIST_SUMIR_CHEFE (96.0f * 96.0f)
 
 struct MonstroDef {
 	const char* nome;
@@ -305,34 +410,52 @@ struct MonstroDef {
 	int vidaMax, dano;
 	BlockID drop;   /* o que deixa ao ser derrotado (no modo sobrevivencia) */
 	int dropCount;
+	int skin;       /* skin propria (SKIN_*) ou -1 para a textura do modelo */
+	int chefe;      /* ordem do chefao (1 a 4), 0 se nao for chefao */
 };
 
-enum { M_GALINHA, M_LEITAO, M_CARNEIRO, M_ARANHA, M_ARANHA_GIGANTE, M_ZUMBI_TITAN, M_CREEPER_COLOSSO, M_GALINHA_MONSTRO, M_MOSQUITO, M_RAINHA };
+enum {
+	M_GALINHA, M_LEITAO, M_CARNEIRO, M_ARANHA, M_ARANHA_GIGANTE, M_ZUMBI_TITAN, M_CREEPER_COLOSSO, M_GALINHA_MONSTRO,
+	M_MOSQUITO, M_RAINHA, M_GOLEM, M_ARANHA_CRISTAL, M_REI_CREEPER, M_DRAGAO
+};
+#define CHEFOES 4
 
 static const struct MonstroDef monstro_defs[] = {
-/*NOME                         MODELO      ESCALA VEL   BRAVO  VOA    CHANCE VIDA DANO DROP                    QTD */
-{ "&fGalinha chocada",         "chicken",  1.0f,  2.0f, false, false, 20,    4,   0,   BLOCK_AIR,              0 },
-{ "&dLeitaozinho",             "pig",      1.0f,  2.0f, false, false, 15,    6,   0,   BLOCK_AIR,              0 },
-{ "&fCarneirinho",             "sheep",    1.0f,  2.0f, false, false, 15,    6,   0,   BLOCK_AIR,              0 },
-{ "&7Aranha da caverna",       "spider",   1.0f,  3.5f, true,  false, 15,    8,   2,   BLOCK_AIR,              0 },
-{ "&cAranha Gigante",          "spider",   2.6f,  3.0f, true,  false, 12,    40,  3,   MBLOCK_RUBI_MINERIO,    3 },
-{ "&2Zumbi Titan",             "zombie",   2.4f,  2.4f, true,  false, 10,    50,  4,   MBLOCK_TITANIO_MINERIO, 4 },
-{ "&aCreeper Colosso",         "creeper",  3.0f,  2.2f, true,  false,  8,    45,  5,   MBLOCK_URANIO_MINERIO,  3 },
-{ "&6Galinha Monstro",         "chicken",  4.5f,  3.2f, true,  false,  5,    60,  4,   MBLOCK_RUBI,            1 },
-{ "&8Mosquito",                "mosquito", 0.8f,  4.5f, true,  true,   0,    2,   1,   BLOCK_AIR,              0 },
-{ "&5Rainha dos Mosquitos",    "mosquito", 3.2f,  3.2f, true,  true,   0,    80,  4,   MITEM_ESPADA_SUPREMA,   1 },
+/*NOME                         MODELO         ESCALA VEL   BRAVO  VOA    CHANCE VIDA DANO DROP                    QTD SKIN                  CHEFE */
+{ "&fGalinha chocada",         "chicken",     1.0f,  2.0f, false, false, 20,    4,   0,   BLOCK_AIR,              0,  SKIN_GALINHA,         0 },
+{ "&dLeitaozinho",             "pig",         1.0f,  2.0f, false, false, 15,    6,   0,   BLOCK_AIR,              0,  SKIN_LEITAO,          0 },
+{ "&bCarneirinho",             "sheep_nofur", 1.0f,  2.0f, false, false, 15,    6,   0,   BLOCK_AIR,              0,  SKIN_CARNEIRO,        0 },
+{ "&7Aranha da caverna",       "spider",      1.0f,  3.5f, true,  false, 15,    8,   2,   BLOCK_AIR,              0,  SKIN_ARANHA,          0 },
+{ "&cAranha Gigante",          "spider",      2.6f,  3.0f, true,  false, 12,    40,  3,   MBLOCK_RUBI_MINERIO,    3,  SKIN_ARANHA_GIGANTE,  0 },
+{ "&2Zumbi Titan",             "zombie",      2.4f,  2.4f, true,  false, 10,    50,  4,   MBLOCK_TITANIO_MINERIO, 4,  SKIN_ZUMBI_TITAN,     0 },
+{ "&9Creeper Colosso",         "creeper",     3.0f,  2.2f, true,  false,  8,    45,  5,   MBLOCK_URANIO_MINERIO,  3,  SKIN_CREEPER_COLOSSO, 0 },
+{ "&6Galinha Monstro",         "chicken",     4.5f,  3.2f, true,  false,  5,    60,  4,   MBLOCK_RUBI,            1,  SKIN_GALINHA_MONSTRO, 0 },
+{ "&8Mosquito",                "mosquito",    0.8f,  4.5f, true,  true,   0,    2,   1,   BLOCK_AIR,              0,  -1,                   0 },
+{ "&5Rainha dos Mosquitos",    "mosquito",    3.2f,  3.2f, true,  true,   0,    80,  4,   MITEM_FERRAO,           1,  -1,                   1 },
+{ "&bGolem de Titanio",        "zombie",      3.4f,  2.3f, true,  false,  0,    180, 6,   MITEM_NUCLEO,           1,  SKIN_GOLEM_TITANIO,   2 },
+{ "&dAranha de Cristal",       "spider",      3.8f,  3.6f, true,  false,  0,    300, 7,   MITEM_OLHO,             1,  SKIN_ARANHA_CRISTAL,  3 },
+{ "&aRei Creeper",             "creeper",     5.0f,  2.4f, true,  false,  0,    450, 9,   MITEM_CORACAO,          1,  SKIN_REI_CREEPER,     4 },
+{ "&2Dragao",                  "dragao_manso",1.5f,  6.0f, false, true,   0,    60,  0,   BLOCK_AIR,              0,  -1,                   0 },
 };
 #define MONSTRO_DEFS_COUNT Array_Elems(monstro_defs)
 
 struct Monstro {
 	struct Entity base;
-	cc_bool usado;
-	int tipo, vida;
-	float tempo, pensarTimer, ataqueTimer, hurtTimer, angulo;
+	cc_bool usado, domado;
+	int tipo, vida, comida;
+	float tempo, pensarTimer, ataqueTimer, hurtTimer, angulo, especialTimer, correndo;
 	Vec3 destino;
 };
 static struct Monstro monstros[MONSTROS_MAX];
 static cc_bool armadura; /* jogador esta usando a armadura de titanio */
+static cc_bool montado;  /* jogador esta montado no dragao */
+static cc_bool dragaoPendente; /* trazer o dragao domado para o mundo novo */
+#define OPT_DRAGAO "minerios-dragao"
+#define RUBIS_PARA_DOMAR 3
+
+static cc_bool Protegido(struct Monstro* m) {
+	return monstro_defs[m->tipo].chefe || m->tipo == M_DRAGAO;
+}
 
 static float Dist2XZ(Vec3 a, Vec3 b) {
 	float dx = a.x - b.x, dz = a.z - b.z;
@@ -367,8 +490,10 @@ static cc_bool AcharChao(int x, int z, int yTopo, int yFim, float* yOut) {
 	return false;
 }
 
+static void Desmontar(void);
 static void Monstro_Remover(struct Monstro* m) {
 	if (!m->usado) return;
+	if (m->domado && montado) Desmontar();
 	Entities_Remove(MONSTRO_ID_BASE + (int)(m - monstros));
 	m->usado = false;
 }
@@ -392,7 +517,7 @@ static void Monstro_AtualizarNome(struct Monstro* m) {
 	cc_string str; char strBuffer[STRING_SIZE];
 	String_InitArray(str, strBuffer);
 
-	String_AppendConst(&str, def->nome);
+	String_AppendConst(&str, m->domado ? "&aSeu dragao" : def->nome);
 	/* mostra a vida depois de levar o primeiro golpe */
 	if (m->vida < def->vidaMax) {
 		String_Format2(&str, " %c%i", m->vida * 3 <= def->vidaMax ? "&c" : "&a", &m->vida);
@@ -476,6 +601,7 @@ static void Monstro_Atacar(struct Monstro* m, struct Entity* jogador) {
 }
 
 static struct Monstro* Monstro_Criar(int tipo, Vec3 pos);
+static void Monstro_Dano(struct Monstro* m, int dano, Vec3 origem, float empurrao);
 
 static void Monstro_TickMosquito(struct Monstro* m, struct Entity* jogador, float delta) {
 	const struct MonstroDef* def = &monstro_defs[m->tipo];
@@ -511,6 +637,107 @@ static void Monstro_TickMosquito(struct Monstro* m, struct Entity* jogador, floa
 	}
 }
 
+static void Explodir(int x, int y, int z, int raio) {
+	int dx, dy, dz;
+	BlockID b;
+
+	for (dy = -raio; dy <= raio; dy++)
+		for (dz = -raio; dz <= raio; dz++)
+			for (dx = -raio; dx <= raio; dx++)
+			{
+				if (dx * dx + dy * dy + dz * dz > raio * raio + 1) continue;
+				if (!World_Contains(x + dx, y + dy, z + dz)) continue;
+				b = World_GetBlock(x + dx, y + dy, z + dz);
+				if (b == BLOCK_AIR || b == BLOCK_BEDROCK || EhAltar(b)) continue;
+				Game_UpdateBlock(x + dx, y + dy, z + dz, BLOCK_AIR);
+			}
+}
+
+/* Os ataques especiais de cada chefao */
+static void Chefe_Especial(struct Monstro* m, struct Entity* jogador, float d2) {
+	Vec3 pos = m->base.next.pos;
+	if (m->especialTimer > 0) return;
+
+	switch (m->tipo)
+	{
+	case M_GOLEM:
+		/* pisao: joga o jogador para cima */
+		m->especialTimer = 6.0f;
+		if (d2 > 7 * 7) return;
+		jogador->Velocity.y = 0.9f;
+		DanoJogador(5);
+		Chat_AddRaw("&bO Golem de Titanio pisou forte no chao!");
+		break;
+	case M_ARANHA_CRISTAL:
+		/* da um bote: corre muito rapido por um tempinho */
+		m->especialTimer = 7.0f;
+		m->correndo      = 1.5f;
+		Chat_AddRaw("&dA Aranha de Cristal deu um bote!");
+		break;
+	case M_REI_CREEPER:
+		/* explode tudo em volta sem morrer */
+		m->especialTimer = 8.0f;
+		if (d2 > 10 * 10) return;
+		Explodir(Math_Floor(pos.x), Math_Floor(pos.y), Math_Floor(pos.z), 3);
+		if (d2 < 5 * 5) DanoJogador(8);
+		Chat_AddRaw("&aO Rei Creeper explodiu de raiva!");
+		break;
+	}
+}
+
+/* O dragao: selvagem fica voando em volta de onde nasceu; domado segue o jogador, */
+/* briga com os monstros bravos e pode ser montado */
+static void Monstro_TickDragao(struct Monstro* m, struct Entity* jogador, float delta) {
+	const struct MonstroDef* def = &monstro_defs[m->tipo];
+	struct Monstro* alvoM = NULL;
+	float melhor = 8.0f * 8.0f, d;
+	Vec3 alvo;
+	int i;
+
+	if (m->domado && montado) {
+		/* o jogador voa e o dragao vai junto, logo embaixo */
+		alvo = jogador->Position;
+		alvo.y -= 1.1f;
+		m->base.next.pos   = alvo;
+		m->base.next.yaw   = jogador->Yaw;
+		m->base.next.rotY  = jogador->Yaw;
+		return;
+	}
+
+	m->angulo += delta * 0.7f;
+	if (m->domado) {
+		/* segue o jogador, um pouco atras e acima */
+		alvo = jogador->Position;
+		if (Dist2(alvo, m->base.next.pos) > 24 * 24) {
+			alvo.y += 3.0f;
+			m->base.next.pos = alvo; m->base.prev.pos = alvo;
+			return;
+		}
+		alvo.x += Math_CosF(m->angulo) * 3.0f;
+		alvo.z += Math_SinF(m->angulo) * 3.0f;
+		alvo.y += 2.5f;
+	} else {
+		alvo = m->destino;
+		alvo.x += Math_CosF(m->angulo) * 5.0f;
+		alvo.z += Math_SinF(m->angulo) * 5.0f;
+		alvo.y += 4.0f;
+	}
+	Monstro_Voar(m, alvo, def->vel * (m->domado ? 1.0f : 0.5f), delta);
+
+	/* o dragao domado ataca o monstro bravo mais perto */
+	if (!m->domado || m->ataqueTimer > 0) return;
+	for (i = 0; i < MONSTROS_MAX; i++)
+	{
+		struct Monstro* o = &monstros[i];
+		if (!o->usado || o == m || !monstro_defs[o->tipo].bravo) continue;
+		d = Dist2(o->base.next.pos, m->base.next.pos);
+		if (d < melhor) { melhor = d; alvoM = o; }
+	}
+	if (!alvoM) return;
+	m->ataqueTimer = 1.2f;
+	Monstro_Dano(alvoM, 8, m->base.next.pos, 1.0f);
+}
+
 static void Monstro_Tick(struct Entity* e, float delta) {
 	struct Monstro* m = (struct Monstro*)e;
 	const struct MonstroDef* def = &monstro_defs[m->tipo];
@@ -524,16 +751,23 @@ static void Monstro_Tick(struct Entity* e, float delta) {
 	m->ataqueTimer -= delta;
 	m->hurtTimer   -= delta;
 
-	d2 = Dist2XZ(pos, jogador->Position);
-	if (m->tempo <= 0 || d2 > DIST_SUMIR) { Monstro_Remover(m); return; }
+	m->especialTimer -= delta;
+	m->correndo      -= delta;
+	if (m->domado) m->tempo = 600.0f; /* o dragao domado nunca vai embora */
 
-	if (def->voa) {
+	d2 = Dist2XZ(pos, jogador->Position);
+	if (m->tempo <= 0 || (!m->domado && d2 > (def->chefe ? DIST_SUMIR_CHEFE : DIST_SUMIR))) { Monstro_Remover(m); return; }
+
+	if (m->tipo == M_DRAGAO) {
+		Monstro_TickDragao(m, jogador, delta);
+	} else if (def->voa) {
 		Monstro_TickMosquito(m, jogador, delta);
-	} else if (def->bravo && d2 < 16 * 16 && Math_AbsF(jogador->Position.y - pos.y) < 6) {
+	} else if (def->bravo && d2 < (def->chefe ? 40 * 40 : 16 * 16) && Math_AbsF(jogador->Position.y - pos.y) < (def->chefe ? 12 : 6)) {
 		/* persegue o jogador */
 		alcance = 0.9f + def->escala * 0.6f;
+		if (def->chefe) Chefe_Especial(m, jogador, d2);
 		if (d2 > alcance * alcance) {
-			Monstro_Andar(m, jogador->Position, def->vel, delta);
+			Monstro_Andar(m, jogador->Position, def->vel * (m->correndo > 0 ? 2.2f : 1.0f), delta);
 		} else if (m->ataqueTimer <= 0) {
 			Monstro_Atacar(m, jogador);
 		}
@@ -577,6 +811,14 @@ static PackedCol Monstro_GetCol(struct Entity* e) {
 }
 
 static void Monstro_RenderModel(struct Entity* e, float delta, float t) {
+	struct Monstro* m = (struct Monstro*)e;
+	int skin = monstro_defs[m->tipo].skin;
+
+	/* usa a skin propria do monstro no lugar da textura padrao do modelo */
+	if (skin >= 0) {
+		e->TextureId    = SkinTex(skin, &e->SkinType);
+		e->NonHumanSkin = e->TextureId != 0;
+	}
 	Vec3_Lerp(&e->Position, &e->prev.pos, &e->next.pos, t);
 	Entity_LerpAngles(e, t);
 	AnimatedComp_GetCurrent(e, t);
@@ -618,9 +860,10 @@ static struct Monstro* Monstro_Criar(int tipo, Vec3 pos) {
 	{
 		if (!monstros[i].usado) break;
 	}
-	/* sem vaga: o mais antigo volta para a terra (a rainha fica) */
+	/* sem vaga: o mais antigo volta para a terra (chefoes e o dragao ficam) */
 	if (i == MONSTROS_MAX) {
-		i = monstros[0].tipo == M_RAINHA ? 1 : 0;
+		for (i = 0; i < MONSTROS_MAX && Protegido(&monstros[i]); i++) { }
+		if (i == MONSTROS_MAX) return NULL;
 		Monstro_Remover(&monstros[i]);
 	}
 	m = &monstros[i];
@@ -631,7 +874,8 @@ static struct Monstro* Monstro_Criar(int tipo, Vec3 pos) {
 	m->usado   = true;
 	m->tipo    = tipo;
 	m->vida    = def->vidaMax;
-	m->tempo   = tipo == M_RAINHA ? 240.0f : def->bravo ? 90.0f : 300.0f;
+	m->tempo   = def->chefe || tipo == M_DRAGAO ? 600.0f : def->bravo ? 90.0f : 300.0f;
+	m->especialTimer = 4.0f;
 	m->destino = pos;
 	m->angulo  = Random_Float(&rnd) * 2 * MATH_PI;
 	m->ataqueTimer = 1.0f; /* da um tempinho para o jogador correr */
@@ -767,13 +1011,13 @@ static void SorteJardim(int x, int y, int z) {
 
 enum {
 	S_RUBI, S_TITANIO, S_URANIO, S_ESPADA_TITANIO, S_ARMADURA, S_ESPADA_SUPREMA, S_BIG_BERTHA,
-	S_TORRE, S_FILHOTES, S_JARDIM, S_OVOS,
+	S_TORRE, S_FILHOTES, S_JARDIM, S_OVOS, S_DRAGAO,
 	S_MOSQUITOS, S_GIGANTE, S_EXPLOSAO, S_GAIOLA, S_SORTE_COUNT
 };
 /* Chance de cada surpresa (de um total de 100) */
 static const cc_uint8 sorte_chances[S_SORTE_COUNT] = {
-	12, 10, 7, 7, 5, 3, 1,
-	7, 8, 6, 7,
+	10, 10, 7, 7, 5, 3, 1,
+	7, 8, 6, 7, 2,
 	9, 6, 7, 5
 };
 
@@ -811,6 +1055,9 @@ static void AbrirSorte(int x, int y, int z) {
 		break;
 	case S_OVOS:
 		SorteDar(x, y, z, MBLOCK_OVO_MINERIO, 3); break;
+	case S_DRAGAO:
+		Chat_AddRaw("&6SUPER SORTE!!! &fUm ovo de dragao! Quebre para chocar.");
+		Game_UpdateBlock(x, y, z, MBLOCK_OVO_DRAGAO); break;
 	case S_MOSQUITOS:
 		Chat_AddRaw("&cAzar! &fO bloco estava cheio de mosquitos!");
 		SoltarMosquitos(5); break;
@@ -834,19 +1081,59 @@ static void SoltarRainha(void) {
 	if (!World_Contains(Math_Floor(pos.x), Math_Floor(pos.y), Math_Floor(pos.z))) pos = jogador->Position, pos.y += 6.0f;
 
 	m = Monstro_Criar(M_RAINHA, pos);
+	if (!m) return;
 	m->pensarTimer = 6.0f;
-	Chat_AddRaw("&5BZZZZZZ! &dA Rainha dos Mosquitos apareceu!");
+	Chat_AddRaw("&5BZZZZZZ! &dA Rainha dos Mosquitos apareceu! &7(chefao 1 de 4)");
+}
+
+/* Chama o chefao do altar, um pouco atras do altar (visto pelo jogador) */
+static void ChamarChefe(int tipo, int x, int y, int z) {
+	struct Entity* jogador = &Entities.CurPlayer->Base;
+	const struct MonstroDef* def = &monstro_defs[tipo];
+	float dx = x + 0.5f - jogador->Position.x, dz = z + 0.5f - jogador->Position.z;
+	float len = Math_SqrtF(dx * dx + dz * dz) + 0.01f, chaoY;
+	struct Monstro* m;
+	Vec3 pos;
+
+	if (tipo == M_RAINHA) { SoltarRainha(); return; }
+	if (ContarTipo(tipo)) { Chat_Add1("&e%c &eja esta por aqui!", def->nome); return; }
+
+	pos.x = x + 0.5f + dx / len * 6.0f;
+	pos.z = z + 0.5f + dz / len * 6.0f;
+	if (!AcharChao(Math_Floor(pos.x), Math_Floor(pos.z), y + 8, y - 8, &chaoY)) chaoY = (float)y;
+	pos.y = chaoY;
+
+	m = Monstro_Criar(tipo, pos);
+	if (!m) return;
+	Chat_Add2("&cO chao treme... %c &capareceu! &7(chefao %i de 4)", def->nome, &def->chefe);
+}
+
+static void ChocarDragao(int x, int y, int z) {
+	struct Monstro* m;
+	Vec3 pos;
+	Vec3_Set(pos, x + 0.5f, (float)y, z + 0.5f);
+
+	m = Monstro_Criar(M_DRAGAO, pos);
+	if (!m) return;
+	Chat_AddRaw("&2Um dragao nasceu! &eDe 3 rubis para ele (segure rubi e aperte colocar) para domar.");
 }
 
 static void OnBlockChanged(void* obj, IVec3 coords, BlockID old, BlockID now) {
-	if (!Minerios_Enabled || !Server.IsSinglePlayer || now != BLOCK_AIR) return;
-	if (old != MBLOCK_OVO_MINERIO && old != MBLOCK_SORTE) return;
-	if (!Block_IsCustomDefined(old)) return;
+	if (!Minerios_Enabled || !Server.IsSinglePlayer) return;
 
-	if (old == MBLOCK_SORTE) {
-		AbrirSorte(coords.x, coords.y, coords.z);
-	} else {
-		ChocarOvo(coords.x, coords.y, coords.z, -1);
+	/* colocar um altar chama o chefao (o altar some) */
+	if (old == BLOCK_AIR && EhAltar(now) && Block_IsCustomDefined(now)) {
+		Game_UpdateBlock(coords.x, coords.y, coords.z, BLOCK_AIR);
+		ChamarChefe(M_RAINHA + (now - MBLOCK_ALTAR_RAINHA), coords.x, coords.y, coords.z);
+		return;
+	}
+
+	if (now != BLOCK_AIR || !Block_IsCustomDefined(old)) return;
+	switch (old)
+	{
+	case MBLOCK_SORTE:      AbrirSorte(coords.x, coords.y, coords.z); break;
+	case MBLOCK_OVO_MINERIO: ChocarOvo(coords.x, coords.y, coords.z, -1); break;
+	case MBLOCK_OVO_DRAGAO:  ChocarDragao(coords.x, coords.y, coords.z); break;
 	}
 }
 
@@ -860,6 +1147,7 @@ static int DanoDoItem(BlockID held) {
 	case MITEM_ESPADA_TITANIO: return 7;
 	case MITEM_ESPADA_SUPREMA: return 14;
 	case MITEM_BIG_BERTHA:     return 30;
+	case MITEM_DEVASTADORA:    return 50;
 	}
 	/* na mao (ou com um bloco): usa a espada de ferramenta da sobrevivencia, se tiver */
 	return 1 + Survival_AttackDamage();
@@ -869,6 +1157,12 @@ static void Monstro_Derrotado(struct Monstro* m) {
 	const struct MonstroDef* def = &monstro_defs[m->tipo];
 	int i;
 	Chat_Add1("&e%c &efoi derrotado(a)!", def->nome);
+	if (def->chefe == CHEFOES) {
+		Chat_AddRaw("&6Voce venceu todos os chefoes! &eJunte o Coracao de uranio com a Big Bertha");
+		Chat_AddRaw("&epara fazer a &6Espada Devastadora&e.");
+	} else if (def->chefe) {
+		Chat_AddRaw("&6Chefao vencido! &eUse o trofeu para fazer o altar do proximo chefao.");
+	}
 
 	if (def->drop != BLOCK_AIR) {
 		Survival_AddBlocks(def->drop, def->dropCount);
@@ -884,6 +1178,7 @@ static void Monstro_Dano(struct Monstro* m, int dano, Vec3 origem, float empurra
 	float dx = m->base.next.pos.x - origem.x, dz = m->base.next.pos.z - origem.z;
 	float len = Math_SqrtF(dx * dx + dz * dz) + 0.01f;
 	const struct MonstroDef* def = &monstro_defs[m->tipo];
+	if (m->domado) return;
 
 	m->vida     -= dano;
 	m->hurtTimer = 0.3f;
@@ -932,28 +1227,98 @@ static struct Monstro* MonstroNaMira(float alcance) {
 }
 
 /* A Big Bertha acerta todos os monstros num arco na frente do jogador */
-static cc_bool GolpeBigBertha(void) {
+/* Golpe que acerta varios monstros: a Big Bertha acerta na frente, a Devastadora em volta */
+static cc_bool GolpeEmArea(BlockID held) {
 	struct Entity* jogador = &Entities.CurPlayer->Base;
 	Vec3 dir = Vec3_GetDirVector(jogador->Yaw * MATH_DEG2RAD, 0);
+	cc_bool devastadora = held == MITEM_DEVASTADORA;
 	int i, acertos = 0;
 	float dx, dz, len, alcance;
 
 	for (i = 0; i < MONSTROS_MAX; i++)
 	{
 		struct Monstro* m = &monstros[i];
-		if (!m->usado) continue;
+		if (!m->usado || m->tipo == M_DRAGAO) continue;
 		dx  = m->base.next.pos.x - jogador->Position.x;
 		dz  = m->base.next.pos.z - jogador->Position.z;
 		len = Math_SqrtF(dx * dx + dz * dz) + 0.01f;
-		alcance = 4.5f + monstro_defs[m->tipo].escala * 0.5f;
-		if (len > alcance || Math_AbsF(m->base.next.pos.y - jogador->Position.y) > 4) continue;
-		/* so o que esta na frente (mais ou menos 70 graus para cada lado) */
-		if ((dx * dir.x + dz * dir.z) / len < 0.35f) continue;
+		alcance = (devastadora ? 6.5f : 4.5f) + monstro_defs[m->tipo].escala * 0.5f;
+		if (len > alcance || Math_AbsF(m->base.next.pos.y - jogador->Position.y) > (devastadora ? 6 : 4)) continue;
+		/* a Big Bertha so acerta o que esta na frente (mais ou menos 70 graus para cada lado) */
+		if (!devastadora && (dx * dir.x + dz * dir.z) / len < 0.35f) continue;
 
-		Monstro_Dano(m, DanoDoItem(MITEM_BIG_BERTHA), jogador->Position, 2.5f);
+		Monstro_Dano(m, DanoDoItem(held), jogador->Position, devastadora ? 3.5f : 2.5f);
 		acertos++;
 	}
 	return acertos > 0;
+}
+
+/*########################################################################################################################*
+*---------------------------------------------------------Dragao----------------------------------------------------------*
+*#########################################################################################################################*/
+static void Montar(void) {
+	struct LocalPlayer* p = Entities.CurPlayer;
+	montado = true;
+	HacksComp_SetFlying(&p->Hacks, true);
+	Chat_AddRaw("&2Voce montou no dragao! &ePule para subir, agache para descer.");
+	Chat_AddRaw("&eAperte colocar para descer do dragao.");
+}
+
+/* Desce do dragao: o jogador vai para o chao embaixo dele, sem dano de queda */
+static void Desmontar(void) {
+	struct LocalPlayer* p = Entities.CurPlayer;
+	struct Entity* e = &p->Base;
+	struct LocationUpdate u;
+	float chaoY;
+	montado = false;
+
+	if (AcharChao(Math_Floor(e->Position.x), Math_Floor(e->Position.z), Math_Floor(e->Position.y), 0, &chaoY)) {
+		u.flags = LU_HAS_POS;
+		Vec3_Set(u.pos, e->Position.x, chaoY, e->Position.z);
+		e->VTABLE->SetLocation(e, &u);
+	}
+	Vec3_Set(e->Velocity, 0, 0, 0);
+	HacksComp_SetFlying(&p->Hacks, false);
+}
+
+static struct Monstro* DragaoDomado(void) {
+	int i;
+	for (i = 0; i < MONSTROS_MAX; i++)
+	{
+		if (monstros[i].usado && monstros[i].domado) return &monstros[i];
+	}
+	return NULL;
+}
+
+static void DragaoClique(struct Monstro* m, BlockID held) {
+	int total = RUBIS_PARA_DOMAR;
+	if (m->domado) {
+		if (DragaoDomado() == m) Montar();
+		return;
+	}
+	if (held != MBLOCK_RUBI_MINERIO && held != MBLOCK_RUBI) {
+		Chat_AddRaw("&2O dragao quer rubis! &eSegure um minerio de rubi e aperte colocar nele.");
+		return;
+	}
+	if (Survival_IsActive()) {
+		if (!Survival_CanPlace(held)) { Chat_AddRaw("&cVoce nao tem rubis."); return; }
+		Survival_OnBlockPlaced(held); /* gasta um rubi */
+	}
+
+	m->comida++;
+	if (m->comida < RUBIS_PARA_DOMAR) {
+		Chat_Add2("&2O dragao comeu o rubi! &e(%i de %i)", &m->comida, &total);
+		return;
+	}
+	if (DragaoDomado()) {
+		Chat_AddRaw("&eVoce ja tem um dragao. Este ficou seu amigo, mas vai voltar para o ninho.");
+		Monstro_Remover(m);
+		return;
+	}
+	m->domado = true;
+	Monstro_AtualizarNome(m);
+	Options_SetBool(OPT_DRAGAO, true);
+	Chat_AddRaw("&aO dragao agora e seu! &eEle te segue e briga com os monstros. Aperte colocar nele para montar.");
 }
 
 cc_bool Minerios_HandleClick(cc_bool place) {
@@ -963,6 +1328,11 @@ cc_bool Minerios_HandleClick(cc_bool place) {
 	if (!Ativo()) return false;
 
 	if (place) {
+		/* montado: colocar desce do dragao */
+		if (montado) { Desmontar(); return true; }
+
+		m = MonstroNaMira(Entities.CurPlayer->ReachDistance + 1.0f);
+		if (m && m->tipo == M_DRAGAO) { DragaoClique(m, held); return true; }
 		if (!EhItem(held)) return false;
 		/* itens nao sao colocados no mundo */
 		if (held == MITEM_ARMADURA_TITANIO) {
@@ -977,10 +1347,11 @@ cc_bool Minerios_HandleClick(cc_bool place) {
 	}
 
 	jogador = &Entities.CurPlayer->Base;
-	if (held == MITEM_BIG_BERTHA && GolpeBigBertha()) return true;
+	if ((held == MITEM_BIG_BERTHA || held == MITEM_DEVASTADORA) && GolpeEmArea(held)) return true;
 
 	m = MonstroNaMira(Entities.CurPlayer->ReachDistance + (held == MITEM_BIG_BERTHA ? 1.5f : 0.5f));
 	if (!m) return false;
+	if (m->domado) return true; /* nao bate no proprio dragao */
 	Monstro_Dano(m, DanoDoItem(held), jogador->Position, 0.8f);
 	return true;
 }
@@ -1262,8 +1633,8 @@ static void GerarCristal(void) {
 	}
 }
 
-/* Blocos da sorte espalhados pelo chao (muitos mais na Utopia) */
-static void GenSorte(int quantos) {
+/* Espalha o bloco pelo chao (blocos da sorte, ovos de dragao) */
+static void GenSorte(BlockRaw bloco, int quantos) {
 	int i, x, y, z;
 	BlockRaw chao;
 	for (i = 0; i < quantos; i++)
@@ -1274,7 +1645,7 @@ static void GenSorte(int quantos) {
 		chao = GenGet(x, y, z);
 		if (y + 1 > World.MaxY) continue;
 		if (chao != BLOCK_GRASS && chao != BLOCK_SAND && chao != MBLOCK_GRAMA_CRISTAL) continue;
-		GenSet(x, y + 1, z, MBLOCK_SORTE);
+		GenSet(x, y + 1, z, bloco);
 	}
 }
 
@@ -1284,7 +1655,10 @@ void Minerios_PosGeracao(void) {
 
 	if (dimGerando == DIM_UTOPIA)  GerarUtopia();
 	if (dimGerando == DIM_CRISTAL) GerarCristal();
-	GenSorte(dimGerando == DIM_UTOPIA ? area / 500 : area / 2500);
+	GenSorte(MBLOCK_SORTE, dimGerando == DIM_UTOPIA ? area / 500 : area / 2500);
+	/* ovos de dragao: alguns na dimensao de Cristal, raros na Utopia */
+	if (dimGerando == DIM_CRISTAL) GenSorte(MBLOCK_OVO_DRAGAO, max(3, area / 4000));
+	if (dimGerando == DIM_UTOPIA)  GenSorte(MBLOCK_OVO_DRAGAO, area / 16000);
 }
 
 
@@ -1312,6 +1686,22 @@ static void MineriosCommand_Execute(const cc_string* args, int argsCount) {
 
 	if (argsCount && String_CaselessEqualsConst(&args[0], "rainha")) {
 		SoltarRainha();
+		return;
+	}
+
+	if (argsCount && String_CaselessEqualsConst(&args[0], "chefe")) {
+		if (argsCount > 1) Convert_ParseInt(&args[1], &tipo);
+		if (tipo < 1 || tipo > CHEFOES) { Chat_AddRaw("&e/client minerios chefe [1-4]"); return; }
+		x = Math_Floor(jogador->Position.x + Math_SinF(yaw) * 4.0f);
+		z = Math_Floor(jogador->Position.z - Math_CosF(yaw) * 4.0f);
+		ChamarChefe(M_RAINHA + tipo - 1, x, Math_Floor(jogador->Position.y), z);
+		return;
+	}
+
+	if (argsCount && String_CaselessEqualsConst(&args[0], "dragao")) {
+		x = Math_Floor(jogador->Position.x + Math_SinF(yaw) * 4.0f);
+		z = Math_Floor(jogador->Position.z - Math_CosF(yaw) * 4.0f);
+		ChocarDragao(x, Math_Floor(jogador->Position.y), z);
 		return;
 	}
 
@@ -1380,8 +1770,8 @@ static struct ChatCommand MineriosCommand = {
 	COMMAND_FLAG_SINGLEPLAYER_ONLY,
 	{
 		"&a/client minerios &e- lista os blocos, itens e monstros do mod",
-		"&a/client minerios ovo [numero|todos] &e- choca um ovo na sua frente",
-		"&a/client minerios mosquitos|rainha|limpar &e- chama mosquitos, a rainha ou tira os monstros",
+		"&a/client minerios ovo [numero|todos] | dragao &e- choca um ovo na sua frente",
+		"&a/client minerios chefe [1-4] | mosquitos | limpar &e- chama um chefao, mosquitos ou tira os monstros",
 		"&a/client minerios sorte &e- coloca um bloco da sorte na sua frente",
 		"&a/client minerios ir [normal|utopia|cristal] &e- viaja para a dimensao",
 	}
@@ -1400,6 +1790,18 @@ static void Minerios_Tick(struct ScheduledTask* task) {
 	if (!Ativo() || viajando) return;
 
 	if (colocarPortal) { colocarPortal = false; AcharTerraFirme(); ColocarPortalVolta(); return; }
+
+	/* o dragao domado vem junto para cada mundo */
+	if (dragaoPendente) {
+		struct Monstro* m;
+		Vec3 pos = Entities.CurPlayer->Base.Position;
+		dragaoPendente = false;
+		pos.x += 2.0f; pos.y += 3.0f;
+		m = Monstro_Criar(M_DRAGAO, pos);
+		if (m) { m->domado = true; Monstro_AtualizarNome(m); }
+	}
+	/* enquanto montado, continua voando (a sobrevivencia nao deixa voar sozinho) */
+	if (montado) HacksComp_SetFlying(&Entities.CurPlayer->Hacks, true);
 
 	ChecarPortal();
 	if (viagemPendente >= 0) {
@@ -1420,6 +1822,7 @@ static void Minerios_Tick(struct ScheduledTask* task) {
 }
 
 static void OnNewMap(void) {
+	if (montado) Desmontar();
 	RemoverTodos();
 	/* um mundo carregado pelo menu volta a ser o "mundo normal" */
 	dimAtual = viajando ? dimDestino : DIM_NORMAL;
@@ -1445,6 +1848,7 @@ static void OnNewMapLoaded(void) {
 		if (Block_IsCustomDefined(block)) continue;
 		DefineBlock(block, &minerio_defs[i]);
 	}
+	dragaoPendente = Options_GetBool(OPT_DRAGAO, false);
 	if (!viajando) return;
 
 	/* precisa vir antes do componente de sobrevivencia aplicar o estado do mundo */
@@ -1468,7 +1872,8 @@ static void OnNewMapLoaded(void) {
 static void Minerios_Init(void) {
 	Minerios_Enabled = Options_GetBool(MINERIOS_OPTION, true);
 	Random_SeedFromCurrentTime(&rnd);
-	Mosquito_Register();
+	Modelos_Register();
+	Skins_Register();
 	Commands_Register(&MineriosCommand);
 	Event_Register_(&UserEvents.BlockChanged, NULL, OnBlockChanged);
 	ScheduledTask_Add(GAME_DEF_TICKS, Minerios_Tick);

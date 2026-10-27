@@ -211,6 +211,10 @@ static cc_bool HeadInWater(struct Entity* e) {
 
 static void UpdateFalling(struct Entity* e) {
 	float y = e->Position.y;
+	/* Flying (e.g. riding the dragon in Minerios.c) never counts as falling */
+	if (((struct LocalPlayer*)e)->Hacks.Floating) {
+		wasFalling = false; return;
+	}
 	/* Water, ropes and ladders break falls */
 	if (Entity_TouchesAnyWater(e) || Entity_TouchesAnyRope(e)) {
 		wasFalling = false; return;
@@ -301,6 +305,7 @@ static BlockID GetDrop(BlockID block) {
 	case BLOCK_ICE:    return BLOCK_AIR;
 	case BLOCK_FIRE:   return BLOCK_AIR;
 	case MBLOCK_SORTE: return BLOCK_AIR; /* abre uma surpresa (Minerios.c) */
+	case MBLOCK_OVO_DRAGAO: return BLOCK_AIR; /* choca um dragao (Minerios.c) */
 	case BLOCK_LEAVES: 
 		return Random_Next(&survival_rnd, 8) == 0 ? BLOCK_SAPLING : BLOCK_AIR;
 	}
@@ -511,6 +516,12 @@ static const struct Recipe recipes[] = {
 	{ 1, MBLOCK_URANIO,          4, BLOCK_GOLD,             2, MBLOCK_PORTAL_UTOPIA   },
 	{ 1, MBLOCK_RUBI,            4, BLOCK_GLASS,            2, MBLOCK_PORTAL_CRISTAL  },
 	{ 1, MBLOCK_RUBI_MINERIO,    2, BLOCK_GOLD_ORE,         1, MBLOCK_SORTE           },
+	/* chefoes: cada trofeu faz o altar do proximo; o ultimo faz a Espada Devastadora */
+	{ 3, MBLOCK_RUBI_MINERIO,    1, MBLOCK_OVO_MINERIO,     1, MBLOCK_ALTAR_RAINHA    },
+	{ 1, MITEM_FERRAO,           2, MBLOCK_TITANIO,         1, MBLOCK_ALTAR_GOLEM     },
+	{ 1, MITEM_NUCLEO,           4, MBLOCK_PEDRA_CRISTAL,   1, MBLOCK_ALTAR_ARANHA    },
+	{ 1, MITEM_OLHO,             2, MBLOCK_URANIO,          1, MBLOCK_ALTAR_CREEPER   },
+	{ 1, MITEM_CORACAO,          1, MITEM_BIG_BERTHA,       1, MITEM_DEVASTADORA      },
 };
 
 struct FoodRecipe {

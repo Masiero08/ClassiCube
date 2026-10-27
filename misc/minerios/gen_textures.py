@@ -596,12 +596,6 @@ SKINS = [
                        olhos((80, 230, 255), 0.35, boca=(30, 40, 60)), manchas((50, 60, 85), 4), 7),
     ("GALINHA_MONSTRO", "galinha", {"corpo": (35, 30, 35), "cabeca": (45, 35, 40), "bico": (90, 90, 95), "barbela": (220, 20, 40), "asa": (60, 20, 25), "pe": (90, 90, 95)},
                        olhos((255, 230, 40), 0.3), manchas((190, 30, 40), 2), 8),
-    ("GOLEM_TITANIO",  "humano",   {"corpo": (150, 165, 185), "cabeca": (165, 180, 200), "braco": (140, 155, 175), "perna": (120, 130, 150)},
-                       olhos((60, 240, 255), 0.4, boca=(40, 50, 70)), placas((150, 165, 185)), 9),
-    ("ARANHA_CRISTAL", "aranha",   {"corpo": (150, 80, 210), "cabeca": (120, 60, 180), "perna": (180, 120, 240)},
-                       olhos((255, 255, 255), 0.3, n=4), facetas((170, 100, 230)), 10),
-    ("REI_CREEPER",    "creeper",  {"corpo": (40, 70, 35), "cabeca": (45, 80, 40), "perna": (30, 55, 28)},
-                       olhos((180, 255, 90), 0.5, boca=(150, 255, 80)), coroa((250, 200, 40)), 11),
 ]
 
 # ------------------------------------------------------- dragao manso
@@ -658,6 +652,168 @@ def dragao_png():
             fx, fy = u + sz, v + sz
             px[fx, fy] = px[fx + sx - 1, fy] = (20, 20, 20, 255)
     return png_bytes(im), im
+
+# ------------------------------------------ modelos dos chefoes e dragoes
+# (nome, x1,y1,z1, x2,y2,z2 em 1/16 de bloco, anim, pivo x,y,z em 1/32, cor, padrao, grupo)
+# A frente do modelo e o lado -Z. As caixas de mesmo grupo dividem o mesmo pedaco da textura.
+# anim: 1/2 asas, 3/4 pernas abertas, 5/6 pernas andando, 7/14 rabo (fases opostas),
+#       8/9 bracos balancando, 10/11 pernas de aranha
+OURO, ROXO, PRETO = (250, 200, 50), (120, 50, 170), (30, 20, 35)
+
+def perna_lado(lado, z, grupo="perna"):
+    x1, x2 = (5, 19) if lado > 0 else (-19, -5)
+    return ("perna", x1, 8, z, x2, 10, z + 2, 10 if lado > 0 else 11, 10 * lado, 18, 2 * z + 2, (190, 130, 240), "cristal", grupo)
+
+MODELOS_PROPRIOS = {
+    "rainha": [
+        ("abdomen",  -4, 8, 2,    4, 15, 16,   0, 0, 0, 0,     (120, 50, 170), "listras", "abdomen"),
+        ("torax",    -3, 8, -4,   3, 14, 2,    0, 0, 0, 0,     (70, 30, 90),   "liso", "torax"),
+        ("cabeca",   -2, 9, -8,   2, 13, -4,   0, 0, 0, 0,     (50, 20, 60),   "olhos_vermelhos", "cabeca"),
+        ("coroa",    -2, 13, -7,  2, 15, -5,   0, 0, 0, 0,     OURO,           "coroa", "coroa"),
+        ("ferrao",   -1, 10, -16, 1, 11, -8,   0, 0, 0, 0,     (230, 180, 255), "liso", "ferrao"),
+        ("asa1_e",    3, 14, -3, 14, 15, 3,    1, 6, 28, 0,    (215, 190, 245), "asa", "asa1"),
+        ("asa1_d",  -14, 14, -3, -3, 15, 3,    2, -6, 28, 0,   (215, 190, 245), "asa", "asa1"),
+        ("asa2_e",    3, 13, 2,  11, 14, 7,    1, 6, 26, 8,    (190, 160, 235), "asa", "asa2"),
+        ("asa2_d",  -11, 13, 2,  -3, 14, 7,    2, -6, 26, 8,   (190, 160, 235), "asa", "asa2"),
+    ] + [("perna", x, 1, z, x + 1, 8, z + 1, 3 if x > 0 else 4, 2 * x + 1, 16, 2 * z + 1, PRETO, "liso", "perna")
+         for x in (2, -3) for z in (-3, -1, 1)],
+    "golem": [
+        ("tronco",   -7, 14, -4,  7, 26, 4,    0, 0, 0, 0,     (150, 165, 185), "placas", "tronco"),
+        ("cabeca",   -4, 24, -6,  4, 31, 1,    0, 0, 0, 0,     (130, 145, 165), "visor", "cabeca"),
+        ("nucleo",   -2, 18, -5,  2, 22, -4,   0, 0, 0, 0,     (90, 240, 255),  "brilho", "nucleo"),
+        ("ombro_e",   7, 25, -2, 11, 28, 2,    0, 0, 0, 0,     (110, 120, 140), "liso", "ombro"),
+        ("ombro_d", -11, 25, -2, -7, 28, 2,    0, 0, 0, 0,     (110, 120, 140), "liso", "ombro"),
+        ("braco_e",   7, 5, -2,  12, 25, 3,    8, 19, 50, 1,   (140, 155, 175), "placas", "braco"),
+        ("braco_d", -12, 5, -2,  -7, 25, 3,    9, -19, 50, 1,  (140, 155, 175), "placas", "braco"),
+        ("perna_e",   1, 0, -2,   6, 14, 3,    5, 7, 28, 1,    (120, 130, 150), "placas", "perna"),
+        ("perna_d",  -6, 0, -2,  -1, 14, 3,    6, -7, 28, 1,   (120, 130, 150), "placas", "perna"),
+    ],
+    "aranha_cristal": [
+        ("cabeca",   -5, 6, -12,  5, 12, -2,   0, 0, 0, 0,     (110, 50, 170),  "olhos_brancos", "cabeca"),
+        ("abdomen",  -6, 5, -2,   6, 14, 12,   0, 0, 0, 0,     (150, 80, 210),  "cristal", "abdomen"),
+        ("presa_e",   2, 3, -13,  3, 7, -12,   0, 0, 0, 0,     (240, 230, 255), "liso", "presa"),
+        ("presa_d",  -3, 3, -13, -2, 7, -12,   0, 0, 0, 0,     (240, 230, 255), "liso", "presa"),
+        ("cristal1", -1, 14, 1,   1, 22, 3,    0, 0, 0, 0,     (200, 250, 255), "cristal", "cristal1"),
+        ("cristal2",  2, 14, 4,   4, 19, 6,    0, 0, 0, 0,     (230, 170, 255), "cristal", "cristal2"),
+        ("cristal3", -4, 14, 5,  -2, 20, 7,    0, 0, 0, 0,     (170, 230, 255), "cristal", "cristal3"),
+        ("cristal4",  0, 14, 8,   2, 18, 10,   0, 0, 0, 0,     (240, 200, 255), "cristal", "cristal2"),
+    ] + [perna_lado(l, z) for l in (1, -1) for z in (-11, -8, -5, -2)],
+    "rei_creeper": [
+        ("corpo",    -5, 6, -4,   5, 22, 4,    0, 0, 0, 0,     (40, 75, 35),   "veias", "corpo"),
+        ("cabeca",   -6, 22, -6,  6, 33, 6,    0, 0, 0, 0,     (45, 85, 40),   "rosto_creeper", "cabeca"),
+        ("nucleo",   -2, 12, -5,  2, 16, -4,   0, 0, 0, 0,     (160, 255, 90), "brilho", "nucleo"),
+        ("ombreira_e", 5, 17, -2, 8, 21, 2,    0, 0, 0, 0,     (120, 240, 70), "cristal", "ombreira"),
+        ("ombreira_d",-8, 17, -2,-5, 21, 2,    0, 0, 0, 0,     (120, 240, 70), "cristal", "ombreira"),
+    ] + [("coroa", x, 33, z, x + 2, 37 + (1 if (x + z) % 4 else 0), z + 2, 0, 0, 0, 0, OURO, "coroa", "coroa")
+         for x in (-6, 4) for z in (-6, 4)] + [
+        ("coroa_meio", -1, 33, -6, 1, 39, -4,  0, 0, 0, 0,     (230, 40, 60),  "brilho", "joia"),
+    ] + [("perna", x, 0, z, x + 4, 6, z + 4, 5 if (x > 0) == (z > 0) else 6, 2 * x + 4, 12, 2 * z + 4, (30, 55, 28), "veias", "perna")
+         for x in (-5, 1) for z in (-6, 2)],
+    "dragao_fogo": [
+        ("corpo",    -3, 8, -6,   3, 14, 6,    0, 0, 0, 0,     (190, 50, 30),   "escamas", "corpo"),
+        ("pescoco",  -2, 11, -12, 2, 14, -6,   0, 0, 0, 0,     (190, 50, 30),   "escamas", "pescoco"),
+        ("cabeca",   -3, 11, -18, 3, 15, -12,  0, 0, 0, 0,     (200, 60, 35),   "olhos_amarelos", "cabeca"),
+        ("mandibula",-2, 9, -17,  2, 11, -13,  0, 0, 0, 0,     (240, 160, 60),  "liso", "mandibula"),
+        ("chifre_e",  2, 15, -14, 3, 19, -13,  0, 0, 0, 0,     (40, 30, 30),    "liso", "chifre"),
+        ("chifre_d", -3, 15, -14,-2, 19, -13,  0, 0, 0, 0,     (40, 30, 30),    "liso", "chifre"),
+        ("asa_e",     3, 12, -6, 21, 13, 6,    1, 6, 25, 0,    (250, 140, 40),  "asa", "asa"),
+        ("asa_d",   -21, 12, -6, -3, 13, 6,    2, -6, 25, 0,   (250, 140, 40),  "asa", "asa"),
+        ("rabo1",    -2, 9, 6,    2, 12, 14,   7, 0, 21, 12,   (190, 50, 30),   "escamas", "rabo1"),
+        ("rabo2",    -1, 9, 14,   1, 11, 22,   14, 0, 20, 28,  (170, 40, 25),   "escamas", "rabo2"),
+        ("ponta",    -2, 8, 22,   2, 12, 25,   14, 0, 20, 28,  (40, 30, 30),    "liso", "ponta"),
+        ("perna_e",   1, 0, -1,   3, 8, 2,     5, 4, 16, 1,    (150, 40, 25),   "escamas", "perna"),
+        ("perna_d",  -3, 0, -1,  -1, 8, 2,     6, -4, 16, 1,   (150, 40, 25),   "escamas", "perna"),
+    ],
+    "dragao_gelo": [
+        ("cabeca",   -3, 10, -14, 3, 15, -7,   0, 0, 0, 0,     (150, 210, 245), "olhos_azuis", "cabeca"),
+        ("chifre_e",  2, 15, -10, 3, 16, -3,   0, 0, 0, 0,     (240, 250, 255), "liso", "chifre"),
+        ("chifre_d", -3, 15, -10,-2, 16, -3,   0, 0, 0, 0,     (240, 250, 255), "liso", "chifre"),
+        ("seg1",     -3, 9, -7,   3, 14, 1,    0, 0, 0, 0,     (110, 180, 230), "escamas", "seg1"),
+        ("seg2",     -3, 9, 1,    3, 14, 9,    7, 0, 23, 2,    (110, 180, 230), "escamas", "seg1"),
+        ("seg3",     -2, 9, 9,    2, 13, 17,   14, 0, 22, 18,  (100, 165, 220), "escamas", "seg3"),
+        ("seg4",     -2, 9, 17,   2, 13, 25,   7, 0, 22, 34,   (100, 165, 220), "escamas", "seg3"),
+        ("seg5",     -1, 10, 25,  1, 12, 33,   14, 0, 22, 50,  (90, 150, 210),  "escamas", "seg5"),
+        ("barbatana",-1, 14, -4,  1, 17, 4,    0, 0, 0, 0,     (230, 245, 255), "cristal", "barbatana"),
+        ("asa_e",     3, 13, -5, 12, 14, 2,    1, 6, 27, 0,    (210, 240, 255), "asa", "asa"),
+        ("asa_d",   -12, 13, -5, -3, 14, 2,    2, -6, 27, 0,   (210, 240, 255), "asa", "asa"),
+    ],
+}
+
+def empacotar(partes, W=64, H=64):
+    """Distribui os pedacos de textura (skyline): devolve {grupo: (u, v)}"""
+    grupos = {}
+    for pt in partes:
+        g = pt[13]
+        if g in grupos: continue
+        sx, sy, sz = pt[4] - pt[1], pt[5] - pt[2], pt[6] - pt[3]
+        grupos[g] = (2 * (sx + sz), sz + sy)
+    ordem = sorted(grupos, key=lambda g: (-grupos[g][1], -grupos[g][0]))
+    sky = [0] * W; uv = {}
+    for g in ordem:
+        w, h = grupos[g]
+        melhor = None
+        for x in range(0, W - w + 1):
+            y = max(sky[x:x + w])
+            if y + h <= H and (melhor is None or y < melhor[1]): melhor = (x, y)
+        if melhor is None: raise SystemExit("textura cheia: " + g)
+        x, y = melhor; uv[g] = melhor
+        for i in range(x, x + w): sky[i] = y + h
+    return uv
+
+def pintar_modelo(nome, partes):
+    W = H = 64
+    uv = empacotar(partes)
+    im = Image.new("RGBA", (W, H), (0, 0, 0, 0)); px = im.load()
+    feitos = set()
+    for pt in partes:
+        n, x1, y1, z1, x2, y2, z2, anim, pvx, pvy, pvz, cor, padrao, g = pt
+        if g in feitos: continue
+        feitos.add(g)
+        sx, sy, sz = x2 - x1, y2 - y1, z2 - z1
+        u, v = uv[g]; w, h = 2 * (sx + sz), sz + sy
+        rnd = random.Random(sum(map(ord, nome + g)))
+        for yy in range(v, v + h):
+            for xx in range(u, u + w):
+                lx, ly = xx - u, yy - v
+                c = shade(cor, 0.88 + rnd.random() * 0.2)
+                if padrao == "listras" and (lx // 2) % 3 == 0: c = shade(PRETO, 1.0)
+                if padrao == "placas" and (lx % 5 == 0 or ly % 5 == 0): c = shade(cor, 0.72)
+                if padrao == "placas" and lx % 5 == 2 and ly % 5 == 2: c = (230, 240, 250, 255)
+                if padrao == "escamas" and (lx + (ly // 2) * 2) % 4 == 0: c = shade(cor, 0.7)
+                if padrao == "cristal" and (lx + ly) % 4 == 0: c = shade(cor, 1.3)
+                if padrao == "cristal" and (lx - ly) % 5 == 0: c = shade(cor, 0.75)
+                if padrao == "veias" and ((lx * 3 + ly * 5) % 9 == 0 or (lx + 2 * ly) % 13 == 0): c = (150, 255, 90, 255)
+                if padrao == "asa": c = shade(cor, 0.95 + rnd.random() * 0.1) if lx % 4 else shade(cor, 0.55)
+                if padrao == "brilho": c = shade(cor, 1.1 if (lx + ly) % 2 else 0.95)
+                if padrao == "coroa" and ly % 3 == 0: c = (230, 40, 60, 255)
+                px[xx, yy] = c
+        # rostos (face da frente: u+sz .. u+sz+sx, v+sz .. v+sz+sy)
+        fx, fy = u + sz, v + sz
+        def olho(x, y, c):
+            if 0 <= x < W and 0 <= y < H: px[x, y] = c + (255,)
+        if padrao.startswith("olhos"):
+            c = {"olhos_vermelhos": (255, 40, 40), "olhos_brancos": (250, 250, 255),
+                 "olhos_amarelos": (255, 220, 40), "olhos_azuis": (40, 120, 255)}[padrao]
+            ey = fy + max(1, sy // 3)
+            olho(fx, ey, c); olho(fx + sx - 1, ey, c)
+            if padrao == "olhos_brancos":  # aranha: 6 olhos
+                for i in range(1, sx - 1, 2): olho(fx + i, ey - 1, c)
+                for i in (2, sx - 3): olho(fx + i, ey + 1, c)
+            if sx >= 6: olho(fx + 1, ey, c); olho(fx + sx - 2, ey, c)
+        if padrao == "visor":
+            for i in range(1, sx - 1): olho(fx + i, fy + 3, (60, 240, 255))
+            for i in range(2, sx - 2): olho(fx + i, fy + 5, (40, 50, 70))
+        if padrao == "rosto_creeper":
+            for (ox, oy) in ((2, 3), (3, 3), (8, 3), (9, 3), (2, 4), (3, 4), (8, 4), (9, 4)):
+                olho(fx + ox, fy + oy, (180, 255, 90))
+            for ox in range(4, 8): olho(fx + ox, fy + 7, (20, 30, 15)); olho(fx + ox, fy + 8, (20, 30, 15))
+            olho(fx + 3, fy + 9, (20, 30, 15)); olho(fx + 8, fy + 9, (20, 30, 15))
+    saida = []
+    for pt in partes:
+        n, x1, y1, z1, x2, y2, z2, anim, pvx, pvy, pvz = pt[:11]
+        u, v = uv[pt[13]]
+        saida.append((n, x1, y1, z1, x2, y2, z2, u, v, anim, pvx, pvy, pvz))
+    return saida, png_bytes(im), im
 
 TEXTURES = [
     ("ORE_RUBY",       ore_ruby),
@@ -739,6 +895,15 @@ def main():
         fp.write("\n/* Modelos proprios: x1,y1,z1, x2,y2,z2 (1/16 de bloco), u,v na textura, anim, pivo x,y,z (1/32 de bloco) */\n")
         modelo("mosquito", MOSQ_PARTES, mosquito_png()[0], piv_mosquito)
         modelo("dragao", DRAGAO_PARTES, dragao_png()[0], lambda p: p[10:13])
+        for nome, partes in MODELOS_PROPRIOS.items():
+            saida, png, _ = pintar_modelo(nome, partes)
+            modelo(nome, [o + (0,) for o in saida], png, lambda p: p[10:13])
+        fp.write("\n/* Caixa em volta de cada modelo (1/16 de bloco): x1,y1,z1, x2,y2,z2 */\n")
+        for nome, partes in [("mosquito", MOSQ_PARTES), ("dragao", DRAGAO_PARTES)] + list(MODELOS_PROPRIOS.items()):
+            xs1 = min(min(pt[1], pt[4]) for pt in partes); xs2 = max(max(pt[1], pt[4]) for pt in partes)
+            ys1 = min(min(pt[2], pt[5]) for pt in partes); ys2 = max(max(pt[2], pt[5]) for pt in partes)
+            zs1 = min(min(pt[3], pt[6]) for pt in partes); zs2 = max(max(pt[3], pt[6]) for pt in partes)
+            fp.write("static const cc_int8 %s_caixa[6] = { %d, %d, %d, %d, %d, %d };\n" % (nome, xs1, ys1, zs1, xs2, ys2, zs2))
 
         fp.write("\n/* Skins proprias dos monstros (modelos padrao, desenho original) */\n")
         fp.write("#define MINERIOS_SKINS %d\n" % len(SKINS))
@@ -763,6 +928,8 @@ def main():
         prev.resize((S * len(imgs) * 8, S * 8), Image.NEAREST).save(sys.argv[2])
         mosquito_png()[1].resize((64 * 8, 32 * 8), Image.NEAREST).save(sys.argv[2].replace(".png", "_mosquito.png"))
         dragao_png()[1].resize((64 * 6, 64 * 6), Image.NEAREST).save(sys.argv[2].replace(".png", "_dragao.png"))
+        for nome, partes in MODELOS_PROPRIOS.items():
+            pintar_modelo(nome, partes)[2].resize((64 * 6, 64 * 6), Image.NEAREST).save(sys.argv[2].replace(".png", "_m_%s.png" % nome))
         for sk in SKINS:
             im = pintar_skin(sk[1], sk[2], sk[3], sk[4], sk[5])
             im.resize((im.width * 6, im.height * 6), Image.NEAREST).save(sys.argv[2].replace(".png", "_skin_%s.png" % sk[0].lower()))

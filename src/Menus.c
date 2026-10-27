@@ -465,6 +465,40 @@ void ListScreen_Show(void) {
 }
 
 
+/* Lista simples para mods (ex.: Diario das Criaturas) */
+static void (*modList_Load)(struct StringsBuffer* entries);
+static void (*modList_Click)(int index);
+
+static void ModListScreen_LoadEntries(struct ListScreen* s) { modList_Load(&s->entries); }
+
+static void ModListScreen_EntryClick(void* screen, void* widget) {
+	struct ListScreen* s     = (struct ListScreen*)screen;
+	struct ButtonWidget* btn = (struct ButtonWidget*)widget;
+	int index = s->currentIndex + btn->meta.val;
+	if (index < s->entries.count && modList_Click) modList_Click(index);
+}
+
+static void ModListScreen_Close(void* screen, void* widget) {
+	Gui_Remove((struct Screen*)&ListScreen);
+}
+
+void ModListScreen_Show(const char* title, const char* actionText,
+						void (*loadEntries)(struct StringsBuffer* entries), void (*entryClick)(int index)) {
+	struct ListScreen* s = &ListScreen;
+	modList_Load  = loadEntries;
+	modList_Click = entryClick;
+
+	s->titleText   = title;
+	s->actionText  = actionText;
+	s->ActionClick = ModListScreen_Close;
+	s->LoadEntries = ModListScreen_LoadEntries;
+	s->EntryClick  = ModListScreen_EntryClick;
+	s->DoneClick   = ModListScreen_Close;
+	s->UpdateEntry = ListScreen_UpdateEntry;
+	ListScreen_Show();
+}
+
+
 /*########################################################################################################################*
 *--------------------------------------------------------MenuScreen-------------------------------------------------------*
 *#########################################################################################################################*/

@@ -35,6 +35,10 @@ vento > planta/inseto; pedra > fogo/vento; inseto > planta.
 | Maré | selvagens derrotadas às vezes deixam | muito forte contra criaturas de água |
 | Mestre | 1 por Mestre vencido | captura sempre |
 
+Cada casulo tem modelo e textura próprios (uma bolota com tampa): o Comum é marrom com faixa vermelha,
+o Reforçado é de metal com rebites, o Maré é azul com ondas e o Mestre é dourado com tampa roxa.
+O casulo voa até a criatura, prende ela e balança: três balanços e ela é sua; se parar antes, ela escapa.
+
 No automático o jogo usa o melhor casulo que você tem (sem gastar o Mestre).
 `/client casulo` mostra quantos você tem; `/client casulo mestre` (ou reforcado, mare, comum, auto) escolhe.
 Criaturas de um Mestre não podem ser capturadas.
@@ -55,6 +59,11 @@ desafiar: eles mandam as criaturas uma por uma contra a sua. Vencendo a equipe t
 
 `/client mestre` lista os Mestres e as insígnias; `/client mestre chamar` chama o próximo na sua frente.
 As insígnias aparecem como estrelas no canto de cima.
+
+## Diário das Criaturas
+`/client diario` abre o Diário: a lista das 22 espécies com as que você já viu e as que já capturou.
+Tocar numa criatura mostra tipo, onde vive, status, evolução e uma descrição. Espécies que você ainda
+não viu aparecem como `???`. O Diário fica salvo nas opções (`criaturas-vistas` e `criaturas-capturadas`).
 
 ## Especies
 | Linha | Estágios | Tipo | Onde nasce |

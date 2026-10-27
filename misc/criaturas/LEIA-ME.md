@@ -25,7 +25,8 @@ A equipe fica salva nas opções (`criaturas-equipe`).
   (amarelo = fora do casulo, verde = pronta, cinza = desmaiada).
 
 Tipos: fogo > planta/inseto; água > fogo/pedra; planta > água/pedra; elétrico > água/vento;
-vento > planta/inseto; pedra > fogo/vento; inseto > planta.
+vento > planta/inseto; pedra > fogo/vento/gelo; inseto > planta; fantasma > fantasma/elétrico;
+gelo > planta/vento; fogo também > gelo.
 
 ## Casulos de captura
 | Casulo | Como ganhar | Efeito |
@@ -61,7 +62,9 @@ desafiar: eles mandam as criaturas uma por uma contra a sua. Vencendo a equipe t
 As insígnias aparecem como estrelas no canto de cima.
 
 ## Diário das Criaturas
-`/client diario` abre o Diário: a lista das 22 espécies com as que você já viu e as que já capturou.
+No 3DS, aperte Start e toque em **Criaturas...** para abrir o menu do mod (Diário, equipe,
+criatura inicial, escolha do casulo, chamar Mestre e insígnias) sem digitar comandos.
+`/client diario` abre o Diário: a lista das 26 espécies com as que você já viu e as que já capturou.
 Tocar numa criatura mostra tipo, onde vive, status, evolução e uma descrição. Espécies que você ainda
 não viu aparecem como `???`. O Diário fica salvo nas opções (`criaturas-vistas` e `criaturas-capturadas`).
 
@@ -77,6 +80,8 @@ não viu aparecem como `???`. O Diário fica salvo nas opções (`criaturas-vist
 | Lagartas | Larvito → Casulim (nv 4) → Asalume (nv 7) | Inseto | grama |
 | Caranguejos | Pincudo → Tenazor (nv 9) | Água | areia |
 | Toupeiras | Toupito → Cavucao (nv 9) | Pedra | pedra/cascalho |
+| Fantasminhas | Vultinho → Assombrao (nv 9) | Fantasma | à noite, ou em cavernas fundas |
+| Focas | Friozinho → Geleirao (nv 9) | Gelo | neve, gelo ou montanhas bem altas |
 
 ## Editar
 Modelos, pinturas e status ficam em `criaturas.py`. Depois de mudar, rode na raiz do repositório:

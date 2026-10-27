@@ -223,6 +223,45 @@ PLANOS["toupeira2"] = [
     ("perna", 1, 0, 2, 4, 2, 5, (2, 2, 3), PERNA_A),
     ("cauda", -1, 3, 5, 1, 4, 8, (0, 3, 5), CAUDA),
 ]
+# fantasminhas: flutuam (corpo comeca no alto) e tem um rabinho de fumaca
+PLANOS["fantasma"] = [
+    ("corpo", -4, 5, -4, 4, 13, 4, (0, 0, 0), FIXO),
+    ("veu", -3, 3, -3, 3, 5, 3, (0, 4, 0), CAUDA),
+    ("fumaca", -2, 1, -2, 2, 3, 2, (0, 2, 0), CAUDA),
+    ("braco", -6, 7, -1, -4, 10, 1, (-5, 10, 0), ASA_E),
+    ("braco", 4, 7, -1, 6, 10, 1, (5, 10, 0), ASA_D),
+]
+PLANOS["fantasma2"] = [
+    ("corpo", -5, 6, -5, 5, 16, 5, (0, 0, 0), FIXO),
+    ("chifre", -5, 16, -2, -3, 19, 0, (0, 0, 0), FIXO),
+    ("chifre", 3, 16, -2, 5, 19, 0, (0, 0, 0), FIXO),
+    ("veu", -4, 3, -4, 4, 6, 4, (0, 5, 0), CAUDA),
+    ("fumaca", -3, 0, -3, 3, 3, 3, (0, 3, 0), CAUDA),
+    ("braco", -9, 8, -1, -5, 12, 2, (-5, 12, 0), ASA_E),
+    ("braco", 5, 8, -1, 9, 12, 2, (5, 12, 0), ASA_D),
+]
+# focas de gelo: corpo baixo e comprido, nadadeiras e rabo
+PLANOS["foca"] = [
+    ("cabeca", -3, 3, -9, 3, 9, -3, (0, 5, -4), CABECA),
+    ("focinho", -2, 3, -10, 2, 6, -9, (0, 5, -4), CABECA),
+    ("corpo", -4, 0, -4, 4, 7, 5, (0, 0, 0), FIXO),
+    ("nadadeira", -7, 0, -3, -4, 1, 0, (-4, 1, -2), PERNA_A),
+    ("nadadeira", 4, 0, -3, 7, 1, 0, (4, 1, -2), PERNA_B),
+    ("cauda", -3, 0, 5, 3, 2, 9, (0, 1, 5), CAUDA),
+]
+PLANOS["foca2"] = [
+    ("cabeca", -4, 5, -12, 4, 12, -5, (0, 7, -5), CABECA),
+    ("focinho", -3, 5, -13, 3, 8, -12, (0, 7, -5), CABECA),
+    ("presa", -3, 3, -13, -2, 5, -12, (0, 7, -5), CABECA),
+    ("presa", 2, 3, -13, 3, 5, -12, (0, 7, -5), CABECA),
+    ("corpo", -6, 0, -6, 6, 10, 7, (0, 0, 0), FIXO),
+    ("cristal", -3, 10, -3, -1, 14, -1, (0, 0, 0), FIXO),
+    ("cristal", 1, 10, 0, 3, 13, 2, (0, 0, 0), FIXO),
+    ("cristal", -2, 10, 3, 0, 12, 5, (0, 0, 0), FIXO),
+    ("nadadeira", -10, 0, -4, -6, 2, 0, (-6, 2, -2), PERNA_A),
+    ("nadadeira", 6, 0, -4, 10, 2, 0, (6, 2, -2), PERNA_B),
+    ("cauda", -4, 0, 7, 4, 3, 12, (0, 1, 7), CAUDA),
+]
 # casulo de captura (parece uma bolota: corpo, tampa e cabinho; nao e uma bola)
 PLANOS["casulo_item"] = [
     ("corpo", -2, 0, -2, 2, 5, 2, (0, 0, 0), FIXO),
@@ -231,12 +270,14 @@ PLANOS["casulo_item"] = [
     ("cabo", 0, 7, 0, 1, 9, 1, (0, 0, 0), FIXO),
 ]
 ORDEM_PLANOS = ["raposa", "porquinho", "esquilo", "ave", "bolha", "raposa2", "raposa3", "porquinho2", "porquinho3", "esquilo2", "ave2", "bolha2", "pedra2",
-                "lagarta", "casulo", "borboleta", "caranguejo", "caranguejo2", "toupeira", "toupeira2", "casulo_item"]
+                "lagarta", "casulo", "borboleta", "caranguejo", "caranguejo2", "toupeira", "toupeira2", "casulo_item",
+                "fantasma", "fantasma2", "foca", "foca2"]
 
 # ---------------------------------------------------------------- tipos
-TIPOS = ["FOGO", "AGUA", "PLANTA", "ELETRICO", "VENTO", "PEDRA", "INSETO"]
+TIPOS = ["FOGO", "AGUA", "PLANTA", "ELETRICO", "VENTO", "PEDRA", "INSETO", "FANTASMA", "GELO"]
 # habitat: onde nasce no mundo
-HABITATS = ["CAMPO", "AREIA", "AGUA", "ALTO", "PEDRA"]
+# NEVE = chao de neve ou gelo; NOITE = qualquer lugar a noite, ou cavernas fundas
+HABITATS = ["CAMPO", "AREIA", "AGUA", "ALTO", "PEDRA", "NEVE", "NOITE"]
 
 # ---------------------------------------------------------------- especies
 # nome, cor do nome (codigo &), tipo, plano, escala, vida, dano, velocidade,
@@ -317,6 +358,20 @@ ESPECIES = [
     dict(id="cavucao", nome="Cavucao", cor="&6", tipo="PEDRA", plano="toupeira2", escala=1.25,
          vida=24, dano=7, vel=2.6, evolui=None, nivel=0, habitat="PEDRA", inicial=0,
          pal=dict(base=(95, 70, 55), barriga=(185, 150, 120), detalhe=(150, 150, 160), olho=(255, 210, 80), rocha=True)),
+    # fantasma: lencoizinhos que aparecem a noite
+    dict(id="vultinho", nome="Vultinho", cor="&5", tipo="FANTASMA", plano="fantasma", escala=0.85,
+         vida=10, dano=3, vel=3.4, evolui="assombrao", nivel=9, habitat="NOITE", inicial=0,
+         pal=dict(base=(185, 165, 225), barriga=(235, 225, 250), detalhe=(120, 90, 180), olho=(40, 20, 70))),
+    dict(id="assombrao", nome="Assombrao", cor="&5", tipo="FANTASMA", plano="fantasma2", escala=1.2,
+         vida=20, dano=7, vel=3.8, evolui=None, nivel=0, habitat="NOITE", inicial=0,
+         pal=dict(base=(95, 70, 150), barriga=(170, 140, 220), detalhe=(60, 40, 110), olho=(120, 255, 200), sobrancelha=True, brilho=True)),
+    # gelo: focas da neve
+    dict(id="friozinho", nome="Friozinho", cor="&f", tipo="GELO", plano="foca", escala=0.85,
+         vida=12, dano=3, vel=2.8, evolui="geleirao", nivel=9, habitat="NEVE", inicial=0,
+         pal=dict(base=(220, 235, 245), barriga=(250, 252, 255), detalhe=(140, 200, 240), olho=(25, 35, 60))),
+    dict(id="geleirao", nome="Geleirao", cor="&b", tipo="GELO", plano="foca2", escala=1.25,
+         vida=26, dano=7, vel=2.6, evolui=None, nivel=0, habitat="NEVE", inicial=0,
+         pal=dict(base=(150, 190, 225), barriga=(230, 242, 252), detalhe=(170, 235, 255), olho=(20, 30, 70), sobrancelha=True)),
 ]
 
 
@@ -441,6 +496,10 @@ DESCRICOES = {
     "tenazor": "As pincas gigantes quebram ate pedra.",
     "toupito": "Cava tuneis sem parar e quase nunca ve o sol.",
     "cavucao": "O focinho de broca atravessa rocha como se fosse areia.",
+    "vultinho": "Aparece de noite so para dar sustos e sair rindo.",
+    "assombrao": "Os olhos brilham no escuro e guiam quem se perdeu.",
+    "friozinho": "Escorrega de barriga no gelo mais rapido que corre.",
+    "geleirao": "Os cristais das costas nunca derretem, nem no deserto.",
 }
 for _e in ESPECIES:
     _e["desc"] = DESCRICOES[_e["id"]]
@@ -572,6 +631,10 @@ def pintar(esp):
                         continue
                     if len(c) == 3:
                         c = ruido(c) + (255,)
+                    # contorno suave em cada face, como os modelos em blocos
+                    borda = fw >= 3 and fh >= 3 and (i in (0, fw - 1) or j in (0, fh - 1))
+                    if borda and c[:3] != (255, 255, 255) and nome not in ("chama", "olho_e", "olho_d"):
+                        c = clar(c[:3], 0.84) + (c[3],)
                     img.putpixel((fx + i, fy + j), c)
     return img
 
@@ -873,6 +936,64 @@ def cor_pixel(esp, nome, face, i, j, w, h, rnd):
             return det if j == 0 or face == "topo" else clar(base, 1.1)
         if nome == "perna":
             return clar(base, 0.75)
+        return c
+
+    if plano == "fantasma":
+        if nome == "corpo":
+            if face == "frente":
+                r = rosto(esp, i, j, w, h, base, olho_y=2)
+                if r:
+                    if pal.get("brilho") and r[:3] == pal["olho"]:
+                        return clar(pal["olho"], 1.0 if j % 2 else 0.8) + (255,)
+                    return r
+                # boca aberta de "buu"
+                if 3 <= i < w - 3 and h - 3 <= j < h - 1:
+                    return clar(det, 0.6)
+            if face == "topo" and pal.get("brilho") and (i + j) % 4 == 0:
+                return clar(base, 1.25)
+            if face in ("esq", "dir", "tras") and j >= h - 2:
+                return mix(base, barriga, 0.6)
+            return clar(c, 1.0 + 0.04 * ((i * 3 + j) % 3))
+        if nome == "veu":
+            # barra ondulada do lencol
+            if face in ("frente", "tras", "esq", "dir") and j == h - 1 and i % 2 == 1:
+                return clar(barriga, 0.9)
+            return mix(base, barriga, 0.4)
+        if nome == "fumaca":
+            return mix(barriga, (255, 255, 255), 0.3 + 0.2 * ((i + j) % 2))
+        if nome == "chifre":
+            return clar(det, 1.0 if j else 1.3)
+        if nome == "braco":
+            return mix(base, barriga, 0.3)
+        return c
+
+    if plano == "foca":
+        if nome == "cabeca" and face == "frente":
+            r = rosto(esp, i, j, w, h, base, olho_y=1)
+            if r:
+                return r
+        if nome == "focinho":
+            if face == "frente" and j == 0 and w // 2 - 1 <= i <= w // 2:
+                return (45, 45, 60)  # nariz
+            if face == "frente" and j == 1 and i in (0, w - 1):
+                return clar(barriga, 0.75)  # bigodes
+            return barriga
+        if nome == "presa":
+            return (250, 248, 235, 255)
+        if nome == "cristal":
+            if face == "topo" or (i + j) % 3 == 0:
+                return (245, 252, 255, 255)
+            return mix(det, (255, 255, 255), 0.25 * (j % 2))
+        if nome == "nadadeira":
+            return clar(det, 0.95)
+        if nome == "cauda":
+            return clar(det, 0.95) if face in ("tras", "topo") and j >= h - 2 else c
+        if nome == "corpo":
+            if face in ("frente", "baixo") or (face in ("esq", "dir") and j >= h - 2):
+                return barriga
+            # pintinhas azuis nas costas
+            if face in ("topo", "esq", "dir") and (i * 5 + j * 3) % 9 == 0:
+                return det
         return c
 
     if plano == "toupeira":

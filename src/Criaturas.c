@@ -23,6 +23,7 @@
 #include "Particle.h"
 #include "Menus.h"
 #include "Gui.h"
+#include "DayNight.h"
 #include "CriaturasDados.h"
 
 /* Criaturas do Bioma: criaturas capturaveis para o modo um jogador.
@@ -518,13 +519,15 @@ static void RemoverTodas(void) {
 static float Multiplicador(int atk, int def) {
 	switch (atk)
 	{
-	case TIPO_FOGO:     if (def == TIPO_PLANTA || def == TIPO_INSETO) return 1.5f; if (def == TIPO_AGUA || def == TIPO_PEDRA) return 0.6f; break;
+	case TIPO_FOGO:     if (def == TIPO_PLANTA || def == TIPO_INSETO || def == TIPO_GELO) return 1.5f; if (def == TIPO_AGUA || def == TIPO_PEDRA) return 0.6f; break;
 	case TIPO_AGUA:     if (def == TIPO_FOGO || def == TIPO_PEDRA) return 1.5f; if (def == TIPO_PLANTA) return 0.6f; break;
 	case TIPO_PLANTA:   if (def == TIPO_AGUA || def == TIPO_PEDRA) return 1.5f; if (def == TIPO_FOGO) return 0.6f; break;
 	case TIPO_ELETRICO: if (def == TIPO_AGUA || def == TIPO_VENTO) return 1.5f; if (def == TIPO_PEDRA) return 0.6f; break;
 	case TIPO_VENTO:    if (def == TIPO_PLANTA || def == TIPO_INSETO) return 1.5f; if (def == TIPO_PEDRA || def == TIPO_ELETRICO) return 0.6f; break;
-	case TIPO_PEDRA:    if (def == TIPO_FOGO || def == TIPO_VENTO) return 1.5f; break;
-	case TIPO_INSETO:   if (def == TIPO_PLANTA) return 1.5f; if (def == TIPO_FOGO || def == TIPO_PEDRA || def == TIPO_VENTO) return 0.6f; break;
+	case TIPO_PEDRA:    if (def == TIPO_FOGO || def == TIPO_VENTO || def == TIPO_GELO) return 1.5f; break;
+	case TIPO_INSETO:   if (def == TIPO_PLANTA) return 1.5f; if (def == TIPO_FOGO || def == TIPO_PEDRA || def == TIPO_VENTO || def == TIPO_FANTASMA) return 0.6f; break;
+	case TIPO_FANTASMA: if (def == TIPO_FANTASMA || def == TIPO_ELETRICO) return 1.5f; if (def == TIPO_PEDRA) return 0.6f; break;
+	case TIPO_GELO:     if (def == TIPO_PLANTA || def == TIPO_VENTO) return 1.5f; if (def == TIPO_FOGO || def == TIPO_AGUA || def == TIPO_GELO) return 0.6f; break;
 	}
 	return 1.0f;
 }
@@ -618,7 +621,7 @@ static void Criatura_Dano(struct Criatura* c, int dano, Vec3 origem) {
 
 /* Faz particulas da cor do tipo no alvo */
 static const BlockID efeitoBloco[TIPO_COUNT] = {
-	BLOCK_LAVA, BLOCK_WATER, BLOCK_LEAVES, BLOCK_GOLD, BLOCK_WHITE, BLOCK_STONE, BLOCK_LIME
+	BLOCK_LAVA, BLOCK_WATER, BLOCK_LEAVES, BLOCK_GOLD, BLOCK_WHITE, BLOCK_STONE, BLOCK_LIME, BLOCK_VIOLET, BLOCK_ICE
 };
 static void Efeito_Golpe(struct Criatura* alvo, int tipo) {
 	Vec3 p = alvo->base.next.pos;
@@ -829,7 +832,11 @@ static void Spawner_Tick(float delta) {
 	if (!AcharChaoEntre(x, z, Math_Floor(jogador->Position.y) + 10, Math_Floor(jogador->Position.y) - 12, true, &y)) return;
 
 	chao = World_GetBlock(x, Math_Floor(y - 0.01f), z);
-	if (Blocks.IsLiquid[chao])                       habitat = HABITAT_AGUA;
+	if (chao == BLOCK_SNOW || chao == BLOCK_ICE)     habitat = HABITAT_NEVE;
+	else if ((DayNight_IsNight() && Random_Next(&rnd, 3) == 0) ||
+		(chao == BLOCK_STONE && y < Env.EdgeHeight - 8)) habitat = HABITAT_NOITE;
+	else if (y > Env.EdgeHeight + 18 && Random_Next(&rnd, 2) == 0) habitat = HABITAT_NEVE;
+	else if (Blocks.IsLiquid[chao])                  habitat = HABITAT_AGUA;
 	else if (chao == BLOCK_SAND || chao == BLOCK_SANDSTONE) habitat = HABITAT_AREIA;
 	else if (chao == BLOCK_STONE || chao == BLOCK_GRAVEL || chao == BLOCK_COBBLE) habitat = HABITAT_PEDRA;
 	else if (y > Env.EdgeHeight + 10)                habitat = HABITAT_ALTO;
@@ -1554,8 +1561,8 @@ static void TentarCapturar(struct Criatura* c) {
 }
 
 /* Diario: tela com a lista de especies */
-static const char* const tipoNomes[TIPO_COUNT] = { "Fogo", "Agua", "Planta", "Eletrico", "Vento", "Pedra", "Inseto" };
-static const char* const habitatNomes[]        = { "na grama", "na areia", "na agua", "em lugares altos", "nas pedras" };
+static const char* const tipoNomes[TIPO_COUNT] = { "Fogo", "Agua", "Planta", "Eletrico", "Vento", "Pedra", "Inseto", "Fantasma", "Gelo" };
+static const char* const habitatNomes[]        = { "na grama", "na areia", "na agua", "em lugares altos", "nas pedras", "na neve e no gelo", "a noite e em cavernas fundas" };
 
 static void Diario_Contar(int* vistas, int* capturadas) {
 	int i;

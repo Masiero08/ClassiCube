@@ -67,6 +67,7 @@ add_library(classicube SHARED
         ../../src/Resources.c
         ../../src/PackedCol.c
         ../../src/Screens.c
+        ../../src/Minerios.c
         ../../src/Formats.c
         ../../src/_sfnt.c
         ../../src/Bitmap.c

@@ -191,6 +191,12 @@
     <ClInclude Include="Options.h">
       <Filter>Header Files\Utils</Filter>
     </ClInclude>
+    <ClInclude Include="Minerios.h">
+      <Filter>Header Files\Map</Filter>
+    </ClInclude>
+    <ClInclude Include="Minerios_tex.h">
+      <Filter>Header Files\Map</Filter>
+    </ClInclude>
     <ClInclude Include="Entity.h">
       <Filter>Header Files\Entities</Filter>
     </ClInclude>
@@ -437,6 +443,9 @@
     </ClCompile>
     <ClCompile Include="Options.c">
       <Filter>Source Files\Utils</Filter>
+    </ClCompile>
+    <ClCompile Include="Minerios.c">
+      <Filter>Source Files\Map</Filter>
     </ClCompile>
     <ClCompile Include="Deflate.c">
       <Filter>Source Files\IO</Filter>

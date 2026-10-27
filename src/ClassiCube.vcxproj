@@ -420,6 +420,8 @@
     <ClInclude Include="Generator.h" />
     <ClInclude Include="MapRenderer.h" />
     <ClInclude Include="Options.h" />
+    <ClInclude Include="Minerios.h" />
+    <ClInclude Include="Minerios_tex.h" />
     <ClInclude Include="Particle.h" />
     <ClInclude Include="BlockPhysics.h" />
     <ClInclude Include="Picking.h" />
@@ -626,6 +628,7 @@
     <ClCompile Include="Entity.c" />
     <ClCompile Include="MapRenderer.c" />
     <ClCompile Include="Options.c" />
+    <ClCompile Include="Minerios.c" />
     <ClCompile Include="PackedCol.c" />
     <ClCompile Include="Particle.c" />
     <ClCompile Include="PluginAPI.c" />

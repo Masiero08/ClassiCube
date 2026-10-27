@@ -5,6 +5,7 @@
 #include "Platform.h"
 #include "World.h"
 #include "Utils.h"
+#include "Minerios.h"
 #include "Game.h"
 #include "Screens.h"
 #include "Window.h"
@@ -510,6 +511,17 @@ static void NotchyGen_CarveOreVeins(float abundance, const char* state, BlockRaw
 	}
 }
 
+/* Veios dos minerios do mod Minerios & Monstros */
+static void NotchyGen_CarveModOres(void) {
+	int i;
+	if (!Minerios_Enabled || !Game_AllowCustomBlocks) return;
+
+	for (i = 0; i < Minerios_VeiosCount; i++)
+	{
+		NotchyGen_CarveOreVeins(Minerios_Veios[i].abundancia, Minerios_Veios[i].estado, Minerios_Veios[i].bloco);
+	}
+}
+
 static void NotchyGen_FloodFillWaterBorders(void) {
 	int waterY = waterLevel - 1;
 	int index1, index2;
@@ -759,6 +771,7 @@ static void NotchyGen_Generate(void) {
 		GEN_COOP_STEP(10, NotchyGen_PlantFlowers() );
 		GEN_COOP_STEP(11, NotchyGen_PlantMushrooms() );
 		GEN_COOP_STEP(12, NotchyGen_PlantTrees() );
+		GEN_COOP_STEP(13, NotchyGen_CarveModOres() );
 	GEN_COOP_END
 
 	Mem_Free(heightmap);

@@ -12,6 +12,7 @@
 #include "Funcs.h"
 #include "ExtMath.h"
 #include "Options.h"
+#include "Minerios.h"
 #include "Logger.h"
 #include "Utils.h"
 #include "Chat.h" /* TODO avoid this include */
@@ -252,6 +253,7 @@ cc_bool Atlas_TryChange(struct Bitmap* atlas) {
 	Atlas1D_Free();
 	Atlas2D_Free();
 
+	Minerios_PatchAtlas(atlas);
 	Atlas_Update(atlas);
 	Event_RaiseVoid(&TextureEvents.AtlasChanged);
 	return true;

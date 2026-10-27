@@ -5,6 +5,7 @@
 #include "World.h"
 #include "Lighting.h"
 #include "MapRenderer.h"
+#include "Minerios.h"
 #include "Graphics.h"
 #include "Camera.h"
 #include "Options.h"
@@ -422,6 +423,7 @@ static void Game_Load(void) {
 	Game_AddComponent(&Chat_Component);
 	Game_AddComponent(&Commands_Component);
 	Game_AddComponent(&Particles_Component);
+	Game_AddComponent(&Minerios_Component);
 	Game_AddComponent(&TabList_Component);
 	Game_AddComponent(&Models_Component);
 	Game_AddComponent(&Http_Component);

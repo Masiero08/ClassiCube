@@ -16,6 +16,8 @@
 #include "World.h"
 #include "Funcs.h"
 #include "Platform.h"
+#include "DayNight.h"
+#include "Picking.h"
 
 /* Basic survival mode for singleplayer, inspired by newer Minecraft versions: */
 /*  - health (10 hearts), fall/lava/drowning damage, regeneration and dying */
@@ -356,9 +358,9 @@ static int GetToolKind(BlockID block) {
 	case MBLOCK_RUBI_MINERIO: case MBLOCK_TITANIO_MINERIO: case MBLOCK_URANIO_MINERIO: case MBLOCK_OVO_MINERIO:
 	case MBLOCK_RUBI: case MBLOCK_TITANIO: case MBLOCK_URANIO: case MBLOCK_PEDRA_CRISTAL:
 	case LBLOCK_DIAMOND_ORE: case LBLOCK_DIAMOND: case LBLOCK_NETHERRACK: case LBLOCK_NETHER_BRICKS:
-	case LBLOCK_QUARTZ_ORE: case LBLOCK_END_STONE:
+	case LBLOCK_QUARTZ_ORE: case LBLOCK_END_STONE: case LBLOCK_FURNACE:
 		return TOOL_PICKAXE;
-	case BLOCK_WOOD: case BLOCK_LOG: case BLOCK_BOOKSHELF: case BLOCK_CRATE:
+	case BLOCK_WOOD: case BLOCK_LOG: case BLOCK_BOOKSHELF: case BLOCK_CRATE: case LBLOCK_BED:
 		return TOOL_AXE;
 	case BLOCK_DIRT: case BLOCK_GRASS: case BLOCK_SAND: case BLOCK_GRAVEL: case BLOCK_SNOW:
 	case LBLOCK_SOUL_SAND:
@@ -539,6 +541,10 @@ static const struct Recipe recipes[] = {
 	/* Diamantes e Nether */
 	{ 4, LITEM_DIAMOND,          0, BLOCK_AIR,              1, LBLOCK_DIAMOND         },
 	{ 1, LBLOCK_DIAMOND,         0, BLOCK_AIR,              4, LITEM_DIAMOND          },
+	/* Animais, fornalha e cama */
+	{ 8, BLOCK_COBBLE,           0, BLOCK_AIR,              1, LBLOCK_FURNACE         },
+	{ 2, LITEM_RAW_MEAT,         1, BLOCK_COAL_ORE,         2, LITEM_COOKED_MEAT      },
+	{ 3, BLOCK_WHITE,            3, BLOCK_WOOD,             1, LBLOCK_BED             },
 	{ 4, LBLOCK_NETHERRACK,      1, BLOCK_COAL_ORE,         4, LBLOCK_NETHER_BRICKS   },
 	{ 10, BLOCK_OBSIDIAN,        1, BLOCK_COAL_ORE,         2, LBLOCK_NETHER_PORTAL   },
 	{ 4, LITEM_ENDER_PEARL,      1, LITEM_DIAMOND,          2, LBLOCK_END_PORTAL      },
@@ -551,10 +557,12 @@ struct FoodRecipe {
 };
 
 static const struct FoodRecipe foods[] = {
+	{ "Bife",               8, 1, LITEM_COOKED_MEAT,  0, BLOCK_AIR        },
 	{ "Sopa",              10, 1, BLOCK_BROWN_SHROOM, 1, BLOCK_RED_SHROOM },
 	{ "Salada",             6, 1, BLOCK_DANDELION,    1, BLOCK_ROSE       },
 	{ "Cogumelo",           3, 1, BLOCK_BROWN_SHROOM, 0, BLOCK_AIR        },
 	{ "Cog. vermelho",      2, 1, BLOCK_RED_SHROOM,   0, BLOCK_AIR        },
+	{ "Carne crua",         3, 1, LITEM_RAW_MEAT,     0, BLOCK_AIR        },
 };
 
 struct ToolRecipe {
@@ -596,8 +604,26 @@ static void UseInputs(int count1, BlockID input1, int count2, BlockID input2) {
 	if (count2) blockCounts[input2] -= count2;
 }
 
+/* Cooking needs a furnace placed near the player */
+static cc_bool NeedsFurnace(BlockID output) { return output == LITEM_COOKED_MEAT; }
+
+static cc_bool NearFurnace(void) {
+	Vec3 pos = Entities.CurPlayer->Base.Position;
+	int cx = Math_Floor(pos.x), cy = Math_Floor(pos.y), cz = Math_Floor(pos.z);
+	int x, y, z;
+
+	for (y = cy - 2; y <= cy + 3; y++)
+		for (z = cz - 4; z <= cz + 4; z++)
+			for (x = cx - 4; x <= cx + 4; x++)
+			{
+				if (World_Contains(x, y, z) && World_GetBlock(x, y, z) == LBLOCK_FURNACE) return true;
+			}
+	return false;
+}
+
 static cc_bool CanCraft(const struct Recipe* r) {
 	if (!HasInputs(r->count1, r->input1, r->count2, r->input2)) return false;
+	if (NeedsFurnace(r->output) && !NearFurnace()) return false;
 	return blockCounts[r->output] + r->outCount <= MAX_BLOCK_COUNT;
 }
 
@@ -637,6 +663,9 @@ static cc_string GetShortName(BlockID block) {
 	case LBLOCK_NETHER_BRICKS: name = "Tij. Nether"; break;
 	case LITEM_ENDER_PEARL:  name = "Perola";     break;
 	case LBLOCK_DIAMOND:     name = "Bl. diamante"; break;
+	case LITEM_RAW_MEAT:     name = "Carne";      break;
+	case LITEM_COOKED_MEAT:  name = "Bife";       break;
+	case BLOCK_WHITE:        name = "La";         break;
 	}
 	return name ? String_FromReadonly(name) : Block_UNSAFE_GetName(block);
 }
@@ -691,6 +720,7 @@ void Survival_DescribeRecipe(int i, cc_string* str) {
 	outCount = r->outCount;
 	String_Format3(str, "%c%i %s&7: ", CanCraft(r) ? "&f" : "&7", &outCount, &name);
 	AppendIngredients(str, r->count1, r->input1, r->count2, r->input2);
+	if (NeedsFurnace(r->output)) String_AppendConst(str, NearFurnace() ? " &a(forno)" : " &c(forno)");
 }
 
 static cc_bool Eat(const struct FoodRecipe* f) {
@@ -725,6 +755,10 @@ cc_bool Survival_Craft(int i) {
 	i -= TOOLS_COUNT;
 
 	r = &recipes[i];
+	if (NeedsFurnace(r->output) && !NearFurnace()) {
+		Chat_AddRaw("&ePrecisa de uma fornalha perto de voce (ate 4 blocos).");
+		return false;
+	}
 	if (!CanCraft(r)) return false;
 	UseInputs(r->count1, r->input1, r->count2, r->input2);
 	blockCounts[r->output] += r->outCount;
@@ -733,6 +767,25 @@ cc_bool Survival_Craft(int i) {
 }
 
 cc_bool Survival_IsActive(void) { return survival_active; }
+
+/* Using (right click) a bed sets where the player respawns, and at night sleeps until morning */
+cc_bool Survival_HandleUse(void) {
+	struct LocalPlayer* p;
+	IVec3 pos = Game_SelectedPos.pos;
+	if (!survival_active || !Game_SelectedPos.valid) return false;
+	if (!World_Contains(pos.x, pos.y, pos.z) || World_GetBlock(pos.x, pos.y, pos.z) != LBLOCK_BED) return false;
+
+	p = (struct LocalPlayer*)Entities.CurPlayer;
+	p->Spawn.x = pos.x + 0.5f; p->Spawn.y = pos.y + 1.0f; p->Spawn.z = pos.z + 0.5f;
+
+	if (DayNight_IsNight() && DayNight_GetMode() == DAYNIGHT_NORMAL) {
+		DayNight_SetTime(0);
+		Chat_AddOf(&(cc_string)String_FromConst("&eVoce dormiu... Bom dia!"), MSG_TYPE_ANNOUNCEMENT);
+	} else {
+		Chat_AddRaw("&eVoce vai renascer nesta cama. So da para dormir a noite.");
+	}
+	return true;
+}
 
 
 /*########################################################################################################################*

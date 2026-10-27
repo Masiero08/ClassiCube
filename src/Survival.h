@@ -20,6 +20,8 @@ cc_bool Survival_CanPlace(BlockID block);
 void Survival_OnBlockPlaced(BlockID block);
 /* Whether survival mode is currently being played (enabled and in singleplayer) */
 cc_bool Survival_IsActive(void);
+/* Handles right clicking a bed (sleep and set spawn). Returns whether the click was used */
+cc_bool Survival_HandleUse(void);
 /* Hurts the player (2 = one heart), if survival mode is being played */
 void Survival_Damage(int amount);
 /* Damage the player's next hit does to a monster (and wears out their sword) */

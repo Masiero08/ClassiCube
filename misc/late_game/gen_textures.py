@@ -109,6 +109,55 @@ for y in range(S):
 p[6, 6] = (200, 255, 240, 255)
 T("ender_pearl", pearl)
 
+# Food, furnace and bed (survival)
+def meat(raw):
+    im = new(); p = im.load()
+    flesh = (205, 70, 70, 255) if raw else (150, 85, 45, 255)
+    fat   = (240, 190, 180, 255) if raw else (205, 150, 95, 255)
+    for y in range(S):
+        for x in range(S):
+            d = math.hypot((x - 7) / 6.0, (y - 6.5) / 4.5)
+            if d < 1.0:
+                p[x, y] = shade(flesh, 1.15 - d * 0.35)
+                if 0.8 < d: p[x, y] = fat
+    for y in range(10, 15):                                  # bone handle
+        p[11 + (y - 10) // 2, y] = (235, 230, 215, 255)
+    p[13, 14] = p[14, 14] = (250, 248, 240, 255)
+    if not raw:
+        for (x, y) in [(4, 5), (7, 4), (9, 7), (5, 8)]: p[x, y] = (100, 55, 25, 255)
+    return im
+T("raw_meat", meat(True))
+T("cooked_meat", meat(False))
+
+fur = noise((110, 110, 112), 0.1, 18); p = fur.load()
+for i in range(S): p[i, 0] = p[i, 15] = (70, 70, 72, 255)
+for y in range(8, 14):                                       # fire mouth
+    for x in range(4, 12):
+        p[x, y] = (30, 25, 25, 255)
+for x in range(5, 11): p[x, 12] = (255, 140, 40, 255); p[x, 13] = (255, 200, 80, 255)
+for x in (6, 8, 9): p[x, 11] = (240, 90, 30, 255)
+for x in range(3, 13): p[x, 7] = (80, 80, 82, 255)
+T("furnace_side", fur)
+ft = noise((120, 120, 122), 0.08, 19); p = ft.load()
+for i in range(S): p[i, 0] = p[0, i] = (150, 150, 152, 255); p[i, 15] = p[15, i] = (70, 70, 72, 255)
+T("furnace_top", ft)
+
+bt = new(); p = bt.load()
+for y in range(S):
+    for x in range(S):
+        p[x, y] = (175, 35, 40, 255) if y > 5 else (235, 235, 240, 255)   # blanket and pillow
+        if y > 5 and (x + y) % 6 == 0: p[x, y] = (150, 25, 32, 255)
+        if x in (0, 15) or y in (0, 15): p[x, y] = (120, 85, 50, 255)
+for x in range(1, 15): p[x, 6] = (215, 60, 65, 255)
+T("bed_top", bt)
+bs = new(); p = bs.load()
+for y in range(7, 16):
+    for x in range(S):
+        p[x, y] = (175, 35, 40, 255) if y < 11 else (130, 92, 55, 255)
+        if y >= 11 and x in (0, 1, 14, 15): p[x, y] = (95, 65, 38, 255)
+for x in range(S): p[x, 7] = (215, 60, 65, 255)
+T("bed_side", bs)
+
 # Ender dragon model skin (64x64, box layout matches the parts in src/LateGame.c)
 def dragon_skin():
     im = Image.new("RGBA", (64, 64), (0, 0, 0, 0)); px = im.load(); rnd = random.Random(20)

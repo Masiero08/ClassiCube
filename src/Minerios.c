@@ -29,6 +29,7 @@
 #include "Deflate.h"
 #include "Stream.h"
 #include "Survival.h"
+#include "DayNight.h"
 #include "Errors.h"
 #include "Logger.h"
 #include "Minerios_tex.h"
@@ -286,8 +287,8 @@ static void Mosquito_Register(void) {
 /*########################################################################################################################*
 *-------------------------------------------------------Monstros----------------------------------------------------------*
 *#########################################################################################################################*/
-#define MONSTROS_MAX     16
-#define MONSTRO_ID_BASE  232 /* 200-223 ficam com o mod Criaturas do Bioma */
+#define MONSTROS_MAX     8
+#define MONSTRO_ID_BASE  232 /* 200-223 ficam com Criaturas do Bioma, 240-247 com os monstros da noite */
 #define DIST_SUMIR       (48.0f * 48.0f)
 
 struct MonstroDef {
@@ -681,7 +682,8 @@ static int DanoDoItem(BlockID held) {
 	case MITEM_ESPADA_SUPREMA: return 14;
 	case MITEM_BIG_BERTHA:     return 30;
 	}
-	return 2; /* na mao (ou com um bloco) */
+	/* na mao (ou com um bloco): usa a espada de ferramenta da sobrevivencia, se tiver */
+	return 1 + Survival_AttackDamage();
 }
 
 static void Monstro_Derrotado(struct Monstro* m) {
@@ -690,7 +692,7 @@ static void Monstro_Derrotado(struct Monstro* m) {
 	Chat_Add1("&e%c &efoi derrotado(a)!", def->nome);
 
 	if (def->drop != BLOCK_AIR) {
-		for (i = 0; i < def->dropCount; i++) Survival_OnBlockBroken(def->drop);
+		Survival_AddBlocks(def->drop, def->dropCount);
 		if (Survival_IsActive()) {
 			cc_string nome = Block_UNSAFE_GetName(def->drop);
 			Chat_Add2("&aVoce ganhou %i %s", &def->dropCount, &nome);
@@ -820,7 +822,8 @@ static Vec3  posSegura; /* ultima posicao do jogador fora de um portal */
 
 /* Vida e blocos do modo sobrevivencia, levados de uma dimensao para outra */
 static cc_bool survLevar;
-static int     survVida;
+static int     survVida, survComida;
+static cc_uint8 survFerramentas[SURVIVAL_TOOLS_SIZE];
 static cc_uint8 survBlocos[BLOCK_COUNT * 2];
 
 static cc_result SalvarMundo(const char* arquivo) {
@@ -871,8 +874,10 @@ static void Viajar(int destino) {
 
 	survLevar = Survival_IsActive();
 	if (survLevar) {
-		survVida = Survival_GetHealth();
+		survVida   = Survival_GetHealth();
+		survComida = Survival_GetFood();
 		Survival_GetCounts(survBlocos);
+		Survival_GetTools(survFerramentas);
 	}
 
 	viajando   = true;
@@ -954,18 +959,26 @@ static void ColocarPortalVolta(void) {
 	if (y + 2 <= World.MaxY) Game_UpdateBlock(x, y + 2, z, dimAtual == DIM_UTOPIA ? MBLOCK_RUBI : MBLOCK_PEDRA_CRISTAL);
 }
 
-static void AplicarCeu(int dim) {
+static void AplicarCeu(int dim, cc_bool mudarAgora) {
+	PackedCol sky    = ENV_DEFAULT_SKY_COLOR;
+	PackedCol fog    = ENV_DEFAULT_FOG_COLOR;
+	PackedCol clouds = ENV_DEFAULT_CLOUDS_COLOR;
+
 	if (dim == DIM_UTOPIA) {
-		Env_SetSkyCol(PackedCol_Make(90, 230, 215, 255));
-		Env_SetFogCol(PackedCol_Make(205, 255, 235, 255));
-		Env_SetCloudsCol(PackedCol_Make(255, 230, 150, 255));
-		Env_SetSunCol(PackedCol_Make(255, 250, 225, 255));
+		sky    = PackedCol_Make( 90, 230, 215, 255);
+		fog    = PackedCol_Make(205, 255, 235, 255);
+		clouds = PackedCol_Make(255, 230, 150, 255);
 	} else if (dim == DIM_CRISTAL) {
-		Env_SetSkyCol(PackedCol_Make(185, 120, 240, 255));
-		Env_SetFogCol(PackedCol_Make(235, 180, 250, 255));
-		Env_SetCloudsCol(PackedCol_Make(255, 205, 245, 255));
-		Env_SetSunCol(PackedCol_Make(255, 235, 255, 255));
+		sky    = PackedCol_Make(185, 120, 240, 255);
+		fog    = PackedCol_Make(235, 180, 250, 255);
+		clouds = PackedCol_Make(255, 205, 245, 255);
 	}
+	/* o ciclo de dia e noite clareia e escurece a partir dessas cores */
+	DayNight_SetDayColors(sky, fog, clouds);
+	if (!mudarAgora) return;
+	Env_SetSkyCol(sky);
+	Env_SetFogCol(fog);
+	Env_SetCloudsCol(clouds);
 }
 
 /* --- Geracao --- */
@@ -1202,7 +1215,11 @@ static void OnNewMapLoaded(void) {
 	int i;
 	/* No multijogador o servidor decide quais blocos existem */
 	Minerios_Enabled = Options_GetBool(MINERIOS_OPTION, true);
-	if (!Minerios_Enabled || !Server.IsSinglePlayer || !Game_AllowCustomBlocks) { viajando = false; return; }
+	if (!Minerios_Enabled || !Server.IsSinglePlayer || !Game_AllowCustomBlocks) {
+		AplicarCeu(DIM_NORMAL, false);
+		viajando = false; return;
+	}
+	AplicarCeu(dimAtual, false);
 
 	for (i = 0; i < MINERIOS_COUNT; i++)
 	{
@@ -1217,10 +1234,12 @@ static void OnNewMapLoaded(void) {
 	/* precisa vir antes do componente de sobrevivencia aplicar o estado do mundo */
 	if (survLevar) {
 		Survival_LoadHealth(survVida);
+		Survival_LoadFood(survComida);
 		Survival_LoadCounts(survBlocos, sizeof(survBlocos));
+		Survival_LoadTools(survFerramentas, sizeof(survFerramentas));
 	}
 	if (dimGerando >= 0) {
-		AplicarCeu(dimGerando);
+		AplicarCeu(dimAtual, dimAtual != DIM_NORMAL);
 		colocarPortal = dimAtual != DIM_NORMAL;
 		dimGerando    = -1;
 	}

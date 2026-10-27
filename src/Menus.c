@@ -38,6 +38,7 @@
 #include "InputHandler.h"
 #include "Protocol.h"
 #include "Survival.h"
+#include "Criaturas.h"
 
 /*########################################################################################################################*
 *--------------------------------------------------------Menu base--------------------------------------------------------*
@@ -235,6 +236,7 @@ static void Menu_SwitchSaveLevel(void* a, void* b)       { SaveLevelScreen_Show(
 static void Menu_SwitchTexPacks(void* a, void* b)        { TexturePackScreen_Show(); }
 static void Menu_SwitchHotkeys(void* a, void* b)         { HotkeyListScreen_Show(); }
 static void Menu_SwitchCrafting(void* a, void* b)        { CraftingScreen_Show(); }
+static void Menu_SwitchCriaturas(void* a, void* b)       { Criaturas_AbrirMenu(); }
 
 
 /*########################################################################################################################*
@@ -554,7 +556,8 @@ static void PauseScreen_CheckHacksAllowed(void* screen) {
 	struct PauseScreen* s = (struct PauseScreen*)screen;
 	if (Gui.ClassicMenu) return;
 
-	Widget_SetDisabled(&s->btns[1],
+	if (s->descs[1].onClick == Menu_SwitchTexPacks)
+		Widget_SetDisabled(&s->btns[1],
 			!Entities.CurPlayer->Hacks.CanAnyHacks); /* select texture pack */
 	s->dirty = true;
 }
@@ -603,8 +606,16 @@ static void PauseScreen_Init(void* screen) {
 		{  160,   50, "Save level...",          Menu_SwitchSaveLevel }
 	};
 
+	static struct SimpleButtonDesc pauseDescs[Array_Elems(descs)];
+
 	/* Hotkeys aren't needed in survival, so crafting replaces them */
-	s->descs      = Survival_IsActive() ? survivalDescs : descs;
+	Mem_Copy(pauseDescs, Survival_IsActive() ? survivalDescs : descs, sizeof(pauseDescs));
+	/* com o mod de criaturas ligado, o botao de texture pack vira o menu das criaturas */
+	if (Criaturas_Ativo()) {
+		pauseDescs[1].title   = "Criaturas...";
+		pauseDescs[1].onClick = Menu_SwitchCriaturas;
+	}
+	s->descs      = pauseDescs;
 	s->descsCount = Array_Elems(descs);
 	PauseScreenBase_AddWidgets(s, 300);
 	ButtonWidget_Add(s, &s->quit, 120, PauseScreenBase_Quit);

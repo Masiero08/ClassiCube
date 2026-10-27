@@ -8,6 +8,7 @@
 #include "Audio.h"
 #include "Funcs.h"
 #include "String_.h"
+#include "Options.h"
 #include "ModernBlocks_tex.h"
 
 /* Adds a set of blocks inspired by newer Minecraft versions to singleplayer worlds. */
@@ -148,6 +149,8 @@ static void OnNewMapLoaded(void) {
 	int i;
 	/* Multiplayer servers decide which blocks exist */
 	if (!Server.IsSinglePlayer || !Game_AllowCustomBlocks) return;
+	/* Can be turned off from the mod selection menu */
+	if (!Options_GetBool(OPT_MODERN_BLOCKS, true)) return;
 
 	for (i = 0; i < MODERN_BLOCKS_COUNT; i++)
 	{

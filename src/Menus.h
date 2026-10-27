@@ -49,6 +49,7 @@ void SaveLevelScreen_Show(void);
 void TexturePackScreen_Show(void);
 void FontListScreen_Show(void);
 void HotkeyListScreen_Show(void);
+void CraftingScreen_Show(void);
 
 void MiscOptionsScreen_Show(void);
 void ChatOptionsScreen_Show(void);

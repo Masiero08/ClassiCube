@@ -13,6 +13,7 @@ Todas as criaturas, nomes e texturas são originais.
 - `/client criatura [nome|todas] [nivel]` faz criaturas aparecerem na frente (para testar).
 
 As criaturas ganham nível ajudando a derrotar selvagens e evoluem em certos níveis.
+A equipe fica salva nas opções (`criaturas-equipe`).
 
 ## Batalha
 - A selvagem atacada **revida** contra a sua criatura; quando fica fraca (menos de 30% da vida), foge.
@@ -25,7 +26,6 @@ As criaturas ganham nível ajudando a derrotar selvagens e evoluem em certos ní
 
 Tipos: fogo > planta/inseto; água > fogo/pedra; planta > água/pedra; elétrico > água/vento;
 vento > planta/inseto; pedra > fogo/vento; inseto > planta.
-A equipe fica salva nas opções (`criaturas-equipe`).
 
 ## Especies
 | Linha | Estágios | Tipo | Onde nasce |

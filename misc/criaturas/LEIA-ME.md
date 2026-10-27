@@ -6,7 +6,7 @@ Todas as criaturas, nomes e texturas são originais.
 ## Como jogar
 - `/client inicial` mostra as criaturas iniciais; `/client inicial Faiscol` escolhe uma.
 - **Quebrar bloco (R no 3DS)** numa criatura selvagem: ataca. A sua criatura entra na briga.
-- **Colocar bloco (L no 3DS)** numa criatura selvagem: tenta capturar (mais fácil com pouca vida).
+- **Colocar bloco (L no 3DS)** numa criatura selvagem: joga um casulo para capturar (mais fácil com pouca vida).
 - **Colocar bloco** na sua criatura: dá uma fruta-cura (recarrega em 20 s). Se ela já está
   com a vida cheia, troca pela próxima criatura da equipe.
 - `/client equipe` lista a equipe (até 6); `/client equipe 2` solta a nº 2; `/client equipe guardar`.
@@ -26,6 +26,35 @@ A equipe fica salva nas opções (`criaturas-equipe`).
 
 Tipos: fogo > planta/inseto; água > fogo/pedra; planta > água/pedra; elétrico > água/vento;
 vento > planta/inseto; pedra > fogo/vento; inseto > planta.
+
+## Casulos de captura
+| Casulo | Como ganhar | Efeito |
+|---|---|---|
+| Comum | sempre tem | chance normal (15% com vida cheia, quase 100% quase sem vida) |
+| Reforçado | selvagens derrotadas às vezes deixam; 3 por Mestre vencido | chance bem maior |
+| Maré | selvagens derrotadas às vezes deixam | muito forte contra criaturas de água |
+| Mestre | 1 por Mestre vencido | captura sempre |
+
+No automático o jogo usa o melhor casulo que você tem (sem gastar o Mestre).
+`/client casulo` mostra quantos você tem; `/client casulo mestre` (ou reforcado, mare, comum, auto) escolhe.
+Criaturas de um Mestre não podem ser capturadas.
+
+## Mestres de Bioma
+Seis treinadores originais aparecem pelo mundo, um de cada vez, na ordem abaixo. Bata neles (R) para
+desafiar: eles mandam as criaturas uma por uma contra a sua. Vencendo a equipe toda você ganha a insígnia,
+3 Casulos Reforçados e 1 Casulo Mestre. Se toda a sua equipe desmaiar, dá para tentar de novo depois.
+
+| Mestre | Tipo | Equipe | Insígnia |
+|---|---|---|---|
+| Mestre Tronco | Planta | Larvito 6, Brotinho 7, Musgao 10 | Folha |
+| Mestra Maré | Água | Gotinha 9, Pincudo 10, Marolha 12 | Onda |
+| Mestre Cascalho | Pedra | Seixo 12, Toupito 12, Pedregulho 15 | Rocha |
+| Mestra Faísca | Elétrico | Choquilo 14, Choquilo 15, Trovesquilo 17 | Raio |
+| Mestre Vendaval | Vento | Penape 16, Asalume 18, Ventania 20 | Pena |
+| Mestra Brasa | Fogo | Labareda 20, Labareda 22, Fornalobo 25 | Chama |
+
+`/client mestre` lista os Mestres e as insígnias; `/client mestre chamar` chama o próximo na sua frente.
+As insígnias aparecem como estrelas no canto de cima.
 
 ## Especies
 | Linha | Estágios | Tipo | Onde nasce |

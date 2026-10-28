@@ -20,6 +20,7 @@
 #include "Commands.h"
 #include "Graphics.h"
 #include "Utils.h"
+#include "DayNight.h"
 #include "Options.h"
 #include "Platform.h"
 #include "Picking.h"
@@ -1896,7 +1897,26 @@ static struct ChatCommand MineriosCommand = {
 /*########################################################################################################################*
 *-------------------------------------------------------Componente--------------------------------------------------------*
 *#########################################################################################################################*/
-static float mosquitoTimer = 30.0f;
+static float mosquitoTimer = 180.0f;
+
+/* Tem agua a ate 8 blocos do jogador? */
+static cc_bool PertoDaAgua(void) {
+	Vec3 pos = Entities.CurPlayer->Base.Position;
+	int px = (int)pos.x, py = (int)pos.y, pz = (int)pos.z;
+	int x, y, z;
+	BlockID b;
+
+	for (y = py - 4; y <= py + 2; y++) {
+		for (z = pz - 8; z <= pz + 8; z++) {
+			for (x = px - 8; x <= px + 8; x++) {
+				if (!World_Contains(x, y, z)) continue;
+				b = World_GetBlock(x, y, z);
+				if (b == BLOCK_WATER || b == BLOCK_STILL_WATER) return true;
+			}
+		}
+	}
+	return false;
+}
 
 /* Barra de vida do chefao mais perto, no canto de cima da tela */
 static cc_bool barraVisivel;
@@ -1962,19 +1982,23 @@ static void Minerios_Tick(struct ScheduledTask* task) {
 		return;
 	}
 
-	/* de vez em quando aparece um enxame de mosquitos (mais na Utopia, nenhum no Cristal, Nether e Fim) */
+	/* Enxames de mosquitos sao raros: so a noite ou perto da agua, uma vez a cada
+	   poucos minutos (um pouco mais na Utopia; nenhum no Cristal, Nether e Fim) */
 	if (!Ativo() || dimAtual == DIM_CRISTAL || dimAtual == DIM_NETHER || dimAtual == DIM_FIM) return;
 	mosquitoTimer -= delta;
 	if (mosquitoTimer > 0) return;
-	mosquitoTimer = (dimAtual == DIM_UTOPIA ? 40.0f : 80.0f) + Random_Float(&rnd) * 60.0f;
-	if (ContarTipo(M_MOSQUITO) < 4) SoltarMosquitos(3 + Random_Next(&rnd, 2));
+	mosquitoTimer = (dimAtual == DIM_UTOPIA ? 150.0f : 240.0f) + Random_Float(&rnd) * 180.0f;
+	if (!DayNight_IsNight() && !PertoDaAgua()) return;
+	if (Random_Next(&rnd, 2)) return;
+	if (ContarTipo(M_MOSQUITO) == 0) SoltarMosquitos(2 + Random_Next(&rnd, 2));
 	/* as vezes a rainha vem junto (mais na Utopia) */
-	if (!ContarTipo(M_RAINHA) && Random_Next(&rnd, dimAtual == DIM_UTOPIA ? 6 : 12) == 0) SoltarRainha();
+	if (!ContarTipo(M_RAINHA) && Random_Next(&rnd, dimAtual == DIM_UTOPIA ? 8 : 16) == 0) SoltarRainha();
 }
 
 static void OnNewMap(void) {
 	if (montado) Desmontar();
 	RemoverTodos();
+	mosquitoTimer = 180.0f;
 	/* um mundo carregado pelo menu volta a ser o "mundo normal" */
 	dimAtual = viajando ? dimDestino : DIM_NORMAL;
 	if (!viajando) armadura = false;

@@ -9,7 +9,7 @@ Mod inspirado no OreSpawn, so para o modo um jogador. Nomes e texturas sao origi
   - Cristal: pedra, grama, troncos e folhas de cristal, cristais que brilham, ceu roxo.
 - Minerio de ovo choca uma criatura; as raras sao gigantes bravos (Aranha Gigante, Zumbi Titan, Creeper Colosso, Galinha Monstro) que deixam minerios ao serem derrotados.
 - Bloco da sorte (ID 118): aparece no chao (bem mais na Utopia) ou e feito com 1 minerio de rubi + 2 minerios de ouro. Ao quebrar sai uma surpresa: minerios, espadas, armadura, ate a Big Bertha (rara), torre de ouro, flores, filhotes, ovos; ou azar: mosquitos, monstro gigante, explosao ou gaiola de vidro.
-- Mosquitos: enxames aparecem de vez em quando (mais na Utopia), voam em volta da cabeca e picam. As vezes vem a Rainha dos Mosquitos (chefao, 80 de vida), que chama mais mosquitos e deixa a Espada suprema.
+- Mosquitos: enxames raros, so a noite ou perto da agua (no maximo um a cada poucos minutos, um pouco mais na Utopia), voam em volta da cabeca e picam. As vezes vem a Rainha dos Mosquitos (chefao, 80 de vida), que chama mais mosquitos e deixa a Espada suprema.
 - Chefoes em ordem de dificuldade, chamados colocando um altar. Cada um deixa um trofeu que faz o altar do proximo:
   1. Rainha dos Mosquitos (modelo proprio com coroa e 4 asas, 80 de vida; tambem aparece sozinha com os enxames) - Ferrao da Rainha. Altar: 3 minerios de rubi + 1 minerio de ovo.
   2. Golem de Titanio (bracos enormes e nucleo no peito, 180; pisao que joga para cima) - Nucleo de titanio. Altar: Ferrao + 2 blocos de titanio.

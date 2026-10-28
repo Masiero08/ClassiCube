@@ -21,6 +21,14 @@ Bata nele (R) ou toque nele (L): ele abre a tampa e dá 10 Casulos Reforçados, 
 Mestre e o Diário. Em seguida abre a escolha da criatura inicial. O baú só aparece uma vez (opção
 `criaturas-bau`); `/client criatura bau` faz ele aparecer de novo para testar.
 
+## Botões de toque (tela de baixo do 3DS)
+Com o mod ligado, a tela de baixo mostra uma coluna de botões no canto de cima à esquerda:
+**Atacar** (bate na criatura da mira ou na selvagem mais perto, ou desafia um Mestre perto),
+**Capturar** (joga um casulo nela), **Curar** (fruta-cura na sua criatura), **Trocar** (próxima da
+equipe; sem equipe, abre a escolha da inicial) e **Criaturas** (o menu do mod). O menu tem também
+"Como batalhar", que mostra a explicação no chat. No PC, `/client criatura botoes` mostra os botões e
+`/client criatura toque 1..5` aperta um deles (para testar).
+
 ## Batalha
 - A selvagem atacada **revida** contra a sua criatura; quando fica fraca (menos de 30% da vida), foge.
 - Cada golpe solta partículas do tipo (fogo, água, folhas, raio, vento, pedra, inseto).

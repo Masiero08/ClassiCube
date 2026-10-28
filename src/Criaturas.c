@@ -24,6 +24,9 @@
 #include "Menus.h"
 #include "Gui.h"
 #include "DayNight.h"
+#include "Screens.h"
+#include "Widgets.h"
+#include "Drawer2D.h"
 #include "CriaturasDados.h"
 
 /* Criaturas do Bioma: criaturas capturaveis para o modo um jogador.
@@ -1636,10 +1639,43 @@ static void Diario_Abrir(void) {
 	Chat_AddRaw("&7Toque numa criatura do Diario para ver os detalhes.");
 }
 
-cc_bool Criaturas_HandleClick(cc_bool place) {
-	struct Entity* jogador;
-	struct Criatura* c;
+/* --- Acoes (usadas pelos botoes L/R e pelos botoes de toque da tela de baixo) --- */
+static void Acao_Atacar(struct Criatura* c) {
+	struct Entity* jogador = &Entities.CurPlayer->Base;
 	struct Criatura* minha;
+	/* sua criatura entra na briga */
+	c->ajudou = c->ajudou || Criatura_DoJogador() != NULL;
+	Criatura_Dano(c, 2, jogador->Position);
+	minha = Criatura_DoJogador();
+	if (minha && c->usada) {
+		minha->alvo = Criatura_Index(c);
+		if (c->alvo < 0) c->alvo = Criatura_Index(minha);
+	}
+}
+
+static void Acao_Curar(struct Criatura* c) {
+	if (c->curaTimer > 0) { Chat_AddRaw("&eA fruta-cura ainda esta crescendo, espere um pouco."); return; }
+	if (c->vida >= VidaMax(c->especie, c->nivel)) { Chat_AddRaw("&eSua criatura ja esta com a vida cheia."); return; }
+	c->vida = VidaMax(c->especie, c->nivel);
+	c->curaTimer = 20.0f;
+	c->nomeSujo  = true;
+	Membro_SincronizarDe(c);
+	Equipe_Salvar();
+	Chat_AddRaw("&aSua criatura comeu uma fruta-cura e recuperou a vida!");
+}
+
+static void Acao_Trocar(struct Criatura* c) {
+	int prox = ProximoSaudavel(membroAtivo);
+	if (prox < 0) { Chat_AddRaw("&eNao tem outra criatura pronta na equipe."); return; }
+	if (capturaTimer > 0) return;
+	capturaTimer = 1.0f;
+	if (c) Chat_Add2("&eVolta, %c%c&e!", especies_def[c->especie].cor, especies_def[c->especie].nome);
+	SoltarMembro(prox);
+	Chat_Add2("&eVai, %c%c&e!", especies_def[equipe[prox].especie].cor, especies_def[equipe[prox].especie].nome);
+}
+
+cc_bool Criaturas_HandleClick(cc_bool place) {
+	struct Criatura* c;
 	struct LocalPlayer* p;
 	float tc, tm;
 	if (!Ativo()) return false;
@@ -1655,44 +1691,17 @@ cc_bool Criaturas_HandleClick(cc_bool place) {
 		return true;
 	}
 	if (!c) return false;
-	jogador = &Entities.CurPlayer->Base;
 
 	if (!c->selvagem) {
 		/* colocar na sua criatura: vida cheia = troca pela proxima da equipe, */
 		/* senao da uma fruta-cura */
-		if (place && c->vida >= VidaMax(c->especie, c->nivel)) {
-			int prox = ProximoSaudavel(membroAtivo);
-			if (prox < 0) { Chat_AddRaw("&eNao tem outra criatura pronta na equipe."); return true; }
-			if (capturaTimer > 0) return true;
-			capturaTimer = 1.0f;
-			Chat_Add2("&eVolta, %c%c&e!", especies_def[c->especie].cor, especies_def[c->especie].nome);
-			SoltarMembro(prox);
-			Chat_Add2("&eVai, %c%c&e!", especies_def[equipe[prox].especie].cor, especies_def[equipe[prox].especie].nome);
-		} else if (place && c->curaTimer <= 0) {
-			c->vida = VidaMax(c->especie, c->nivel);
-			c->curaTimer = 20.0f;
-			c->nomeSujo  = true;
-			Membro_SincronizarDe(c);
-			Equipe_Salvar();
-			Chat_AddRaw("&aSua criatura comeu uma fruta-cura e recuperou a vida!");
-		} else if (place) {
-			Chat_AddRaw("&eA fruta-cura ainda esta crescendo, espere um pouco.");
-		}
+		if (place && c->vida >= VidaMax(c->especie, c->nivel)) Acao_Trocar(c);
+		else if (place) Acao_Curar(c);
 		return true;
 	}
 
-	if (place) {
-		TentarCapturar(c);
-	} else {
-		/* atacar: sua criatura entra na briga */
-		c->ajudou = c->ajudou || Criatura_DoJogador() != NULL;
-		Criatura_Dano(c, 2, jogador->Position);
-		minha = Criatura_DoJogador();
-		if (minha && c->usada) {
-			minha->alvo = Criatura_Index(c);
-			if (c->alvo < 0) c->alvo = Criatura_Index(minha);
-		}
-	}
+	if (place) TentarCapturar(c);
+	else       Acao_Atacar(c);
 	return true;
 }
 
@@ -1759,6 +1768,12 @@ static struct ChatCommand EquipeCommand = {
 	}
 };
 
+static void Ajuda_Batalha(void) {
+	Chat_AddRaw("&eComo batalhar: chegue perto de uma criatura selvagem e toque em &fAtacar");
+	Chat_AddRaw("&e(tela de baixo) ou mire e aperte &fR&e. Com a vida dela baixa, toque em &fCapturar &e(ou &fL&e).");
+	Chat_AddRaw("&f Curar &ee &fTrocar &ecuidam da sua criatura; &fCriaturas &eabre Diario, equipe e Mestres.");
+}
+
 static void Inicial_Escolher(int escolha) {
 	if (equipeCount) { Chat_AddRaw("&eVoce ja tem sua criatura inicial!"); return; }
 	equipe[0].especie = escolha;
@@ -1768,6 +1783,7 @@ static void Inicial_Escolher(int escolha) {
 	equipeCount = 1;
 	SoltarMembro(0);
 	Chat_Add2("&aVoce escolheu %c%c&a! Cuide bem dele.", especies_def[escolha].cor, especies_def[escolha].nome);
+	Ajuda_Batalha();
 }
 
 static void InicialCommand_Execute(const cc_string* args, int argsCount) {
@@ -1813,6 +1829,8 @@ static struct ChatCommand InicialCommand = {
 
 /* Faz nascer criaturas selvagens na frente do jogador (para testar ou mostrar) */
 static void Bau_Reiniciar(void);
+static void Barra_AlternarPC(void);
+static void Barra_Tocar(int i);
 static void CriaturaCommand_Execute(const cc_string* args, int argsCount) {
 	struct Entity* jogador = &Entities.CurPlayer->Base;
 	struct Criatura* c;
@@ -1830,6 +1848,14 @@ static void CriaturaCommand_Execute(const cc_string* args, int argsCount) {
 			nome = String_FromReadonly(especies_def[i].nome);
 			if (String_CaselessEquals(&args[0], &nome)) escolha = i;
 		}
+	}
+	if (argsCount && String_CaselessEqualsConst(&args[0], "botoes")) {
+		Barra_AlternarPC();
+		return;
+	}
+	if (argsCount && String_CaselessEqualsConst(&args[0], "toque")) {
+		Barra_Tocar(nivel);
+		return;
 	}
 	if (argsCount && String_CaselessEqualsConst(&args[0], "bau")) {
 		Bau_Reiniciar();
@@ -2059,6 +2085,10 @@ static void Menu_Carregar(struct StringsBuffer* entries) {
 	String_InitArray(str, strBuffer);
 	String_AppendConst(&str, "Mestres e insignias");
 	Menu_Add(entries, &str);
+
+	String_InitArray(str, strBuffer);
+	String_AppendConst(&str, "&eComo batalhar");
+	Menu_Add(entries, &str);
 }
 
 static void Menu_Mostrar(int menu);
@@ -2103,6 +2133,10 @@ static void Menu_Clique(int i) {
 	case 4:
 		Menu_Fechar();
 		Mestre_Listar();
+		break;
+	case 5:
+		Menu_Fechar();
+		Ajuda_Batalha();
 		break;
 	}
 }
@@ -2244,6 +2278,177 @@ static void Bau_Reiniciar(void) {
 
 
 /*########################################################################################################################*
+*-----------------------------------------------Botoes de toque (tela de baixo)--------------------------------------------*
+*#########################################################################################################################*/
+/* No 3DS a tela de toque mostra botoes para batalhar sem precisar mirar: */
+/* eles agem na criatura da mira ou, se nao tiver, na selvagem mais perto. */
+#define BARRA_BTNS   5
+#define BARRA_ALCANCE 12.0f
+#define GUI_PRIORITY_CRIATURAS 22 /* entre a tela de toque (25) e o inventario (20) */
+static struct BarraScreen {
+	Screen_Body
+	struct ButtonWidget btns[BARRA_BTNS];
+	struct FontDesc font;
+} BarraScreen;
+static struct Widget* barra_widgets[BARRA_BTNS];
+static cc_bool barraNoPC; /* /client criatura botoes: mostra os botoes no PC para testar */
+
+static float Distancia2(const Vec3* a, const Vec3* b) {
+	float dx = a->x - b->x, dy = a->y - b->y, dz = a->z - b->z;
+	return dx * dx + dy * dy + dz * dz;
+}
+
+static struct Criatura* SelvagemPerto(void) {
+	struct Entity* jogador = &Entities.CurPlayer->Base;
+	struct Criatura* c;
+	struct Criatura* melhor = NULL;
+	float d, melhorD = BARRA_ALCANCE * BARRA_ALCANCE, tc;
+	int i;
+
+	c = CriaturaNaMira(&tc);
+	if (c && c->selvagem && !c->capturando) return c;
+
+	for (i = 0; i < CRIATURAS_MAX; i++)
+	{
+		c = &criaturas[i];
+		if (!c->usada || !c->selvagem || c->capturando) continue;
+		d = Distancia2(&c->base.Position, &jogador->Position);
+		if (d < melhorD) { melhorD = d; melhor = c; }
+	}
+	return melhor;
+}
+
+static cc_bool MestrePerto(void) {
+	struct Entity* jogador = &Entities.CurPlayer->Base;
+	if (!treinador.usado || luta.ativa || mestreSairTimer > 0) return false;
+	return Distancia2(&treinador.base.Position, &jogador->Position) < BARRA_ALCANCE * BARRA_ALCANCE;
+}
+
+static void Barra_Atacar(void* s, void* w) {
+	struct Criatura* c;
+	if (!Ativo()) return;
+	if (bau.usado && !bau.aberto) { Bau_Abrir(); return; }
+	c = SelvagemPerto();
+	if (c) { Acao_Atacar(c); return; }
+	if (MestrePerto()) { Mestre_Desafiar(); return; }
+	Chat_AddRaw("&eNenhuma criatura selvagem por perto. Ande pela grama, areia, agua ou pedras.");
+}
+
+static void Barra_Capturar(void* s, void* w) {
+	struct Criatura* c;
+	if (!Ativo()) return;
+	c = SelvagemPerto();
+	if (c) TentarCapturar(c);
+	else   Chat_AddRaw("&eNenhuma criatura selvagem por perto para capturar.");
+}
+
+static void Barra_Curar(void* s, void* w) {
+	struct Criatura* c;
+	if (!Ativo()) return;
+	c = Criatura_DoJogador();
+	if (c) Acao_Curar(c);
+	else   Chat_AddRaw("&eSua criatura esta no casulo. Toque em Trocar para chamar uma.");
+}
+
+static void Barra_Trocar(void* s, void* w) {
+	if (!Ativo()) return;
+	if (!equipeCount) { Menu_Mostrar(MENU_INICIAL); return; }
+	Acao_Trocar(Criatura_DoJogador());
+}
+
+static void Barra_Menu(void* s, void* w) { Criaturas_AbrirMenu(); }
+
+static const struct { const char* texto; Widget_LeftClick click; } barraDescs[BARRA_BTNS] = {
+	{ "Atacar",    Barra_Atacar   },
+	{ "Capturar",  Barra_Capturar },
+	{ "Curar",     Barra_Curar    },
+	{ "Trocar",    Barra_Trocar   },
+	{ "Criaturas", Barra_Menu     },
+};
+
+static void BarraScreen_ContextLost(void* screen) {
+	struct BarraScreen* s = (struct BarraScreen*)screen;
+	Font_Free(&s->font);
+	Screen_ContextLost(screen);
+}
+
+static void BarraScreen_ContextRecreated(void* screen) {
+	struct BarraScreen* s = (struct BarraScreen*)screen;
+	int i;
+	Screen_UpdateVb(screen);
+	Gui_MakeTitleFont(&s->font);
+	for (i = 0; i < BARRA_BTNS; i++)
+	{
+		ButtonWidget_SetConst(&s->btns[i], barraDescs[i].texto, &s->font);
+	}
+}
+
+static void BarraScreen_Layout(void* screen) {
+	struct BarraScreen* s = (struct BarraScreen*)screen;
+	int i;
+	/* coluna no canto de cima a esquerda (o resto da tela de toque fica livre) */
+	for (i = 0; i < BARRA_BTNS; i++)
+	{
+		Widget_SetLocation(&s->btns[i], ANCHOR_MIN, ANCHOR_MIN, 10, 10 + i * 42);
+	}
+}
+
+static void BarraScreen_Render(void* screen, float delta) {
+	if (Gui.InputGrab || !Ativo()) return;
+	Screen_Render2Widgets(screen, delta);
+}
+
+static int BarraScreen_PointerDown(void* screen, int id, int x, int y) {
+	if (Gui.InputGrab || !Ativo()) return false;
+	return Screen_DoPointerDown(screen, id, x, y) >= 0;
+}
+
+static void BarraScreen_Init(void* screen) {
+	struct BarraScreen* s = (struct BarraScreen*)screen;
+	int i;
+	s->widgets     = barra_widgets;
+	s->numWidgets  = BARRA_BTNS;
+	for (i = 0; i < BARRA_BTNS; i++)
+	{
+		ButtonWidget_Init(&s->btns[i], 110, barraDescs[i].click);
+		s->btns[i].color = PackedCol_Make(255, 255, 255, 200);
+		barra_widgets[i] = (struct Widget*)&s->btns[i];
+	}
+	s->maxVertices = BARRA_BTNS * BUTTONWIDGET_MAX;
+}
+
+static const struct ScreenVTABLE BarraScreen_VTABLE = {
+	BarraScreen_Init,        Screen_NullUpdate,     Screen_NullFunc,
+	BarraScreen_Render,      Screen_BuildMesh,
+	Screen_FInput,           Screen_InputUp,        Screen_FKeyPress, Screen_FText,
+	BarraScreen_PointerDown, Screen_PointerUp,      Screen_FPointer,  Screen_FMouseScroll,
+	BarraScreen_Layout,      BarraScreen_ContextLost, BarraScreen_ContextRecreated
+};
+
+static void Barra_Mostrar(void) {
+	struct BarraScreen* s = &BarraScreen;
+	if (!(Gui.TouchUI || barraNoPC) || !criaturasLigadas || !Server.IsSinglePlayer) return;
+	if (Gui_GetScreen(GUI_PRIORITY_CRIATURAS)) return;
+	s->VTABLE = &BarraScreen_VTABLE;
+	Gui_Add((struct Screen*)s, GUI_PRIORITY_CRIATURAS);
+}
+
+static void Barra_Esconder(void) {
+	if (Gui_GetScreen(GUI_PRIORITY_CRIATURAS)) Gui_Remove((struct Screen*)&BarraScreen);
+}
+
+/* /client criatura toque 1..5: aperta um botao de toque (para testar no PC) */
+static void Barra_Tocar(int i) {
+	if (i >= 1 && i <= BARRA_BTNS) barraDescs[i - 1].click(&BarraScreen, &BarraScreen.btns[i - 1]);
+}
+
+static void Barra_AlternarPC(void) {
+	barraNoPC = !barraNoPC;
+	if (barraNoPC) Barra_Mostrar(); else Barra_Esconder();
+}
+
+
+/*########################################################################################################################*
 *--------------------------------------------------------Componente-------------------------------------------------------*
 *#########################################################################################################################*/
 static void Criaturas_Init(void) {
@@ -2278,6 +2483,7 @@ static void Criaturas_OnNewMap(void) {
 static void Criaturas_OnNewMapLoaded(void) {
 	criaturasLigadas = Options_GetBool(OPT_CRIATURAS, true);
 	bauPendente      = true;
+	if (criaturasLigadas) Barra_Mostrar(); else Barra_Esconder();
 }
 
 static void Criaturas_Free(void) {

@@ -1,6 +1,7 @@
 #include "Survival.h"
 #include "Minerios.h"
 #include "LateGame.h"
+#include "Paisagem.h"
 #include "Block.h"
 #include "BlockID.h"
 #include "Chat.h"
@@ -313,8 +314,11 @@ static BlockID GetDrop(BlockID block) {
 	case MBLOCK_OVO_DRAGAO: return BLOCK_AIR; /* choca um dragao (Minerios.c) */
 	case LBLOCK_DIAMOND_ORE:   return LITEM_DIAMOND;
 	case LBLOCK_QUARTZ_ORE:    return LITEM_QUARTZ;
-	case BLOCK_LEAVES: 
+	case BLOCK_LEAVES: case PBLOCK_FOLHAS_BETULA: case PBLOCK_FOLHAS_CEREJEIRA: case PBLOCK_FOLHAS_PINHEIRO:
 		return Random_Next(&survival_rnd, 8) == 0 ? BLOCK_SAPLING : BLOCK_AIR;
+	case PBLOCK_GRAMA_ALTA: case PBLOCK_SAMAMBAIA:
+		return BLOCK_AIR;
+	case PBLOCK_ARBUSTO: return PITEM_FRUTINHAS;
 	}
 	return block;
 }
@@ -326,10 +330,12 @@ static int GetHardness(BlockID block) {
 	switch (block)
 	{
 	case BLOCK_LEAVES: case BLOCK_GLASS: case BLOCK_SNOW: case BLOCK_TNT:
+	case PBLOCK_FOLHAS_BETULA: case PBLOCK_FOLHAS_CEREJEIRA: case PBLOCK_FOLHAS_PINHEIRO:
 		return 1;
 	case BLOCK_DIRT: case BLOCK_GRASS: case BLOCK_SAND: case BLOCK_GRAVEL: case BLOCK_SPONGE:
 		return 2;
 	case BLOCK_WOOD: case BLOCK_LOG: case BLOCK_BOOKSHELF: case BLOCK_CRATE:
+	case PBLOCK_TRONCO_BETULA: case PBLOCK_TRONCO_PINHEIRO: case PBLOCK_ABOBORA:
 		return 4;
 	case BLOCK_GOLD_ORE: case BLOCK_IRON_ORE: case BLOCK_COAL_ORE:
 	case BLOCK_GOLD: case BLOCK_IRON:
@@ -361,6 +367,7 @@ static int GetToolKind(BlockID block) {
 	case LBLOCK_QUARTZ_ORE: case LBLOCK_END_STONE: case LBLOCK_FURNACE:
 		return TOOL_PICKAXE;
 	case BLOCK_WOOD: case BLOCK_LOG: case BLOCK_BOOKSHELF: case BLOCK_CRATE: case LBLOCK_BED:
+	case PBLOCK_TRONCO_BETULA: case PBLOCK_TRONCO_PINHEIRO: case PBLOCK_ABOBORA:
 		return TOOL_AXE;
 	case BLOCK_DIRT: case BLOCK_GRASS: case BLOCK_SAND: case BLOCK_GRAVEL: case BLOCK_SNOW:
 	case LBLOCK_SOUL_SAND:
@@ -520,6 +527,8 @@ struct Recipe {
 
 static const struct Recipe recipes[] = {
 	{ 1, BLOCK_LOG,       0, BLOCK_AIR,      4, BLOCK_WOOD         },
+	{ 1, PBLOCK_TRONCO_BETULA,   0, BLOCK_AIR,      4, BLOCK_WOOD    },
+	{ 1, PBLOCK_TRONCO_PINHEIRO, 0, BLOCK_AIR,      4, BLOCK_WOOD    },
 	{ 4, BLOCK_WOOD,      0, BLOCK_AIR,      1, BLOCK_CRATE        },
 	{ 6, BLOCK_WOOD,      0, BLOCK_AIR,      1, BLOCK_BOOKSHELF    },
 	{ 2, BLOCK_LEAVES,    0, BLOCK_AIR,      1, BLOCK_ROPE         },
@@ -576,6 +585,8 @@ static const struct FoodRecipe foods[] = {
 	{ "Cogumelo",           3, 1, BLOCK_BROWN_SHROOM, 0, BLOCK_AIR        },
 	{ "Cog. vermelho",      2, 1, BLOCK_RED_SHROOM,   0, BLOCK_AIR        },
 	{ "Carne crua",         3, 1, LITEM_RAW_MEAT,     0, BLOCK_AIR        },
+	{ "Frutinhas",          3, 1, PITEM_FRUTINHAS,    0, BLOCK_AIR        },
+	{ "Torta de abobora",   8, 1, PBLOCK_ABOBORA,     1, PBLOCK_CANA      },
 };
 
 struct ToolRecipe {
@@ -793,7 +804,7 @@ static cc_bool TryEatHeld(void) {
 	{
 		if (foods[i].count2 || foods[i].input1 != held) continue;
 		/* Mushrooms are only eaten when not aiming at a block (else they get placed) */
-		if (held != LITEM_RAW_MEAT && held != LITEM_COOKED_MEAT && Game_SelectedPos.valid) return false;
+		if (held != LITEM_RAW_MEAT && held != LITEM_COOKED_MEAT && held != PITEM_FRUTINHAS && Game_SelectedPos.valid) return false;
 		if (food >= MAX_FOOD) {
 			Chat_AddOf(&(cc_string)String_FromConst("&eVoce esta sem fome."), MSG_TYPE_BOTTOMRIGHT_1);
 			return true;

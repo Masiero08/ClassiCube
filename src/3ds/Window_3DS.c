@@ -189,23 +189,31 @@ static void ProcessCircleInput(int port, int axis, circlePosition* pos, float de
 	Gamepad_SetAxis(port, axis, pos->dx / AXIS_SCALE, -pos->dy / AXIS_SCALE, delta);
 }
 
+// Set once the Circle Pad Pro (Old 3DS) or C-Stick (New 3DS) has been used
+static cc_bool rightStickSeen;
+
 void Gamepads_Process(float delta) {
 	u32 mods = hidKeysDown() | hidKeysHeld();
+	circlePosition hid_pos, stk_pos = { 0 };
 	int port = Gamepad_Connect(0x3D5, defaults_3ds);
+
+	// Circle Pad Pro / C-Stick and (on Old 3DS) ZL/ZR come from ir:rst
+	if (irrst_result == 0) {
+		irrstScanInput();
+		mods |= irrstKeysDown() | irrstKeysHeld();
+		irrstCstickRead(&stk_pos);
+		if (Math_AbsI(stk_pos.dx) > 24 || Math_AbsI(stk_pos.dy) > 24) rightStickSeen = true;
+	}
 	HandleButtons(port, mods);
-	
-	circlePosition hid_pos;
 	hidCircleRead(&hid_pos);
 
-	// Circle Pad always turns the camera (D-Pad walks)
-	ProcessCircleInput(port, PAD_AXIS_RIGHT, &hid_pos, delta);
-
-	// C-Stick (New 3DS) or Circle Pad Pro also walks
-	if (irrst_result == 0) {
-		circlePosition stk_pos;
-		irrstScanInput();
-		irrstCstickRead(&stk_pos);
-		ProcessCircleInput(port, PAD_AXIS_LEFT, &stk_pos, delta);
+	if (rightStickSeen) {
+		// With the right stick: Circle Pad walks, right stick turns the camera
+		ProcessCircleInput(port, PAD_AXIS_LEFT,  &hid_pos, delta);
+		ProcessCircleInput(port, PAD_AXIS_RIGHT, &stk_pos, delta);
+	} else {
+		// Without it: Circle Pad turns the camera (D-Pad walks)
+		ProcessCircleInput(port, PAD_AXIS_RIGHT, &hid_pos, delta);
 	}
 }
 

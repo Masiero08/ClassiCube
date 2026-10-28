@@ -24,6 +24,7 @@
 #include "Menus.h"
 #include "Gui.h"
 #include "DayNight.h"
+#include "Paisagem.h"
 #include "Screens.h"
 #include "Widgets.h"
 #include "Drawer2D.h"
@@ -1022,6 +1023,7 @@ static struct {
 } luta;
 static float mestreSpawnTimer = 45.0f;
 static float mestreSairTimer;
+static float ginasioTimer;
 
 static int Mestre_Proximo(void) {
 	int i;
@@ -1218,6 +1220,24 @@ static void Mestre_Tick(float delta) {
 	Vec3 pos;
 
 	if (!treinador.usado) {
+		/* perto de um ginasio: o Mestre dele fica na frente do emblema */
+		ginasioTimer -= delta;
+		if (ginasioTimer <= 0) {
+			IVec3 emb;
+			ginasioTimer = 2.0f;
+			idx = Paisagem_AcharGinasio(Math_Floor(jogador->Position.x), Math_Floor(jogador->Position.y),
+										Math_Floor(jogador->Position.z), 12, &emb);
+			if (idx >= 0 && idx < MESTRES_COUNT && !(insignias & (1 << idx))) {
+				Vec3_Set(pos, emb.x + 0.5f, (float)(emb.y - 1), emb.z - 1.5f);
+				Mestre_Aparecer(idx, pos);
+				/* olha para a porta (-Z) */
+				treinador.base.next.yaw = treinador.base.prev.yaw = treinador.base.Yaw = 0.0f;
+				treinador.base.next.rotY = treinador.base.prev.rotY = treinador.base.RotY = 0.0f;
+				Chat_AddRaw("&eVoce entrou num ginasio! Toque em &fAtacar &eou bata nele para desafiar.");
+				return;
+			}
+		}
+
 		/* aparece de vez em quando um Mestre ainda nao vencido */
 		idx = Mestre_Proximo();
 		if (!equipeCount || idx < 0) return;

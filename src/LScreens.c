@@ -604,8 +604,9 @@ LAYOUTS mfa_btnCancel[] = { { ANCHOR_CENTRE,  90 }, { ANCHOR_CENTRE,  -25 } };
 
 
 static void MainScreen_DoLogin(void);
+static void MainScreen_GoOnline(void* w);
 static void MFAScreen_SignIn(void* w) {
-	MainScreen_SetActive();
+	MainScreen_GoOnline(NULL);
 	MainScreen_DoLogin();
 }
 static void MFAScreen_Cancel(void* w) {
@@ -705,16 +706,23 @@ static void SwitchToSplitScreen(void* w) { SplitScreen_SetActive(); }
 /*########################################################################################################################*
 *----------------------------------------------------------MainScreen-----------------------------------------------------*
 *#########################################################################################################################*/
+#define MODS_OPT_CRIATURAS "mod-criaturas"
+#define MODS_OPT_BLOCOS    "mod-blocos"
+#define MODS_OPT_SURVIVAL  "survival-mode"
+#define MODS_OPT_MINERIOS  "mod-minerios"
+
+/* A tela principal tem duas partes: o inicio (Jogar, Mods, Ajustes, Online, Sair) */
+/* e a parte Online (login, servidores e conexao direta), aberta pelo botao Online. */
 static struct MainScreen {
 	LScreen_Layout
 	struct LButton btnLogin, btnResume, btnDirect, btnSPlayer, btnSplit, btnMods;
-	struct LButton btnRegister, btnOptions, btnUpdates;
+	struct LButton btnRegister, btnOptions, btnUpdates, btnOnline, btnBack;
 	struct LInput iptUsername, iptPassword;
-	struct LLabel lblStatus, lblUpdate;
-	cc_bool signingIn;
+	struct LLabel lblStatus, lblUpdate, lblMods;
+	cc_bool signingIn, online;
 } MainScreen CC_BIG_VAR;
 
-#define MAINSCREEN_MAX_WIDGETS 13
+#define MAINSCREEN_MAX_WIDGETS 14
 static struct LWidget* main_widgets[MAINSCREEN_MAX_WIDGETS];
 
 LAYOUTS main_iptUsername[] = { { ANCHOR_CENTRE_MIN, -140 }, { ANCHOR_CENTRE, -120 } };
@@ -725,16 +733,19 @@ LAYOUTS main_lblStatus[] = { { ANCHOR_CENTRE,   0 }, { ANCHOR_CENTRE,  20 } };
 
 LAYOUTS main_btnResume[]  = { { ANCHOR_CENTRE, 90 }, { ANCHOR_CENTRE, -25 } };
 LAYOUTS main_btnDirect[]  = { { ANCHOR_CENTRE,  0 }, { ANCHOR_CENTRE,  60 } };
-LAYOUTS main_btnSPlayer[] = { { ANCHOR_CENTRE, -55 }, { ANCHOR_CENTRE, 110 } };
-LAYOUTS main_btnMods[]    = { { ANCHOR_CENTRE,  78 }, { ANCHOR_CENTRE, 110 } };
-LAYOUTS main_btnSplit[]   = { { ANCHOR_CENTRE,  0 }, { ANCHOR_CENTRE, 160 } };
 
 LAYOUTS main_btnRegister[] = { { ANCHOR_MIN,    6 }, { ANCHOR_MAX,  6 } };
-LAYOUTS main_btnOptions[]  = { { ANCHOR_CENTRE, 0 }, { ANCHOR_MAX,  6 } };
-LAYOUTS main_btnUpdates[]  = { { ANCHOR_MAX,    6 }, { ANCHOR_MAX,  6 } };
 
-LAYOUTS main_lblUpdate_N[] = { { ANCHOR_MAX,   10 }, { ANCHOR_MAX, 45 } };
 LAYOUTS main_lblUpdate_H[] = { { ANCHOR_MAX,   10 }, { ANCHOR_MAX, 6 } };
+LAYOUTS main_btnBack[]     = { { ANCHOR_CENTRE, 0 }, { ANCHOR_MAX,  6 } };
+
+LAYOUTS home_btnJogar[]   = { { ANCHOR_CENTRE,   0 }, { ANCHOR_CENTRE,  -95 } };
+LAYOUTS home_btnMods[]    = { { ANCHOR_CENTRE, -72 }, { ANCHOR_CENTRE,  -25 } };
+LAYOUTS home_btnAjustes[] = { { ANCHOR_CENTRE,  72 }, { ANCHOR_CENTRE,  -25 } };
+LAYOUTS home_btnOnline[]  = { { ANCHOR_CENTRE, -72 }, { ANCHOR_CENTRE,   30 } };
+LAYOUTS home_btnSair[]    = { { ANCHOR_CENTRE,  72 }, { ANCHOR_CENTRE,   30 } };
+LAYOUTS home_btnSplit[]   = { { ANCHOR_CENTRE,   0 }, { ANCHOR_CENTRE,   80 } };
+LAYOUTS home_lblMods[]    = { { ANCHOR_CENTRE,   0 }, { ANCHOR_CENTRE,  125 } };
 
 CC_NOINLINE static void MainScreen_Error(struct HttpRequest* req, const char* action) {
 	cc_string str; char strBuffer[STRING_SIZE];
@@ -851,55 +862,86 @@ static void MainScreen_ExitApp(void* w) {
 	Window_Main.Exists = false;
 }
 
+static void MainScreen_GoOnline(void* w) { MainScreen.online = true;  MainScreen_SetActive(); }
+static void MainScreen_GoHome(void* w)   { MainScreen.online = false; MainScreen_SetActive(); }
+
+static void MainScreen_UpdateModsLabel(struct MainScreen* s) {
+	cc_string str; char strBuffer[STRING_SIZE];
+	int count = 0;
+	String_InitArray(str, strBuffer);
+
+	if (Options_GetBool(MODS_OPT_CRIATURAS, true)) count++;
+	if (Options_GetBool(MODS_OPT_BLOCOS,    true)) count++;
+	if (Options_GetBool(MODS_OPT_SURVIVAL,  true)) count++;
+	if (Options_GetBool(MODS_OPT_MINERIOS,  true)) count++;
+
+	if (count) {
+		String_Format1(&str, "&eMods ligados: &f%i de 4", &count);
+	} else {
+		String_AppendConst(&str, "&7Modo normal (sem mods)");
+	}
+	LLabel_SetText(&s->lblMods, &str);
+}
+
+/* Inicio: botoes grandes e simples para quem so quer jogar */
+static void MainScreen_AddHome(struct MainScreen* s) {
+	LButton_Add(s, &s->btnSPlayer, 270, 50, "Jogar",
+				MainScreen_Singleplayer, home_btnJogar);
+	LButton_Add(s, &s->btnMods,    134, 40, "Mods",
+				SwitchToMods,            home_btnMods);
+	LButton_Add(s, &s->btnOptions, 134, 40, "Ajustes",
+				SwitchToSettings,        home_btnAjustes);
+#ifdef CC_BUILD_NETWORKING
+	LButton_Add(s, &s->btnOnline,  134, 40, "Online",
+				MainScreen_GoOnline,     home_btnOnline);
+#endif
+#ifdef CC_BUILD_SPLITSCREEN
+	LButton_Add(s, &s->btnSplit,   200, 35, "Tela dividida",
+				SwitchToSplitScreen,     home_btnSplit);
+#endif
+
+	if (Platform_Flags & PLAT_FLAG_APP_EXIT) {
+		LButton_Add(s, &s->btnUpdates, 134, 40, "Sair",
+					MainScreen_ExitApp, home_btnSair);
+	} else if (Updater_Supported) {
+		LButton_Add(s, &s->btnUpdates, 134, 40, "Updates",
+					SwitchToUpdates,    home_btnSair);
+	}
+
+	LLabel_Add(s, &s->lblMods, "", home_lblMods);
+	MainScreen_UpdateModsLabel(s);
+}
+
 static void MainScreen_Activated(struct LScreen* s_) {
 	struct MainScreen* s = (struct MainScreen*)s_;
 
 	s->iptPassword.inputType = KEYBOARD_TYPE_PASSWORD;
 	s->lblUpdate.small       = true;
 
+	if (!s->online) { MainScreen_AddHome(s); return; }
+
 #ifdef CC_BUILD_NETWORKING
-	LInput_Add(s,  &s->iptUsername, 280, "Username..",  main_iptUsername);
-	LInput_Add(s,  &s->iptPassword, 280, "Password..",  main_iptPassword);
-	LButton_Add(s, &s->btnLogin,    100, 35, "Sign in", 
+	LInput_Add(s,  &s->iptUsername, 280, "Usuario..",  main_iptUsername);
+	LInput_Add(s,  &s->iptPassword, 280, "Senha..",  main_iptPassword);
+	LButton_Add(s, &s->btnLogin,    120, 35, "Entrar", 
 				MainScreen_Login,  main_btnLogin);
-	LButton_Add(s, &s->btnResume,   100, 35, "Resume",  
+	LButton_Add(s, &s->btnResume,   120, 35, "Continuar",  
 				MainScreen_Resume, main_btnResume);
 #endif
 
 	LLabel_Add(s,  &s->lblStatus,  "",  main_lblStatus);
 #ifdef CC_BUILD_NETWORKING
-	LButton_Add(s, &s->btnDirect,  200, 35, "Direct connect", 
+	LButton_Add(s, &s->btnDirect,  200, 35, "Conexao direta", 
 				SwitchToDirectConnect,   main_btnDirect);
 #endif
-	LButton_Add(s, &s->btnSPlayer, 145, 35, "Singleplayer",
-				MainScreen_Singleplayer, main_btnSPlayer);
-#ifdef CC_BUILD_SPLITSCREEN
-	LButton_Add(s, &s->btnSplit,   200, 35, "Splitscreen (WIP)", 
-				SwitchToSplitScreen,     main_btnSplit);
-#endif
-	LButton_Add(s, &s->btnMods,    100, 35, "Mods",
-				SwitchToMods,            main_btnMods);
-
 	if (Process_OpenSupported) {
 		LButton_Add(s, &s->btnRegister, 100, 35, "Register", 
 					MainScreen_Register, main_btnRegister);
 	}
 
-	LButton_Add(s, &s->btnOptions, 100, 35, "Options", 
-				SwitchToSettings, main_btnOptions);
-
-	if (Platform_Flags & PLAT_FLAG_APP_EXIT) {
-		LLabel_Add(s,  &s->lblUpdate,  "&eChecking..", main_lblUpdate_N);
-		LButton_Add(s, &s->btnUpdates,  100, 35, "Exit", 
-					MainScreen_ExitApp, main_btnUpdates);
-	} else {
-		LLabel_Add(s,  &s->lblUpdate,  "&eChecking..",      
-					Updater_Supported ? main_lblUpdate_N : main_lblUpdate_H);
-		if (Updater_Supported) {
-			LButton_Add(s, &s->btnUpdates,  100, 35, "Updates", 
-						SwitchToUpdates, main_btnUpdates);
-		}
-	}
+	LButton_Add(s, &s->btnBack, 100, 35, "Voltar", 
+				MainScreen_GoHome, main_btnBack);
+	LLabel_Add(s,  &s->lblUpdate,  "&eChecking..", main_lblUpdate_H);
 
 #ifdef CC_BUILD_NETWORKING
 	s->btnResume.OnHover   = MainScreen_ResumeHover;
@@ -932,7 +974,8 @@ static void MainScreen_TickCheckUpdates(struct MainScreen* s) {
 	LWebTask_Tick(&CheckUpdateTask.Base, NULL);
 
 	if (!CheckUpdateTask.Base.completed) return;
-	MainScreen_ApplyUpdateLabel(s);
+	/* o aviso de atualizacao so aparece na parte Online */
+	if (s->online) MainScreen_ApplyUpdateLabel(s);
 }
 
 static void MainScreen_LoginPhase2(struct MainScreen* s, const cc_string* user) {
@@ -1026,13 +1069,16 @@ void MainScreen_SetActive(void) {
 	s->Activated     = MainScreen_Activated;
 	s->LoadState     = MainScreen_Load;
 	s->Tick          = MainScreen_Tick;
-	s->title         = "ClassiCube";
+	/* entrar direto num servidor (link/parametro) precisa da parte Online */
+	if (Launcher_AutoHash.length) s->online = true;
+	s->title         = s->online ? "Online" : "ClassiCube";
 
-#ifdef CC_BUILD_NETWORKING
-	s->onEnterWidget = (struct LWidget*)&s->btnLogin;
-#else
-	s->onEnterWidget = (struct LWidget*)&s->btnSPlayer;
-#endif
+	if (s->online) {
+		s->onEnterWidget  = (struct LWidget*)&s->btnLogin;
+		s->onEscapeWidget = (struct LWidget*)&s->btnBack;
+	} else {
+		s->onEnterWidget  = (struct LWidget*)&s->btnSPlayer;
+	}
 
 	Launcher_SetScreen((struct LScreen*)s);
 }
@@ -1558,11 +1604,6 @@ static struct ModsScreen {
 
 #define MODS_SCREEN_MAX_WIDGETS 9
 static struct LWidget* mods_widgets[MODS_SCREEN_MAX_WIDGETS];
-
-#define MODS_OPT_CRIATURAS "mod-criaturas"
-#define MODS_OPT_BLOCOS    "mod-blocos"
-#define MODS_OPT_SURVIVAL  "survival-mode"
-#define MODS_OPT_MINERIOS  "mod-minerios"
 
 LAYOUTS mods_lblInfo[]     = { { ANCHOR_CENTRE,        0 }, { ANCHOR_CENTRE, -150 } };
 LAYOUTS mods_cbCriaturas[] = { { ANCHOR_CENTRE_MIN, -150 }, { ANCHOR_CENTRE, -115 } };

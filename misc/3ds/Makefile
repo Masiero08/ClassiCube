@@ -15,7 +15,7 @@ RUN_PROGRAM	?= azahar
 
 APP_ICON	:= misc/3ds/icon.png
 APP_TITLE 	:= ClassiCube
-APP_DESC	:= Simple block building sandbox
+APP_DESC	:= ClassiCube 3DS com Mods
 APP_AUTHOR 	:= ClassiCube team
 
 CIA_BANNER_BIN	:= misc/3ds/banner.bin

@@ -529,6 +529,7 @@ static const struct Recipe recipes[] = {
 	{ 1, BLOCK_LOG,       0, BLOCK_AIR,      4, BLOCK_WOOD         },
 	{ 1, PBLOCK_TRONCO_BETULA,   0, BLOCK_AIR,      4, BLOCK_WOOD    },
 	{ 1, PBLOCK_TRONCO_PINHEIRO, 0, BLOCK_AIR,      4, BLOCK_WOOD    },
+	{ 2, BLOCK_WOOD,      0, BLOCK_AIR,      4, LITEM_GRAVETO      },
 	{ 4, BLOCK_WOOD,      0, BLOCK_AIR,      1, BLOCK_CRATE        },
 	{ 6, BLOCK_WOOD,      0, BLOCK_AIR,      1, BLOCK_BOOKSHELF    },
 	{ 2, BLOCK_LEAVES,    0, BLOCK_AIR,      1, BLOCK_ROPE         },
@@ -568,7 +569,7 @@ static const struct Recipe recipes[] = {
 	{ 2, LITEM_RAW_MEAT,         1, BLOCK_COAL_ORE,         2, LITEM_COOKED_MEAT      },
 	{ 3, BLOCK_WHITE,            3, BLOCK_WOOD,             1, LBLOCK_BED             },
 	{ 4, LBLOCK_NETHERRACK,      1, BLOCK_COAL_ORE,         4, LBLOCK_NETHER_BRICKS   },
-	{ 10, BLOCK_OBSIDIAN,        1, BLOCK_COAL_ORE,         2, LBLOCK_NETHER_PORTAL   },
+	{ 8, BLOCK_OBSIDIAN,         1, BLOCK_COAL_ORE,         2, LBLOCK_NETHER_PORTAL   },
 	{ 4, LITEM_ENDER_PEARL,      1, LITEM_DIAMOND,          2, LBLOCK_END_PORTAL      },
 };
 
@@ -596,22 +597,22 @@ struct ToolRecipe {
 };
 
 static const struct ToolRecipe tools[] = {
-	{ TOOL_PICKAXE, 1, 5, BLOCK_WOOD,   0, BLOCK_AIR  },
-	{ TOOL_AXE,     1, 5, BLOCK_WOOD,   0, BLOCK_AIR  },
-	{ TOOL_SHOVEL,  1, 3, BLOCK_WOOD,   0, BLOCK_AIR  },
-	{ TOOL_SWORD,   1, 4, BLOCK_WOOD,   0, BLOCK_AIR  },
-	{ TOOL_PICKAXE, 2, 3, BLOCK_COBBLE, 2, BLOCK_WOOD },
-	{ TOOL_AXE,     2, 3, BLOCK_COBBLE, 2, BLOCK_WOOD },
-	{ TOOL_SHOVEL,  2, 1, BLOCK_COBBLE, 2, BLOCK_WOOD },
-	{ TOOL_SWORD,   2, 2, BLOCK_COBBLE, 1, BLOCK_WOOD },
-	{ TOOL_PICKAXE, 3, 3, BLOCK_IRON,   2, BLOCK_WOOD },
-	{ TOOL_AXE,     3, 3, BLOCK_IRON,   2, BLOCK_WOOD },
-	{ TOOL_SHOVEL,  3, 1, BLOCK_IRON,   2, BLOCK_WOOD },
-	{ TOOL_SWORD,   3, 2, BLOCK_IRON,   1, BLOCK_WOOD },
-	{ TOOL_PICKAXE, 4, 3, LITEM_DIAMOND, 2, BLOCK_WOOD },
-	{ TOOL_AXE,     4, 3, LITEM_DIAMOND, 2, BLOCK_WOOD },
-	{ TOOL_SHOVEL,  4, 1, LITEM_DIAMOND, 2, BLOCK_WOOD },
-	{ TOOL_SWORD,   4, 2, LITEM_DIAMOND, 1, BLOCK_WOOD },
+	{ TOOL_PICKAXE, 1, 3, BLOCK_WOOD,    2, LITEM_GRAVETO },
+	{ TOOL_AXE,     1, 3, BLOCK_WOOD,    2, LITEM_GRAVETO },
+	{ TOOL_SHOVEL,  1, 1, BLOCK_WOOD,    2, LITEM_GRAVETO },
+	{ TOOL_SWORD,   1, 2, BLOCK_WOOD,    1, LITEM_GRAVETO },
+	{ TOOL_PICKAXE, 2, 3, BLOCK_COBBLE,  2, LITEM_GRAVETO },
+	{ TOOL_AXE,     2, 3, BLOCK_COBBLE,  2, LITEM_GRAVETO },
+	{ TOOL_SHOVEL,  2, 1, BLOCK_COBBLE,  2, LITEM_GRAVETO },
+	{ TOOL_SWORD,   2, 2, BLOCK_COBBLE,  1, LITEM_GRAVETO },
+	{ TOOL_PICKAXE, 3, 3, BLOCK_IRON,    2, LITEM_GRAVETO },
+	{ TOOL_AXE,     3, 3, BLOCK_IRON,    2, LITEM_GRAVETO },
+	{ TOOL_SHOVEL,  3, 1, BLOCK_IRON,    2, LITEM_GRAVETO },
+	{ TOOL_SWORD,   3, 2, BLOCK_IRON,    1, LITEM_GRAVETO },
+	{ TOOL_PICKAXE, 4, 3, LITEM_DIAMOND, 2, LITEM_GRAVETO },
+	{ TOOL_AXE,     4, 3, LITEM_DIAMOND, 2, LITEM_GRAVETO },
+	{ TOOL_SHOVEL,  4, 1, LITEM_DIAMOND, 2, LITEM_GRAVETO },
+	{ TOOL_SWORD,   4, 2, LITEM_DIAMOND, 1, LITEM_GRAVETO },
 };
 
 #define FOODS_COUNT Array_Elems(foods)
@@ -690,6 +691,7 @@ static cc_string GetShortName(BlockID block) {
 	case LITEM_RAW_MEAT:     name = "Carne";      break;
 	case LITEM_COOKED_MEAT:  name = "Bife";       break;
 	case BLOCK_WHITE:        name = "La";         break;
+	case LITEM_GRAVETO:      name = "Graveto";    break;
 	}
 	return name ? String_FromReadonly(name) : Block_UNSAFE_GetName(block);
 }
@@ -791,6 +793,213 @@ cc_bool Survival_Craft(int i) {
 }
 
 cc_bool Survival_IsActive(void) { return survival_active; }
+
+/*########################################################################################################################*
+*-----------------------------------------------------Crafting grid-------------------------------------------------------*
+*#########################################################################################################################*/
+/* Tools have a shape like in Minecraft (H = head material, S = stick), the other recipes */
+/*  only need the right amount of each ingredient anywhere in the grid */
+static const char* const toolShapes[TOOL_KINDS] = {
+	"HHH" ".S." ".S.", /* Picareta */
+	"HH." "HS." ".S.", /* Machado  */
+	".H." ".S." ".S.", /* Pa       */
+	".H." ".H." ".S.", /* Espada   */
+};
+
+/* Moves the filled cells of a grid to its top left corner (optionally mirrored), */
+/*  so that a shape can be built anywhere in the grid */
+static void TrimGrid(const BlockID* src, BlockID* dst, cc_bool mirror) {
+	int minX = CRAFT_GRID_SIZE, minY = CRAFT_GRID_SIZE, maxX = -1;
+	int x, y, dx;
+
+	for (x = 0; x < CRAFT_GRID_CELLS; x++) dst[x] = BLOCK_AIR;
+	for (y = 0; y < CRAFT_GRID_SIZE; y++)
+		for (x = 0; x < CRAFT_GRID_SIZE; x++)
+		{
+			if (src[y * CRAFT_GRID_SIZE + x] == BLOCK_AIR) continue;
+			minX = min(minX, x); maxX = max(maxX, x); minY = min(minY, y);
+		}
+	if (maxX < 0) return;
+
+	for (y = minY; y < CRAFT_GRID_SIZE; y++)
+		for (x = minX; x <= maxX; x++)
+		{
+			dx = mirror ? maxX - x : x - minX;
+			dst[(y - minY) * CRAFT_GRID_SIZE + dx] = src[y * CRAFT_GRID_SIZE + x];
+		}
+}
+
+static void ToolLayout(const struct ToolRecipe* t, BlockID* grid) {
+	const char* shape = toolShapes[t->kind];
+	int i;
+	for (i = 0; i < CRAFT_GRID_CELLS; i++)
+	{
+		grid[i] = shape[i] == 'H' ? t->input1 : (shape[i] == 'S' ? t->input2 : BLOCK_AIR);
+	}
+}
+
+static cc_bool MatchesTool(const struct ToolRecipe* t, const BlockID* trimmed, const BlockID* mirrored) {
+	BlockID shape[CRAFT_GRID_CELLS], trimmedShape[CRAFT_GRID_CELLS];
+	int i;
+	ToolLayout(t, shape);
+	TrimGrid(shape, trimmedShape, false);
+
+	for (i = 0; i < CRAFT_GRID_CELLS; i++) { if (trimmed[i]  != trimmedShape[i]) break; }
+	if (i == CRAFT_GRID_CELLS) return true;
+	for (i = 0; i < CRAFT_GRID_CELLS; i++) { if (mirrored[i] != trimmedShape[i]) return false; }
+	return true;
+}
+
+/* Whether the grid has exactly the given ingredients, in any position */
+static cc_bool MatchesShapeless(const BlockID* grid, int count1, BlockID input1, int count2, BlockID input2) {
+	int i, n1 = 0, n2 = 0;
+	for (i = 0; i < CRAFT_GRID_CELLS; i++)
+	{
+		if (grid[i] == BLOCK_AIR) continue;
+		if (grid[i] == input1)               n1++;
+		else if (count2 && grid[i] == input2) n2++;
+		else return false;
+	}
+	return n1 == count1 && n2 == count2;
+}
+
+int Survival_MatchGrid(const BlockID* grid) {
+	BlockID trimmed[CRAFT_GRID_CELLS], mirrored[CRAFT_GRID_CELLS];
+	const struct Recipe* r;
+	const struct FoodRecipe* f;
+	int i;
+
+	TrimGrid(grid, trimmed,  false);
+	TrimGrid(grid, mirrored, true);
+	if (trimmed[0] == BLOCK_AIR && trimmed[1] == BLOCK_AIR && trimmed[2] == BLOCK_AIR) return -1;
+
+	for (i = 0; i < TOOLS_COUNT; i++)
+	{
+		if (MatchesTool(&tools[i], trimmed, mirrored)) return FOODS_COUNT + i;
+	}
+	for (i = 0; i < Array_Elems(recipes); i++)
+	{
+		r = &recipes[i];
+		if (MatchesShapeless(grid, r->count1, r->input1, r->count2, r->input2)) return FOODS_COUNT + TOOLS_COUNT + i;
+	}
+	for (i = 0; i < FOODS_COUNT; i++)
+	{
+		f = &foods[i];
+		if (MatchesShapeless(grid, f->count1, f->input1, f->count2, f->input2)) return i;
+	}
+	return -1;
+}
+
+/* Cells used for N ingredients of a shapeless recipe, so that they look tidy in the grid */
+static const cc_uint8 layoutOrder[CRAFT_GRID_CELLS + 1][CRAFT_GRID_CELLS] = {
+	{ 0 }, { 4 }, { 1, 4 }, { 3, 4, 5 }, { 0, 1, 3, 4 }, { 0, 1, 3, 4, 2 },
+	{ 0, 1, 2, 3, 4, 5 }, { 0, 1, 2, 3, 4, 5, 7 }, { 0, 1, 2, 3, 5, 6, 7, 8 }, { 0, 1, 2, 3, 4, 5, 6, 7, 8 },
+};
+
+static const cc_uint8 ringOrder[8] = { 1, 3, 5, 7, 0, 2, 6, 8 };
+
+static void ShapelessLayout(BlockID* grid, int count1, BlockID input1, int count2, BlockID input2) {
+	int i, total = count1 + count2;
+	for (i = 0; i < CRAFT_GRID_CELLS; i++) grid[i] = BLOCK_AIR;
+	if (total > CRAFT_GRID_CELLS) return;
+
+	/* A single extra ingredient goes in the middle, with the others around it */
+	if (count2 == 1 && count1 >= 4) {
+		grid[4] = input2;
+		for (i = 0; i < count1; i++) grid[ringOrder[i]] = input1;
+		return;
+	}
+	for (i = 0; i < total; i++)
+	{
+		grid[layoutOrder[total][i]] = i < count1 ? input1 : input2;
+	}
+}
+
+void Survival_RecipeLayout(int i, BlockID* grid) {
+	const struct Recipe* r;
+	const struct FoodRecipe* f;
+
+	if (i < FOODS_COUNT) {
+		f = &foods[i];
+		ShapelessLayout(grid, f->count1, f->input1, f->count2, f->input2); return;
+	}
+	i -= FOODS_COUNT;
+	if (i < TOOLS_COUNT) { ToolLayout(&tools[i], grid); return; }
+	i -= TOOLS_COUNT;
+
+	r = &recipes[i];
+	ShapelessLayout(grid, r->count1, r->input1, r->count2, r->input2);
+}
+
+BlockID Survival_RecipeIcon(int i, int* count) {
+	*count = 0;
+	if (i < FOODS_COUNT) return foods[i].input1;
+	i -= FOODS_COUNT;
+	if (i < TOOLS_COUNT) return tools[i].input1;
+	i -= TOOLS_COUNT;
+
+	*count = recipes[i].outCount;
+	return recipes[i].output;
+}
+
+int Survival_RecipeTool(int i) {
+	i -= FOODS_COUNT;
+	return i >= 0 && i < TOOLS_COUNT ? tools[i].kind : -1;
+}
+
+int Survival_RecipeKind(int i) {
+	if (i < FOODS_COUNT) return RECIPE_KIND_FOOD;
+	if (i < FOODS_COUNT + TOOLS_COUNT) return RECIPE_KIND_TOOL;
+	return RECIPE_KIND_BLOCK;
+}
+
+void Survival_RecipeName(int i, cc_string* str) {
+	cc_string name;
+	int count;
+
+	if (i < FOODS_COUNT) {
+		String_Format2(str, "Comer %c (+%i)", foods[i].name, &foods[i].value); return;
+	}
+	i -= FOODS_COUNT;
+	if (i < TOOLS_COUNT) {
+		String_Format2(str, "%c de %c", toolNames[tools[i].kind], tierNames[tools[i].tier]); return;
+	}
+	i -= TOOLS_COUNT;
+
+	name  = GetShortName(recipes[i].output);
+	count = recipes[i].outCount;
+	if (count > 1) String_Format1(str, "%i ", &count);
+	String_AppendString(str, &name);
+}
+
+const char* Survival_RecipeProblem(int i) {
+	const struct Recipe* r;
+	const struct ToolRecipe* t;
+	const struct FoodRecipe* f;
+
+	if (i < FOODS_COUNT) {
+		f = &foods[i];
+		if (!HasInputs(f->count1, f->input1, f->count2, f->input2)) return "Falta material";
+		return food >= MAX_FOOD ? "Voce esta sem fome" : NULL;
+	}
+	i -= FOODS_COUNT;
+	if (i < TOOLS_COUNT) {
+		t = &tools[i];
+		if (toolTier[t->kind] >= t->tier) return "Voce ja tem essa ferramenta";
+		return HasInputs(t->count1, t->input1, t->count2, t->input2) ? NULL : "Falta material";
+	}
+	i -= TOOLS_COUNT;
+
+	r = &recipes[i];
+	if (!HasInputs(r->count1, r->input1, r->count2, r->input2)) return "Falta material";
+	if (NeedsFurnace(r->output) && !NearFurnace()) return "Precisa de uma fornalha perto";
+	if (blockCounts[r->output] + r->outCount > MAX_BLOCK_COUNT) return "Voce ja tem muitos";
+	return NULL;
+}
+
+int Survival_GetCount(BlockID block) { return blockCounts[block]; }
+cc_string Survival_BlockName(BlockID block) { return GetShortName(block); }
+
 
 /* Using (right click) a bed sets where the player respawns, and at night sleeps until morning */
 /* Eats the held block directly when it is a single-ingredient food */

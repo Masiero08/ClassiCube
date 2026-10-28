@@ -59,6 +59,7 @@ static const struct LateBlockDef late_blockDefs[LBLOCK_END - LBLOCK_DIAMOND_ORE]
 { "Carne assada",         T(COOKED_MEAT),     T(COOKED_MEAT),     T(COOKED_MEAT),     DRAW_SPRITE,      COLLIDE_NONE,  SOUND_CLOTH, 0 },
 { "Fornalha",             T(FURNACE_TOP),     T(FURNACE_SIDE),    T(FURNACE_TOP),     DRAW_OPAQUE,      COLLIDE_SOLID, SOUND_STONE, 0 },
 { "Cama",                 T(BED_TOP),         T(BED_SIDE),        4,                  DRAW_OPAQUE,      COLLIDE_SOLID, SOUND_CLOTH, 0 },
+{ "Graveto",              T(GRAVETO),         T(GRAVETO),         T(GRAVETO),         DRAW_SPRITE,      COLLIDE_NONE,  SOUND_WOOD,  0 },
 };
 
 

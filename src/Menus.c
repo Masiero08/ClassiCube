@@ -1714,43 +1714,7 @@ void TexturePackScreen_Show(void) {
 /*########################################################################################################################*
 *----------------------------------------------------CraftingScreen-------------------------------------------------------*
 *#########################################################################################################################*/
-static void CraftingScreen_EntryClick(void* screen, void* widget) {
-	struct ListScreen* s     = (struct ListScreen*)screen;
-	struct ButtonWidget* btn = (struct ButtonWidget*)widget;
-	int recipe = s->currentIndex + btn->meta.val;
-
-	if (!Survival_Craft(recipe)) return;
-	ListScreen_Reload(s);
-	ListScreen_RedrawEntries(s);
-	s->dirty = true;
-}
-
-static void CraftingScreen_LoadEntries(struct ListScreen* s) {
-	cc_string str; char strBuffer[STRING_SIZE * 2];
-	int i;
-
-	for (i = 0; i < Survival_RecipesCount(); i++)
-	{
-		String_InitArray(str, strBuffer);
-		Survival_DescribeRecipe(i, &str);
-		StringsBuffer_Add(&s->entries, &str);
-	}
-}
-
-static void CraftingScreen_BackToGame(void* s, void* w) { Gui_Remove((struct Screen*)s); }
-
-void CraftingScreen_Show(void) {
-	struct ListScreen* s = &ListScreen;
-	s->titleText   = "Crafting";
-	s->actionText  = "Back to game";
-
-	s->ActionClick = CraftingScreen_BackToGame;
-	s->LoadEntries = CraftingScreen_LoadEntries;
-	s->EntryClick  = CraftingScreen_EntryClick;
-	s->DoneClick   = Menu_SwitchPause;
-	s->UpdateEntry = ListScreen_UpdateEntry;
-	ListScreen_Show();
-}
+/* See CraftingScreen.c */
 
 
 /*########################################################################################################################*

@@ -267,6 +267,7 @@
     <ClCompile Include="..\..\src\LBackend_Android.c" />
     <ClCompile Include="..\..\src\Lighting.c" />
     <ClCompile Include="..\..\src\ModernBlocks.c" />
+    <ClCompile Include="..\..\src\CraftingScreen.c" />
     <ClCompile Include="..\..\src\Survival.c" />
     <ClCompile Include="..\..\src\LateGame.c" />
     <ClCompile Include="..\..\src\Criaturas.c" />

@@ -323,13 +323,15 @@ void Launcher_Finish(void) {
 *---------------------------------------------------------Colours/Skin----------------------------------------------------*
 *#########################################################################################################################*/
 struct LauncherTheme Launcher_Theme;
+/* Tema padrao deste fork: parede de pedra no fundo e botoes verdes de grama */
 const struct LauncherTheme Launcher_ModernTheme = {
 	false,
-	BitmapColor_RGB(153, 127, 172), /* background */
-	BitmapColor_RGB( 97,  81, 110), /* button border */
-	BitmapColor_RGB(189, 168, 206), /* active button */
-	BitmapColor_RGB(141, 114, 165), /* button foreground */
-	BitmapColor_RGB(162, 131, 186), /* button highlight */
+	BitmapColor_RGB( 66,  62,  70), /* background */
+	BitmapColor_RGB( 22,  38,  18), /* button border */
+	BitmapColor_RGB(108, 186,  76), /* active button */
+	BitmapColor_RGB( 76, 146,  56), /* button foreground */
+	BitmapColor_RGB(132, 204,  98), /* button highlight */
+	true
 };
 const struct LauncherTheme Launcher_ClassicTheme = {
 	true,
@@ -531,9 +533,62 @@ CC_NOINLINE static void ClearTile(int x, int y, int width, int height,
 	}
 }
 
+static int BlocksNoise(int x, int y) {
+	int n = x + y * 57;
+	n = (n << 13) ^ n;
+	return (n * (n * n * 15731 + 789221) + 1376312589) & 0x7fffffff;
+}
+
+static int BlocksClamp(int v) { return v < 0 ? 0 : (v > 255 ? 255 : v); }
+
+/* Parede de blocos de pedra (com um ou outro minerio), tingida pela cor de fundo do tema. */
+/* So depende de (x, y), entao redesenhar so um pedaco continua encaixando com o resto. */
+static void DrawBlocksBackground(struct Context2D* ctx, int x, int y, int width, int height) {
+	struct Bitmap* bmp = (struct Bitmap*)ctx;
+	BitmapCol base = Launcher_Theme.BackgroundColor;
+	int texel = max(1, Display_ScaleX(4));
+	int R, G, B, xx, yy, tx, ty, u, v, n, delta;
+	BitmapCol* dst;
+
+	if (!Drawer2D_Clamp(ctx, &x, &y, &width, &height)) return;
+
+	for (yy = y; yy < y + height; yy++) {
+		dst = Bitmap_GetRow(bmp, yy) + x;
+		ty  = yy / texel;
+		v   = ty & 7;
+
+		for (xx = x; xx < x + width; xx++, dst++) {
+			tx = xx / texel;
+			u  = tx & 7;
+			/* texel aleatorio + leve variacao por bloco */
+			n     = BlocksNoise(tx, ty);
+			delta = (n >> 8) % 15 - 7;
+			delta += (BlocksNoise(tx >> 3, (ty >> 3) + 101) >> 8) % 7 - 3;
+
+			/* bisel: borda de cima/esquerda clara, de baixo/direita escura */
+			if (u == 0 || v == 0) delta += 7;
+			if (u == 7 || v == 7) delta -= 12;
+
+			R = BitmapCol_R(base) + delta;
+			G = BitmapCol_G(base) + delta;
+			B = BitmapCol_B(base) + delta;
+
+			/* pontinhos de minerio raros (ouro / cristal) */
+			n = BlocksNoise(tx + 7919, ty + 3);
+			if (u && v && u < 7 && v < 7 && (n & 0x3FF) < 9) {
+				if (n & 0x400) { R += 70; G += 52; B -= 10; }
+				else           { R -= 10; G += 50; B += 56; }
+			}
+			*dst = BitmapColor_RGB(BlocksClamp(R), BlocksClamp(G), BlocksClamp(B));
+		}
+	}
+}
+
 void Launcher_DrawBackground(struct Context2D* ctx, int x, int y, int width, int height) {
 	if (Launcher_Theme.ClassicBackground && dirtBmp.scan0) {
 		ClearTile(x, y, width, height, ctx, &stoneBmp);
+	} else if (Launcher_Theme.BlocksBackground) {
+		DrawBlocksBackground(ctx, x, y, width, height);
 	} else {
 		Gradient_Noise(ctx, Launcher_Theme.BackgroundColor, 6, x, y, width, height);
 	}
@@ -569,7 +624,93 @@ static void DrawTitleText(struct FontDesc* font, const char* text, struct Contex
 }
 
 #ifdef CC_BUILD_DUALSCREEN
+#include "LauncherArt.h"
 extern cc_bool launcherTop;
+
+static struct Bitmap artScene, artLogo;
+static cc_bool artLoaded;
+
+static void LoadTopArt(void) {
+	struct Stream s;
+	cc_result res;
+	artLoaded = true;
+
+	Stream_ReadonlyMemory(&s, (void*)launcherArt_cena, sizeof(launcherArt_cena));
+	if ((res = Png_Decode(&artScene, &s))) { Logger_SimpleWarn(res, "decoding launcher scene"); artScene.scan0 = NULL; }
+
+	Stream_ReadonlyMemory(&s, (void*)launcherArt_logo, sizeof(launcherArt_logo));
+	if ((res = Png_Decode(&artLogo, &s)))  { Logger_SimpleWarn(res, "decoding launcher logo");  artLogo.scan0  = NULL; }
+}
+
+/* Desenha a imagem ampliada 'scale' vezes (pixels grandes), misturando pelo alfa */
+static void DrawArt(struct Context2D* ctx, struct Bitmap* src, int x, int y, int scale) {
+	struct Bitmap* dst = (struct Bitmap*)ctx;
+	int xx, yy, a, dx, dy;
+	BitmapCol s, d;
+
+	for (yy = 0; yy < src->height * scale; yy++) {
+		dy = y + yy;
+		if (dy < 0 || dy >= ctx->height) continue;
+
+		for (xx = 0; xx < src->width * scale; xx++) {
+			dx = x + xx;
+			if (dx < 0 || dx >= ctx->width) continue;
+
+			s = Bitmap_GetPixel(src, xx / scale, yy / scale);
+			a = BitmapCol_A(s);
+			if (a == 0) continue;
+			if (a == 255) { Bitmap_GetPixel(dst, dx, dy) = s; continue; }
+
+			d = Bitmap_GetPixel(dst, dx, dy);
+			Bitmap_GetPixel(dst, dx, dy) = BitmapColor_RGB(
+				(BitmapCol_R(s) * a + BitmapCol_R(d) * (255 - a)) / 255,
+				(BitmapCol_G(s) * a + BitmapCol_G(d) * (255 - a)) / 255,
+				(BitmapCol_B(s) * a + BitmapCol_B(d) * (255 - a)) / 255);
+		}
+	}
+}
+
+/* Faixa escura semitransparente atras do titulo das outras telas */
+static void DarkenBand(struct Context2D* ctx, int y, int height) {
+	struct Bitmap* bmp = (struct Bitmap*)ctx;
+	int xx, yy;
+	BitmapCol c;
+
+	for (yy = max(0, y); yy < min(ctx->height, y + height); yy++) {
+		for (xx = 0; xx < ctx->width; xx++) {
+			c = Bitmap_GetPixel(bmp, xx, yy);
+			Bitmap_GetPixel(bmp, xx, yy) = BitmapColor_RGB(
+				BitmapCol_R(c) * 2 / 5, BitmapCol_G(c) * 2 / 5, BitmapCol_B(c) * 2 / 5);
+		}
+	}
+}
+
+/* Tela de cima: paisagem de blocos, com o logo no menu principal ou o nome da tela nas outras */
+static void DrawTopScreen(struct FontDesc* font, const char* text, struct Context2D* ctx) {
+	cc_string title = String_FromReadonly(text);
+	int scale, y;
+	if (!artLoaded) LoadTopArt();
+
+	if (!artScene.scan0) {
+		Launcher_DrawBackgroundAll(ctx);
+		DrawTitleText(font, text, ctx, ANCHOR_CENTRE, ANCHOR_CENTRE);
+		return;
+	}
+
+	scale = max(1, max(Math_CeilDiv(ctx->width, artScene.width), Math_CeilDiv(ctx->height, artScene.height)));
+	DrawArt(ctx, &artScene, (ctx->width  - artScene.width  * scale) / 2,
+							 ctx->height - artScene.height * scale, scale);
+
+	if (String_CaselessEqualsConst(&title, "ClassiCube") && artLogo.scan0) {
+		DrawArt(ctx, &artLogo, (ctx->width - artLogo.width * scale) / 2, 7 * scale, scale);
+	} else {
+		y = ctx->height / 2 - 13 * scale;
+		DarkenBand(ctx, y, 26 * scale);
+		Context2D_Clear(ctx, BitmapColor_RGB(246, 170, 52), 0, y,                  ctx->width, scale);
+		Context2D_Clear(ctx, BitmapColor_RGB(246, 170, 52), 0, y + 25 * scale - 1, ctx->width, scale);
+		DrawTitleText(font, text, ctx, ANCHOR_CENTRE, ANCHOR_CENTRE);
+	}
+}
 
 void Launcher_DrawTitle(struct FontDesc* font, const char* text, struct Context2D* ctx) {
 	/* Put title on top screen */
@@ -585,8 +726,7 @@ void Launcher_DrawTitle(struct FontDesc* font, const char* text, struct Context2
 	topCtx.width  = width;
 	topCtx.height = height;
 	
-	Launcher_DrawBackgroundAll(ctx);
-	DrawTitleText(font, text, ctx, ANCHOR_CENTRE, ANCHOR_CENTRE);
+	DrawTopScreen(font, text, ctx);
 	Rect2D rect = { 0, 0, bmp.width, bmp.height };
 	Window_DrawFramebuffer(rect, &bmp);
 	

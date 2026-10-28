@@ -76,6 +76,14 @@ static void LButton_DrawBase(struct Context2D* ctx, int x, int y, int width, int
 		Gradient_Noise(ctx, color, 8,
 						x + oneX,       y + oneY,
 						width - twoX,   height - twoY);
+	} else if (Launcher_Theme.BlocksBackground) {
+		/* botao de grama: degrade mais forte e uma faixa clara em cima */
+		Gradient_Vertical(ctx, BitmapColor_Offset(color, 14,14,10), BitmapColor_Offset(color, -22,-26,-18),
+						  x + oneX,     y + oneY,
+						  width - twoX, height - twoY);
+		Context2D_Clear(ctx, BitmapColor_Offset(color, 30,34,22),
+						x + oneX,     y + oneY,
+						width - twoX, max(twoY, height / 8));
 	} else {
 		Gradient_Vertical(ctx, BitmapColor_Offset(color, 8,8,8), BitmapColor_Offset(color, -8,-8,-8),
 						  x + oneX,     y + oneY,

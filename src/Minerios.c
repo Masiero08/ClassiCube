@@ -716,11 +716,16 @@ static void Chefe_Especial(struct Monstro* m, struct Entity* jogador, float d2) 
 
 /* O dragao: selvagem fica voando em volta de onde nasceu; domado segue o jogador, */
 /* briga com os monstros bravos e pode ser montado */
+static cc_bool SegurandoRubi(void) {
+	BlockID b = Inventory_SelectedBlock;
+	return b == MBLOCK_RUBI_MINERIO || b == MBLOCK_RUBI;
+}
+
 static void Monstro_TickDragao(struct Monstro* m, struct Entity* jogador, float delta) {
 	const struct MonstroDef* def = &monstro_defs[m->tipo];
 	struct Monstro* alvoM = NULL;
 	float melhor = 8.0f * 8.0f, d;
-	Vec3 alvo;
+	Vec3 alvo, dir;
 	int i;
 
 	if (m->domado && montado) {
@@ -734,6 +739,20 @@ static void Monstro_TickDragao(struct Monstro* m, struct Entity* jogador, float 
 	}
 
 	m->angulo += delta * 0.7f;
+	if (SegurandoRubi() && Dist2(jogador->Position, m->base.next.pos) < 16 * 16) {
+		/* o cheiro do rubi atrai o dragao: ele desce e fica parado na frente do jogador */
+		dir = Vec3_GetDirVector(jogador->Yaw * MATH_DEG2RAD, 0);
+		alvo = jogador->Position;
+		alvo.x += dir.x * (2.0f + def->escala);
+		alvo.z += dir.z * (2.0f + def->escala);
+		alvo.y += 0.5f;
+		if (!m->domado && m->especialTimer <= 0) {
+			Chat_AddRaw("&2O dragao sentiu o cheiro do rubi e veio ate voce! &eAperte colocar para dar o rubi.");
+			m->especialTimer = 30.0f;
+		}
+		Monstro_Voar(m, alvo, def->vel * 0.8f, delta);
+		return;
+	}
 	if (m->domado) {
 		/* segue o jogador, um pouco atras e acima */
 		alvo = jogador->Position;
@@ -1149,7 +1168,7 @@ static void ChocarDragao(int x, int y, int z, int tipo) {
 
 	m = Monstro_Criar(tipo, pos);
 	if (!m) return;
-	Chat_Add1("&eNasceu um %c&e! De 3 rubis para ele (segure rubi e aperte colocar) para domar.", monstro_defs[tipo].nome);
+	Chat_Add1("&eNasceu um %c&e! Segure um rubi na mao, ele vem ate voce: aperte colocar 3 vezes para domar.", monstro_defs[tipo].nome);
 }
 
 static void OnBlockChanged(void* obj, IVec3 coords, BlockID old, BlockID now) {
@@ -1324,6 +1343,22 @@ static struct Monstro* DragaoDomado(void) {
 	return NULL;
 }
 
+/* O dragao mais perto do jogador, ate a distancia dada */
+static struct Monstro* DragaoPerto(float alcance) {
+	Vec3 pos = Entities.CurPlayer->Base.Position;
+	struct Monstro* melhor = NULL;
+	float d, melhorD = alcance * alcance;
+	int i;
+
+	for (i = 0; i < MONSTROS_MAX; i++)
+	{
+		if (!monstros[i].usado || !EhDragao(monstros[i].tipo)) continue;
+		d = Dist2(pos, monstros[i].base.next.pos);
+		if (d < melhorD) { melhorD = d; melhor = &monstros[i]; }
+	}
+	return melhor;
+}
+
 static void DragaoClique(struct Monstro* m, BlockID held) {
 	int total = RUBIS_PARA_DOMAR;
 	if (m->domado) {
@@ -1331,7 +1366,7 @@ static void DragaoClique(struct Monstro* m, BlockID held) {
 		return;
 	}
 	if (held != MBLOCK_RUBI_MINERIO && held != MBLOCK_RUBI) {
-		Chat_AddRaw("&2O dragao quer rubis! &eSegure um minerio de rubi e aperte colocar nele.");
+		Chat_AddRaw("&2O dragao quer rubis! &eSegure um minerio de rubi (ou bloco de rubi) na mao: ele vem ate voce.");
 		return;
 	}
 	if (Survival_IsActive()) {
@@ -1412,6 +1447,8 @@ cc_bool Minerios_HandleClick(cc_bool place) {
 		if (montado) { Desmontar(); return true; }
 
 		m = MonstroNaMira(Entities.CurPlayer->ReachDistance + 1.0f);
+		/* com rubi na mao nao precisa mirar certinho: vale o dragao mais perto */
+		if ((!m || !EhDragao(m->tipo)) && SegurandoRubi()) m = DragaoPerto(8.0f);
 		if (m && EhDragao(m->tipo)) { DragaoClique(m, held); return true; }
 		if (!EhItem(held)) return false;
 		/* itens nao sao colocados no mundo */

@@ -37,6 +37,8 @@
 #include "Lighting.h"
 #include "InputHandler.h"
 #include "Protocol.h"
+#include "Survival.h"
+#include "Criaturas.h"
 
 /*########################################################################################################################*
 *--------------------------------------------------------Menu base--------------------------------------------------------*
@@ -233,6 +235,8 @@ static void Menu_SwitchLoadLevel(void* a, void* b)       { LoadLevelScreen_Show(
 static void Menu_SwitchSaveLevel(void* a, void* b)       { SaveLevelScreen_Show(); }
 static void Menu_SwitchTexPacks(void* a, void* b)        { TexturePackScreen_Show(); }
 static void Menu_SwitchHotkeys(void* a, void* b)         { HotkeyListScreen_Show(); }
+static void Menu_SwitchCrafting(void* a, void* b)        { CraftingScreen_Show(); }
+static void Menu_SwitchCriaturas(void* a, void* b)       { Criaturas_AbrirMenu(); }
 
 
 /*########################################################################################################################*
@@ -465,6 +469,40 @@ void ListScreen_Show(void) {
 }
 
 
+/* Lista simples para mods (ex.: Diario das Criaturas) */
+static void (*modList_Load)(struct StringsBuffer* entries);
+static void (*modList_Click)(int index);
+
+static void ModListScreen_LoadEntries(struct ListScreen* s) { modList_Load(&s->entries); }
+
+static void ModListScreen_EntryClick(void* screen, void* widget) {
+	struct ListScreen* s     = (struct ListScreen*)screen;
+	struct ButtonWidget* btn = (struct ButtonWidget*)widget;
+	int index = s->currentIndex + btn->meta.val;
+	if (index < s->entries.count && modList_Click) modList_Click(index);
+}
+
+static void ModListScreen_Close(void* screen, void* widget) {
+	Gui_Remove((struct Screen*)&ListScreen);
+}
+
+void ModListScreen_Show(const char* title, const char* actionText,
+						void (*loadEntries)(struct StringsBuffer* entries), void (*entryClick)(int index)) {
+	struct ListScreen* s = &ListScreen;
+	modList_Load  = loadEntries;
+	modList_Click = entryClick;
+
+	s->titleText   = title;
+	s->actionText  = actionText;
+	s->ActionClick = ModListScreen_Close;
+	s->LoadEntries = ModListScreen_LoadEntries;
+	s->EntryClick  = ModListScreen_EntryClick;
+	s->DoneClick   = ModListScreen_Close;
+	s->UpdateEntry = ListScreen_UpdateEntry;
+	ListScreen_Show();
+}
+
+
 /*########################################################################################################################*
 *--------------------------------------------------------MenuScreen-------------------------------------------------------*
 *#########################################################################################################################*/
@@ -518,7 +556,8 @@ static void PauseScreen_CheckHacksAllowed(void* screen) {
 	struct PauseScreen* s = (struct PauseScreen*)screen;
 	if (Gui.ClassicMenu) return;
 
-	Widget_SetDisabled(&s->btns[1],
+	if (s->descs[1].onClick == Menu_SwitchTexPacks)
+		Widget_SetDisabled(&s->btns[1],
 			!Entities.CurPlayer->Hacks.CanAnyHacks); /* select texture pack */
 	s->dirty = true;
 }
@@ -558,7 +597,25 @@ static void PauseScreen_Init(void* screen) {
 	s->widgetsPerPage = 3;
 	Event_Register_(&UserEvents.HackPermsChanged, s, PauseScreen_CheckHacksAllowed);
 
-	s->descs      = descs;
+	static const struct SimpleButtonDesc survivalDescs[] = {
+		{ -160,  -50, "Options...",             Menu_SwitchOptions   },
+		{ -160,    0, "Change texture pack...", Menu_SwitchTexPacks  },
+		{ -160,   50, "Crafting...",            Menu_SwitchCrafting  },
+		{  160,  -50, "Generate new level...",  Menu_SwitchGenLevel  },
+		{  160,    0, "Load level...",          Menu_SwitchLoadLevel },
+		{  160,   50, "Save level...",          Menu_SwitchSaveLevel }
+	};
+
+	static struct SimpleButtonDesc pauseDescs[Array_Elems(descs)];
+
+	/* Hotkeys aren't needed in survival, so crafting replaces them */
+	Mem_Copy(pauseDescs, Survival_IsActive() ? survivalDescs : descs, sizeof(pauseDescs));
+	/* com o mod de criaturas ligado, o botao de texture pack vira o menu das criaturas */
+	if (Criaturas_Ativo()) {
+		pauseDescs[1].title   = "Criaturas...";
+		pauseDescs[1].onClick = Menu_SwitchCriaturas;
+	}
+	s->descs      = pauseDescs;
 	s->descsCount = Array_Elems(descs);
 	PauseScreenBase_AddWidgets(s, 300);
 	ButtonWidget_Add(s, &s->quit, 120, PauseScreenBase_Quit);
@@ -1648,6 +1705,48 @@ void TexturePackScreen_Show(void) {
 	s->ActionClick = TexturePackScreen_ActionFunc;
 	s->LoadEntries = TexturePackScreen_LoadEntries;
 	s->EntryClick  = TexturePackScreen_EntryClick;
+	s->DoneClick   = Menu_SwitchPause;
+	s->UpdateEntry = ListScreen_UpdateEntry;
+	ListScreen_Show();
+}
+
+
+/*########################################################################################################################*
+*----------------------------------------------------CraftingScreen-------------------------------------------------------*
+*#########################################################################################################################*/
+static void CraftingScreen_EntryClick(void* screen, void* widget) {
+	struct ListScreen* s     = (struct ListScreen*)screen;
+	struct ButtonWidget* btn = (struct ButtonWidget*)widget;
+	int recipe = s->currentIndex + btn->meta.val;
+
+	if (!Survival_Craft(recipe)) return;
+	ListScreen_Reload(s);
+	ListScreen_RedrawEntries(s);
+	s->dirty = true;
+}
+
+static void CraftingScreen_LoadEntries(struct ListScreen* s) {
+	cc_string str; char strBuffer[STRING_SIZE * 2];
+	int i;
+
+	for (i = 0; i < Survival_RecipesCount(); i++)
+	{
+		String_InitArray(str, strBuffer);
+		Survival_DescribeRecipe(i, &str);
+		StringsBuffer_Add(&s->entries, &str);
+	}
+}
+
+static void CraftingScreen_BackToGame(void* s, void* w) { Gui_Remove((struct Screen*)s); }
+
+void CraftingScreen_Show(void) {
+	struct ListScreen* s = &ListScreen;
+	s->titleText   = "Crafting";
+	s->actionText  = "Back to game";
+
+	s->ActionClick = CraftingScreen_BackToGame;
+	s->LoadEntries = CraftingScreen_LoadEntries;
+	s->EntryClick  = CraftingScreen_EntryClick;
 	s->DoneClick   = Menu_SwitchPause;
 	s->UpdateEntry = ListScreen_UpdateEntry;
 	ListScreen_Show();

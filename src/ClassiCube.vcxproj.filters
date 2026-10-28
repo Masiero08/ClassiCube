@@ -180,8 +180,31 @@
     <ClInclude Include="Lighting.h">
       <Filter>Header Files\Map</Filter>
     </ClInclude>
+    <ClInclude Include="ModernBlocks.h">
+      <Filter>Header Files\Map</Filter>
+    </ClInclude>
+    <ClInclude Include="ModernBlocks_tex.h">
+      <Filter>Header Files\Map</Filter>
+    <ClInclude Include="Survival.h">
+      <Filter>Header Files\Entities</Filter>
+    </ClInclude>
+    <ClInclude Include="LateGame.h">
+      <Filter>Header Files\Map</Filter>
+    </ClInclude>
+    <ClInclude Include="LateGame_tex.h">
+      <Filter>Header Files\Map</Filter>
+    </ClInclude>
+    <ClInclude Include="DayNight.h">
+      <Filter>Header Files\Entities</Filter>
+    </ClInclude>
     <ClInclude Include="Options.h">
       <Filter>Header Files\Utils</Filter>
+    </ClInclude>
+    <ClInclude Include="Minerios.h">
+      <Filter>Header Files\Map</Filter>
+    </ClInclude>
+    <ClInclude Include="Minerios_tex.h">
+      <Filter>Header Files\Map</Filter>
     </ClInclude>
     <ClInclude Include="Entity.h">
       <Filter>Header Files\Entities</Filter>
@@ -398,6 +421,17 @@
     <ClCompile Include="Lighting.c">
       <Filter>Source Files\Map</Filter>
     </ClCompile>
+    <ClCompile Include="ModernBlocks.c">
+      <Filter>Source Files\Map</Filter>
+    <ClCompile Include="Survival.c">
+      <Filter>Source Files\Entities</Filter>
+    </ClCompile>
+    <ClCompile Include="LateGame.c">
+      <Filter>Source Files\Map</Filter>
+    </ClCompile>
+    <ClCompile Include="DayNight.c">
+      <Filter>Source Files\Entities</Filter>
+    </ClCompile>
     <ClCompile Include="AxisLinesRenderer.c">
       <Filter>Source Files\SelectionBox</Filter>
     </ClCompile>
@@ -424,6 +458,9 @@
     </ClCompile>
     <ClCompile Include="Options.c">
       <Filter>Source Files\Utils</Filter>
+    </ClCompile>
+    <ClCompile Include="Minerios.c">
+      <Filter>Source Files\Map</Filter>
     </ClCompile>
     <ClCompile Include="Deflate.c">
       <Filter>Source Files\IO</Filter>
@@ -606,6 +643,9 @@
       <Filter>Source Files\Graphics</Filter>
     </ClCompile>
     <ClCompile Include="Commands.c">
+      <Filter>Source Files\Game</Filter>
+    </ClCompile>
+    <ClCompile Include="Criaturas.c">
       <Filter>Source Files\Game</Filter>
     </ClCompile>
     <ClCompile Include="FancyLighting.c">

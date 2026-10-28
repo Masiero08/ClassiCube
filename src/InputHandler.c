@@ -18,6 +18,11 @@
 #include "Event.h"
 #include "Window.h"
 #include "Entity.h"
+#include "Survival.h"
+#include "Criaturas.h"
+#include "Minerios.h"
+#include "DayNight.h"
+#include "LateGame.h"
 #include "Screens.h"
 #include "Block.h"
 #include "Menus.h"
@@ -413,19 +418,22 @@ static void InputHandler_DeleteBlock(void) {
 
 	old = World_GetBlock(pos.x, pos.y, pos.z);
 	if (Blocks.Draw[old] == DRAW_GAS || !Blocks.CanDelete[old]) return;
+	if (!Survival_CanBreak(old, pos.x, pos.y, pos.z)) return;
 
 	Game_ChangeBlock(pos.x, pos.y, pos.z, BLOCK_AIR);
+	Survival_OnBlockBroken(old);
 	Event_RaiseBlock(&UserEvents.BlockChanged, pos, old, BLOCK_AIR);
 }
 
 static void InputHandler_PlaceBlock(void) {
 	IVec3 pos;
-	BlockID old, block;
+	BlockID old, block, held;
 	pos = Game_SelectedPos.translatedPos;
 	if (!Game_SelectedPos.valid || !World_Contains(pos.x, pos.y, pos.z)) return;
 
 	old   = World_GetBlock(pos.x, pos.y, pos.z);
-	block = Inventory_SelectedBlock;
+	held  = Inventory_SelectedBlock;
+	block = held;
 	if (AutoRotate_Enabled) block = AutoRotate_RotateBlock(block);
 
 	if (Game_CanPick(old) || !Blocks.CanPlace[block]) return;
@@ -436,8 +444,10 @@ static void InputHandler_PlaceBlock(void) {
 	if (Blocks.Collide[old] == COLLIDE_NONE && !Blocks.CanDelete[old]) return;
 
 	if (!CheckIsFree(block)) return;
+	if (!Survival_CanPlace(held)) return;
 
 	Game_ChangeBlock(pos.x, pos.y, pos.z, block);
+	Survival_OnBlockPlaced(held);
 	Event_RaiseBlock(&UserEvents.BlockChanged, pos, old, block);
 }
 
@@ -599,6 +609,10 @@ static cc_bool BindTriggered_DeleteBlock(int key, struct InputDevice* device) {
 	if (Gui.InputGrab) return false;
 	
 	MouseStatePress(MOUSE_LEFT);
+	if (Criaturas_HandleClick(false)) { HeldBlockRenderer_ClickAnim(true); return true; }
+	if (Minerios_HandleClick(false))  { HeldBlockRenderer_ClickAnim(true); return true; }
+	if (LateGame_HandleAttack()) { HeldBlockRenderer_ClickAnim(true); return true; }
+	if (DayNight_HandleAttack()) { HeldBlockRenderer_ClickAnim(true); return true; }
 	InputHandler_DeleteBlock();
 	return true;
 }
@@ -607,6 +621,9 @@ static cc_bool BindTriggered_PlaceBlock(int key, struct InputDevice* device) {
 	if (Gui.InputGrab) return false;
 	
 	MouseStatePress(MOUSE_RIGHT);
+	if (Criaturas_HandleClick(true)) { HeldBlockRenderer_ClickAnim(false); return true; }
+	if (Minerios_HandleClick(true))  { HeldBlockRenderer_ClickAnim(false); return true; }
+	if (Survival_HandleUse())        { HeldBlockRenderer_ClickAnim(false); return true; }
 	InputHandler_PlaceBlock();
 	return true;
 }
@@ -871,6 +888,12 @@ static void OnInputDown(void* obj, int key, cc_bool was, struct InputDevice* dev
 		if (s->VTABLE->HandlesInputDown(s, key, device)) return;
 	}
 	if (Gui.InputGrab) return;
+
+	/* SELECT on a gamepad (e.g. 3DS) opens crafting in survival; pressing it again closes it */
+	if (key == CCPAD_SELECT && device->type == INPUT_DEVICE_GAMEPAD && Survival_IsActive()) {
+		if (!was) CraftingScreen_Show();
+		return;
+	}
 
 	if (InputDevice_IsPause(key, device)) {
 #ifdef CC_BUILD_WEB

@@ -197,15 +197,15 @@ void Gamepads_Process(float delta) {
 	circlePosition hid_pos;
 	hidCircleRead(&hid_pos);
 
+	// Circle Pad always turns the camera (D-Pad walks)
+	ProcessCircleInput(port, PAD_AXIS_RIGHT, &hid_pos, delta);
+
+	// C-Stick (New 3DS) or Circle Pad Pro also walks
 	if (irrst_result == 0) {
 		circlePosition stk_pos;
 		irrstScanInput();
 		irrstCstickRead(&stk_pos);
-		
-		ProcessCircleInput(port, PAD_AXIS_RIGHT, &stk_pos, delta);
-		ProcessCircleInput(port, PAD_AXIS_LEFT,  &hid_pos, delta);
-	} else {
-		ProcessCircleInput(port, PAD_AXIS_RIGHT, &hid_pos, delta);
+		ProcessCircleInput(port, PAD_AXIS_LEFT, &stk_pos, delta);
 	}
 }
 

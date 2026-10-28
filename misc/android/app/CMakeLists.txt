@@ -61,9 +61,15 @@ add_library(classicube SHARED
         ../../src/LWeb.c
         ../../src/Stream.c
         ../../src/Lighting.c
+        ../../src/ModernBlocks.c
+        ../../src/Survival.c
+        ../../src/LateGame.c
+        ../../src/Criaturas.c
+        ../../src/DayNight.c
         ../../src/Resources.c
         ../../src/PackedCol.c
         ../../src/Screens.c
+        ../../src/Minerios.c
         ../../src/Formats.c
         ../../src/_sfnt.c
         ../../src/Bitmap.c

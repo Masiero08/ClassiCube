@@ -266,9 +266,15 @@
     <ClCompile Include="..\..\src\LBackend.c" />
     <ClCompile Include="..\..\src\LBackend_Android.c" />
     <ClCompile Include="..\..\src\Lighting.c" />
+    <ClCompile Include="..\..\src\ModernBlocks.c" />
+    <ClCompile Include="..\..\src\Survival.c" />
+    <ClCompile Include="..\..\src\LateGame.c" />
+    <ClCompile Include="..\..\src\Criaturas.c" />
+    <ClCompile Include="..\..\src\DayNight.c" />
     <ClCompile Include="..\..\src\Logger.c" />
     <ClCompile Include="..\..\src\LScreens.c" />
     <ClCompile Include="..\..\src\LWeb.c" />
+    <ClCompile Include="..\..\src\Minerios.c" />
     <ClCompile Include="..\..\src\LWidgets.c" />
     <ClCompile Include="..\..\src\MapRenderer.c" />
     <ClCompile Include="..\..\src\MenuOptions.c" />

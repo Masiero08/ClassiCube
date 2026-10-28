@@ -374,6 +374,8 @@
   <ItemGroup>
     <ClInclude Include="Animations.h" />
     <ClInclude Include="Commands.h" />
+    <ClInclude Include="Criaturas.h" />
+    <ClInclude Include="CriaturasDados.h" />
     <ClInclude Include="EntityRenderers.h" />
     <ClInclude Include="LBackend.h" />
     <ClInclude Include="Http.h" />
@@ -412,9 +414,17 @@
     <ClInclude Include="Inventory.h" />
     <ClInclude Include="IsometricDrawer.h" />
     <ClInclude Include="Lighting.h" />
+    <ClInclude Include="ModernBlocks.h" />
+    <ClInclude Include="ModernBlocks_tex.h" />
+    <ClInclude Include="Survival.h" />
+    <ClInclude Include="LateGame.h" />
+    <ClInclude Include="LateGame_tex.h" />
+    <ClInclude Include="DayNight.h" />
     <ClInclude Include="Generator.h" />
     <ClInclude Include="MapRenderer.h" />
     <ClInclude Include="Options.h" />
+    <ClInclude Include="Minerios.h" />
+    <ClInclude Include="Minerios_tex.h" />
     <ClInclude Include="Particle.h" />
     <ClInclude Include="BlockPhysics.h" />
     <ClInclude Include="Picking.h" />
@@ -571,6 +581,7 @@
     <ClCompile Include="Audio_WinMM.c" />
     <ClCompile Include="Certs.c" />
     <ClCompile Include="Commands.c" />
+    <ClCompile Include="Criaturas.c" />
     <ClCompile Include="EntityRenderers.c" />
     <ClCompile Include="GameVersion.c" />
     <ClCompile Include="Graphics_D3D11.c" />
@@ -615,9 +626,14 @@
     <ClCompile Include="IsometricDrawer.c" />
     <ClCompile Include="Input.c" />
     <ClCompile Include="Lighting.c" />
+    <ClCompile Include="ModernBlocks.c" />
+    <ClCompile Include="Survival.c" />
+    <ClCompile Include="LateGame.c" />
+    <ClCompile Include="DayNight.c" />
     <ClCompile Include="Entity.c" />
     <ClCompile Include="MapRenderer.c" />
     <ClCompile Include="Options.c" />
+    <ClCompile Include="Minerios.c" />
     <ClCompile Include="PackedCol.c" />
     <ClCompile Include="Particle.c" />
     <ClCompile Include="PluginAPI.c" />

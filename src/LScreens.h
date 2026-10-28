@@ -46,6 +46,7 @@ void ColoursScreen_SetActive(void);
 void DirectConnectScreen_SetActive(void);
 void MFAScreen_SetActive(void);
 void MainScreen_SetActive(void);
+void ModsScreen_SetActive(void);
 void CheckResourcesScreen_SetActive(void);
 void FetchResourcesScreen_SetActive(void);
 void ServersScreen_SetActive(void);

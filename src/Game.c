@@ -1,8 +1,14 @@
 #include "Game.h"
 #include "Block.h"
+#include "ModernBlocks.h"
+#include "Survival.h"
+#include "DayNight.h"
 #include "World.h"
 #include "Lighting.h"
 #include "MapRenderer.h"
+#include "Minerios.h"
+#include "LateGame.h"
+#include "Paisagem.h"
 #include "Graphics.h"
 #include "Camera.h"
 #include "Options.h"
@@ -14,6 +20,7 @@
 #include "Utils.h"
 #include "Logger.h"
 #include "Entity.h"
+#include "Criaturas.h"
 #include "Chat.h"
 #include "Commands.h"
 #include "Drawer2D.h"
@@ -411,6 +418,13 @@ static void Game_Load(void) {
 	Game_AddComponent(&InputHandler_Component);
 	Game_AddComponent(&Camera_Component);
 	Game_AddComponent(&Blocks_Component);
+	Game_AddComponent(&ModernBlocks_Component);
+	/* antes da sobrevivencia: leva a vida e os blocos do jogador entre as dimensoes */
+	Game_AddComponent(&Minerios_Component);
+	Game_AddComponent(&LateGame_Component);
+	Game_AddComponent(&Paisagem_Component);
+	Game_AddComponent(&Survival_Component);
+	Game_AddComponent(&DayNight_Component);
 	Game_AddComponent(&Drawer2D_Component);
 	Game_AddComponent(&SystemFonts_Component);
 
@@ -430,6 +444,7 @@ static void Game_Load(void) {
 	Game_AddComponent(&Server_Component);
 	Game_AddComponent(&Protocol_Component);
 	Game_AddComponent(&Entities_Component);
+	Game_AddComponent(&Criaturas_Component);
 
 	Game_AddComponent(&Gui_Component);
 	Game_AddComponent(&Selections_Component);

@@ -627,6 +627,7 @@
     <ClCompile Include="Input.c" />
     <ClCompile Include="Lighting.c" />
     <ClCompile Include="ModernBlocks.c" />
+    <ClCompile Include="CraftingScreen.c" />
     <ClCompile Include="Survival.c" />
     <ClCompile Include="LateGame.c" />
     <ClCompile Include="DayNight.c" />

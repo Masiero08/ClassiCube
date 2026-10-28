@@ -158,6 +158,15 @@ for y in range(7, 16):
 for x in range(S): p[x, 7] = (215, 60, 65, 255)
 T("bed_side", bs)
 
+# Stick (graveto) for tool handles in the crafting grid
+st = new(); p = st.load()
+for i in range(3, 14):                                       # diagonal stick, light top edge
+    x, y = 15 - i, i
+    p[x, y] = (150, 105, 60, 255); p[x - 1, y] = (110, 75, 40, 255)
+    if i % 4 == 0: p[x, y] = (175, 130, 80, 255)
+p[12, 3] = (90, 60, 32, 255)
+T("graveto", st)
+
 # Ender dragon model skin (64x64, box layout matches the parts in src/LateGame.c)
 def dragon_skin():
     im = Image.new("RGBA", (64, 64), (0, 0, 0, 0)); px = im.load(); rnd = random.Random(20)

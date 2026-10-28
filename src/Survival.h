@@ -36,6 +36,29 @@ void Survival_DescribeRecipe(int i, cc_string* str);
 /* Crafts the given recipe if the player has enough of its inputs */
 cc_bool Survival_Craft(int i);
 
+/* The crafting grid is 3x3 cells, stored row by row (BLOCK_AIR = empty cell) */
+#define CRAFT_GRID_SIZE  3
+#define CRAFT_GRID_CELLS 9
+enum RecipeKind { RECIPE_KIND_FOOD, RECIPE_KIND_TOOL, RECIPE_KIND_BLOCK };
+/* Returns the recipe made by what is in the crafting grid, or -1 if none */
+int  Survival_MatchGrid(const BlockID* grid);
+/* Fills the crafting grid with where the ingredients of the given recipe go */
+void Survival_RecipeLayout(int i, BlockID* grid);
+/* Block shown for the result of a recipe, and how many are made (0 for tools and food) */
+BlockID Survival_RecipeIcon(int i, int* count);
+/* Whether the recipe makes food, a tool or a block (see RecipeKind) */
+int  Survival_RecipeKind(int i);
+/* Which tool the recipe makes (0 = pickaxe, 1 = axe, 2 = shovel, 3 = sword), or -1 if not a tool */
+int  Survival_RecipeTool(int i);
+/* Appends the name of what the recipe makes */
+void Survival_RecipeName(int i, cc_string* str);
+/* Why the recipe can't be made right now, or NULL if it can */
+const char* Survival_RecipeProblem(int i);
+/* How many of the given block the player has */
+int  Survival_GetCount(BlockID block);
+/* Short Portuguese name of the given block */
+cc_string Survival_BlockName(BlockID block);
+
 /* Size of the data written by Survival_GetTools */
 #define SURVIVAL_TOOLS_SIZE 12
 

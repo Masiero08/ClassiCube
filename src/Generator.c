@@ -6,6 +6,7 @@
 #include "World.h"
 #include "Utils.h"
 #include "LateGame.h"
+#include "Paisagem.h"
 #include "Minerios.h"
 #include "Game.h"
 #include "Screens.h"
@@ -355,10 +356,12 @@ static void NotchyGen_CreateHeightmap(void) {
 				height = max(hLow, hHigh);
 			}
 
-			height *= 0.5f;
+			/* Taller hills than classic (0.5), but keep peaks well below the top of the world */
+			height *= 0.7f;
 			if (height < 0) height *= 0.8f;
 
 			adjHeight = (int)(height + waterLevel);
+			if (adjHeight > World.Height - 6) adjHeight = World.Height - 6;
 			minHeight = min(adjHeight, minHeight);
 			heightmap[hIndex++] = adjHeight;
 		}
@@ -775,6 +778,7 @@ static void NotchyGen_Generate(void) {
 		GEN_COOP_STEP(13, NotchyGen_CarveModOres() );
 		GEN_COOP_STEP(14, Minerios_PosGeracao() );
 		GEN_COOP_STEP(15, LateGame_GenOverworld() );
+		GEN_COOP_STEP(16, Paisagem_GenOverworld() );
 	GEN_COOP_END
 
 	Mem_Free(heightmap);

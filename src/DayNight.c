@@ -551,7 +551,7 @@ static cc_bool DayNight_Tick(struct ScheduledTask2* task) {
 		animalTimer += delta;
 		if (animalTimer >= 6.0f) {
 			animalTimer = 0;
-			if (CountAnimals() < ANIMALS_MAX - 2) TrySpawnAnimal();
+			if (CountAnimals() < ANIMALS_MAX) TrySpawnAnimal();
 		}
 	}
 

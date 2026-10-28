@@ -1758,6 +1758,8 @@ static void GenSorte(BlockRaw bloco, int quantos) {
 	}
 }
 
+int Minerios_DimensaoGerando(void) { return dimGerando; }
+
 void Minerios_PosGeracao(void) {
 	int area = World.Width * World.Length;
 	if (!Game_AllowCustomBlocks) return;

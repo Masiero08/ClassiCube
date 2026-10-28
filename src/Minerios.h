@@ -41,6 +41,8 @@ extern const struct MinerioVeio Minerios_Veios[];
 extern const int Minerios_VeiosCount;
 /* Ultimo passo do gerador: transforma o mundo gerado numa dimensao (se for o caso) */
 void Minerios_PosGeracao(void);
+/* Dimensao sendo gerada agora (-1 ou 0 = mundo normal) */
+int Minerios_DimensaoGerando(void);
 
 /* Chamado quando o jogador aperta colocar (place = true) ou quebrar bloco. */
 /* Retorna true se o clique foi usado pelo mod (bater num monstro, usar um item). */

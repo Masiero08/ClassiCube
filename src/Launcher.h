@@ -40,6 +40,8 @@ struct LauncherTheme {
 	BitmapCol ButtonForeColor;
 	/* Colour of line at top of buttons to give them a less flat look*/
 	BitmapCol ButtonHighlightColor;
+	/* Whether to draw the background as a wall of blocks (tinted by BackgroundColor) */
+	cc_bool BlocksBackground;
 };
 /* Currently active theme */
 extern struct LauncherTheme Launcher_Theme;

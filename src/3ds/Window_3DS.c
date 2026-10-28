@@ -200,7 +200,7 @@ void Gamepads_Process(float delta) {
 	// Circle Pad Pro / C-Stick and (on Old 3DS) ZL/ZR come from ir:rst
 	if (irrst_result == 0) {
 		irrstScanInput();
-		mods |= irrstKeysDown() | irrstKeysHeld();
+		mods |= irrstKeysHeld();
 		irrstCstickRead(&stk_pos);
 		if (Math_AbsI(stk_pos.dx) > 24 || Math_AbsI(stk_pos.dy) > 24) rightStickSeen = true;
 	}

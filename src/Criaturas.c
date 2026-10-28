@@ -246,6 +246,50 @@ static void Equipe_Salvar(void) {
 	Options_Set(OPT_EQUIPE, &str);
 }
 
+/* Caixa das Criaturas: guarda as capturas que nao cabem na equipe (fica no Diario) */
+#define CAIXA_MAX 30
+#define OPT_CAIXA "criaturas-caixa"
+static struct Membro caixa[CAIXA_MAX];
+static int caixaCount;
+
+static void Caixa_Salvar(void) {
+	cc_string str; char strBuffer[CAIXA_MAX * 12];
+	int i;
+	String_InitArray(str, strBuffer);
+	for (i = 0; i < caixaCount; i++)
+	{
+		if (i) String_Append(&str, ',');
+		String_AppendInt(&str, caixa[i].especie); String_Append(&str, ':');
+		String_AppendInt(&str, caixa[i].nivel);   String_Append(&str, ':');
+		String_AppendInt(&str, caixa[i].xp);
+	}
+	Options_Set(OPT_CAIXA, &str);
+}
+
+static void Caixa_Carregar(void) {
+	cc_string str; char strBuffer[CAIXA_MAX * 12];
+	cc_string partes[CAIXA_MAX], campos[3];
+	int i, n, count, v[3];
+	String_InitArray(str, strBuffer);
+	Options_Get(OPT_CAIXA, &str, "");
+	caixaCount = 0;
+	if (!str.length) return;
+
+	count = String_UNSAFE_Split(&str, ',', partes, CAIXA_MAX);
+	for (i = 0; i < count; i++)
+	{
+		if (String_UNSAFE_Split(&partes[i], ':', campos, 3) != 3) continue;
+		for (n = 0; n < 3; n++) { if (!Convert_ParseInt(&campos[n], &v[n])) break; }
+		if (n < 3 || v[0] < 0 || v[0] >= ESPECIES_COUNT) continue;
+
+		caixa[caixaCount].especie = v[0];
+		caixa[caixaCount].nivel   = max(1, min(v[1], NIVEL_MAX));
+		caixa[caixaCount].xp      = max(0, v[2]);
+		caixa[caixaCount].vida    = 0; /* recupera a vida toda quando sai da caixa */
+		caixaCount++;
+	}
+}
+
 static void Equipe_Carregar(void) {
 	cc_string str; char strBuffer[STRING_SIZE * 2];
 	cc_string membros, ativo, partes[EQUIPE_MAX], campos[4];
@@ -324,6 +368,8 @@ struct Criatura {
 	cc_bool avisouTipo; /* ja avisou no chat que o tipo e forte/fraco contra esta */
 	cc_bool doMestre;   /* criatura de um Mestre de Bioma (nao foge, nao pode ser capturada) */
 	cc_bool capturando; /* dentro de um casulo que ainda esta balancando */
+	float especialTimer, defesaTimer, defesaRecarga; /* golpe especial e defender */
+	cc_bool querEspecial; /* o jogador pediu o especial: usa no proximo golpe */
 };
 static struct Criatura criaturas[CRIATURAS_MAX];
 static RNGState rnd;
@@ -605,6 +651,7 @@ static void Criatura_Dano(struct Criatura* c, int dano, Vec3 origem) {
 	Vec3 dir;
 	float len;
 	if (c->capturando) return;
+	if (c->defesaTimer > 0) dano /= 2; /* defendendo: metade do dano */
 	c->vida -= max(1, dano);
 	c->hurtTimer = 0.4f;
 	c->nomeSujo  = true;
@@ -646,14 +693,36 @@ static void Criatura_Olhar(struct Criatura* c, Vec3 alvo) {
 	c->base.next.rotY = c->base.next.yaw;
 }
 
+/* Golpe especial de cada tipo: dano 2.2x, recarga de 8 s */
+#define ESPECIAL_RECARGA 8.0f
+#define DEFESA_TEMPO     3.0f
+#define DEFESA_RECARGA   10.0f
+static const char* const golpeNomes[TIPO_COUNT] = {
+	"Bafo de Brasa", "Jato de Agua", "Chicote de Cipo", "Choque Forte", "Rajada",
+	"Rolar Pedra", "Ferroada", "Susto Sombrio", "Sopro Gelado"
+};
+
 static void Criatura_Golpear(struct Criatura* atk, struct Criatura* alvo) {
 	const struct EspecieDef* da = &especies_def[atk->especie];
 	float mult = Multiplicador(da->tipo, especies_def[alvo->especie].tipo);
 	int dano   = (int)((da->dano + atk->nivel / 2) * mult * (atk->selvagem ? 0.7f : 1.0f));
+	cc_bool especial;
 
+	/* o jogador escolhe quando usar; selvagens e Mestres usam de vez em quando */
+	especial = atk->especialTimer <= 0 && (atk->selvagem ? Random_Next(&rnd, 4) == 0 : atk->querEspecial);
 	atk->atkTimer = atk->selvagem ? 1.4f : 1.0f;
 	Criatura_Olhar(atk, alvo->base.next.pos);
 	Efeito_Golpe(alvo, da->tipo);
+
+	if (especial) {
+		dano = (int)(dano * 2.2f) + 1;
+		atk->especialTimer = ESPECIAL_RECARGA;
+		atk->querEspecial  = false;
+		atk->atkTimer     += 0.5f;
+		Efeito_Golpe(atk, da->tipo);
+		Efeito_Golpe(alvo, da->tipo);
+		Chat_Add4("%c%c &fusou &e%c&f!%c", da->cor, da->nome, golpeNomes[da->tipo], atk->selvagem ? " &7(cuidado!)" : "");
+	}
 
 	if (!atk->selvagem) {
 		alvo->ajudou = true;
@@ -782,6 +851,9 @@ static void Criatura_Tick(struct Entity* e, float delta) {
 	c->fugaTimer   -= delta;
 	c->pensarTimer -= delta;
 	c->curaTimer   -= delta;
+	c->especialTimer -= delta;
+	c->defesaTimer   -= delta;
+	c->defesaRecarga -= delta;
 
 	if (c->capturando) {
 		/* esta dentro do casulo: nao anda nem pensa */
@@ -1364,8 +1436,11 @@ static void Hud_Atualizar(float delta) {
 	minha = Criatura_DoJogador();
 
 	String_InitArray(str, strBuffer);
-	if (minha) Hud_Criatura(&str, "&fSua: ", minha);
-	else String_AppendConst(&str, "&7Nenhuma criatura fora do casulo");
+	if (minha) {
+		Hud_Criatura(&str, "&fSua: ", minha);
+		String_AppendConst(&str, minha->especialTimer <= 0 ? " &eE" : " &8E");
+		if (minha->defesaTimer > 0) String_AppendConst(&str, " &bD");
+	} else String_AppendConst(&str, "&7Nenhuma criatura fora do casulo");
 	Hud_Linha(0, &str);
 
 	String_InitArray(str, strBuffer);
@@ -1465,7 +1540,20 @@ static void Captura_Concluir(struct Criatura* c) {
 	Vec3 pos = lanc.para;
 
 	c->capturando = false;
-	if (lanc.sucesso && equipeCount < EQUIPE_MAX) {
+	if (lanc.sucesso && equipeCount >= EQUIPE_MAX && caixaCount < CAIXA_MAX) {
+		/* equipe cheia: vai para a Caixa das Criaturas */
+		caixa[caixaCount].especie = c->especie;
+		caixa[caixaCount].nivel   = c->nivel;
+		caixa[caixaCount].xp      = 0;
+		caixa[caixaCount].vida    = 0;
+		caixaCount++;
+		Caixa_Salvar();
+		Diario_Marcar(c->especie, true);
+		Chat_Add2("&aPegou! %c%c &afoi para a Caixa das Criaturas (sua equipe esta cheia).", def->cor, def->nome);
+		Chat_AddRaw("&7Abra em Criaturas > Diario > Caixa para trocar com a equipe.");
+		Lancamento_Efeito(pos, BLOCK_GOLD);
+		Criatura_Remover(c);
+	} else if (lanc.sucesso && equipeCount < EQUIPE_MAX) {
 		equipe[equipeCount].especie = c->especie;
 		equipe[equipeCount].nivel   = c->nivel;
 		equipe[equipeCount].vida    = max(1, c->vida);
@@ -1555,8 +1643,8 @@ static void TentarCapturar(struct Criatura* c) {
 		Chat_AddRaw("&cNao da para capturar a criatura de um Mestre! Venca ela na batalha.");
 		return;
 	}
-	if (equipeCount >= EQUIPE_MAX) {
-		Chat_AddRaw("&cSua equipe esta cheia (6). Use &f/client equipe &cpara ver.");
+	if (equipeCount >= EQUIPE_MAX && caixaCount >= CAIXA_MAX) {
+		Chat_AddRaw("&cSua equipe e a Caixa das Criaturas estao cheias.");
 		return;
 	}
 
@@ -1605,9 +1693,109 @@ static void Diario_Contar(int* vistas, int* capturadas) {
 	}
 }
 
+/* --- Caixa das Criaturas (tela) --- */
+static char caixaTitulo[STRING_SIZE];
+static int caixaEscolhida;
+
+static void Tela_Fechar(void) {
+	struct Screen* tela = Gui_GetInputGrab();
+	if (tela) Gui_Remove(tela);
+}
+
+static void Membro_Texto(cc_string* str, const struct Membro* m) {
+	const struct EspecieDef* def = &especies_def[m->especie];
+	int nivel = m->nivel;
+	String_AppendConst(str, def->cor);
+	String_AppendConst(str, def->nome);
+	String_Format2(str, " &fNv.%i &7(%c)", &nivel, tipoNomes[def->tipo]);
+}
+
+static void Caixa_CarregarLista(struct StringsBuffer* entries) {
+	cc_string str; char strBuffer[STRING_SIZE];
+	int i;
+	for (i = 0; i < caixaCount; i++)
+	{
+		String_InitArray(str, strBuffer);
+		Membro_Texto(&str, &caixa[i]);
+		StringsBuffer_Add(entries, &str);
+	}
+	if (!caixaCount) {
+		String_InitArray(str, strBuffer);
+		String_AppendConst(&str, "&7(vazia: capturas com a equipe cheia vem para ca)");
+		StringsBuffer_Add(entries, &str);
+	}
+}
+
+static void Caixa_TrocaLista(struct StringsBuffer* entries) {
+	cc_string str; char strBuffer[STRING_SIZE];
+	int i;
+	for (i = 0; i < equipeCount; i++)
+	{
+		String_InitArray(str, strBuffer);
+		Membro_Texto(&str, &equipe[i]);
+		StringsBuffer_Add(entries, &str);
+	}
+}
+
+static void Caixa_Abrir(void);
+static void Caixa_TrocaClique(int j) {
+	struct Membro saindo;
+	int i = caixaEscolhida;
+	Tela_Fechar();
+	if (i < 0 || i >= caixaCount || j < 0 || j >= equipeCount) return;
+
+	if (j == membroAtivo) SoltarMembro(-1); /* guarda antes de trocar */
+	saindo = equipe[j];
+	equipe[j]      = caixa[i];
+	equipe[j].vida = VidaMax(equipe[j].especie, equipe[j].nivel);
+	caixa[i]       = saindo;
+	Equipe_Salvar();
+	Caixa_Salvar();
+	Chat_Add4("&a%c%c &aentrou na equipe e %c%c &afoi para a Caixa.",
+		especies_def[equipe[j].especie].cor, especies_def[equipe[j].especie].nome,
+		especies_def[saindo.especie].cor, especies_def[saindo.especie].nome);
+	if (membroAtivo < 0) SoltarMembro(j);
+}
+
+static void Caixa_Clique(int i) {
+	if (i < 0 || i >= caixaCount) { Tela_Fechar(); return; }
+	if (equipeCount < EQUIPE_MAX) {
+		Tela_Fechar();
+		equipe[equipeCount]      = caixa[i];
+		equipe[equipeCount].vida = VidaMax(caixa[i].especie, caixa[i].nivel);
+		equipeCount++;
+		caixaCount--;
+		Mem_Move(&caixa[i], &caixa[i + 1], (caixaCount - i) * sizeof(struct Membro));
+		Equipe_Salvar();
+		Caixa_Salvar();
+		Chat_Add2("&a%c%c &asaiu da Caixa e entrou na equipe!", especies_def[equipe[equipeCount - 1].especie].cor,
+			especies_def[equipe[equipeCount - 1].especie].nome);
+		return;
+	}
+	/* equipe cheia: escolhe quem vai para a Caixa no lugar */
+	caixaEscolhida = i;
+	Tela_Fechar();
+	ModListScreen_Show("Trocar por qual da equipe?", "Cancelar", Caixa_TrocaLista, Caixa_TrocaClique);
+}
+
+static void Caixa_Abrir(void) {
+	cc_string str;
+	int max = CAIXA_MAX;
+	Tela_Fechar();
+	String_InitArray_NT(str, caixaTitulo);
+	String_Format2(&str, "Caixa das Criaturas (%i/%i)", &caixaCount, &max);
+	caixaTitulo[str.length] = '\0';
+	ModListScreen_Show(caixaTitulo, "Fechar", Caixa_CarregarLista, Caixa_Clique);
+	Chat_AddRaw("&7Toque numa criatura da Caixa para colocar ela na equipe.");
+}
+
 static void Diario_CarregarLista(struct StringsBuffer* entries) {
 	cc_string str; char strBuffer[STRING_SIZE];
 	int i, n;
+	String_InitArray(str, strBuffer);
+	String_Format1(&str, "&e> Caixa das Criaturas (%i guardadas)", &caixaCount);
+	StringsBuffer_Add(entries, &str);
+
 	for (i = 0; i < ESPECIES_COUNT; i++)
 	{
 		String_InitArray(str, strBuffer);
@@ -1628,10 +1816,15 @@ static void Diario_CarregarLista(struct StringsBuffer* entries) {
 }
 
 static void Diario_MostrarEspecie(int i) {
-	const struct EspecieDef* def = &especies_def[i];
-	struct Screen* tela = Gui_GetInputGrab();
-	int n = i + 1, vel = (int)def->vel, vida = def->vida, dano = def->dano;
+	const struct EspecieDef* def;
+	struct Screen* tela;
+	int n, vel, vida, dano;
+	if (i == 0) { Caixa_Abrir(); return; }
+	i--; /* a primeira linha e a Caixa */
 	if (i < 0 || i >= ESPECIES_COUNT) return;
+	def  = &especies_def[i];
+	tela = Gui_GetInputGrab();
+	n = i + 1; vel = (int)def->vel; vida = def->vida; dano = def->dano;
 	if (tela) Gui_Remove(tela);
 
 	if (!(diarioVistas & (1 << i))) {
@@ -1791,7 +1984,8 @@ static struct ChatCommand EquipeCommand = {
 static void Ajuda_Batalha(void) {
 	Chat_AddRaw("&eComo batalhar: chegue perto de uma criatura selvagem e toque em &fAtacar");
 	Chat_AddRaw("&e(tela de baixo) ou mire e aperte &fR&e. Com a vida dela baixa, toque em &fCapturar &e(ou &fL&e).");
-	Chat_AddRaw("&f Curar &ee &fTrocar &ecuidam da sua criatura; &fCriaturas &eabre Diario, equipe e Mestres.");
+	Chat_AddRaw("&fEspecial &eusa o golpe forte do tipo (recarga 8s); &fDefender &ecorta o dano pela metade.");
+	Chat_AddRaw("&f Curar &ee &fTrocar &ecuidam da sua criatura; &fCriaturas &eabre Diario, Caixa, equipe e Mestres.");
 }
 
 static void Inicial_Escolher(int escolha) {
@@ -2302,7 +2496,7 @@ static void Bau_Reiniciar(void) {
 *#########################################################################################################################*/
 /* No 3DS a tela de toque mostra botoes para batalhar sem precisar mirar: */
 /* eles agem na criatura da mira ou, se nao tiver, na selvagem mais perto. */
-#define BARRA_BTNS   5
+#define BARRA_BTNS   7
 #define BARRA_ALCANCE 12.0f
 #define GUI_PRIORITY_CRIATURAS 22 /* entre a tela de toque (25) e o inventario (20) */
 static struct BarraScreen {
@@ -2378,8 +2572,42 @@ static void Barra_Trocar(void* s, void* w) {
 
 static void Barra_Menu(void* s, void* w) { Criaturas_AbrirMenu(); }
 
+static void Barra_Especial(void* s, void* w) {
+	struct Criatura* c;
+	int t;
+	if (!Ativo()) return;
+	c = Criatura_DoJogador();
+	if (!c) { Chat_AddRaw("&eSua criatura esta no casulo. Toque em Trocar para chamar uma."); return; }
+	if (c->especialTimer > 0) {
+		t = (int)c->especialTimer + 1;
+		Chat_Add1("&7O especial ainda esta carregando (%is).", &t);
+		return;
+	}
+	c->querEspecial = true;
+	Chat_Add2("&e%c &evai usar &f%c &eno proximo golpe!", especies_def[c->especie].nome, golpeNomes[especies_def[c->especie].tipo]);
+	if (c->alvo < 0) Barra_Atacar(s, w); /* sem briga: comeca uma */
+}
+
+static void Barra_Defender(void* s, void* w) {
+	struct Criatura* c;
+	int t;
+	if (!Ativo()) return;
+	c = Criatura_DoJogador();
+	if (!c) { Chat_AddRaw("&eSua criatura esta no casulo. Toque em Trocar para chamar uma."); return; }
+	if (c->defesaRecarga > 0) {
+		t = (int)c->defesaRecarga + 1;
+		Chat_Add1("&7Ainda nao da para defender de novo (%is).", &t);
+		return;
+	}
+	c->defesaTimer   = DEFESA_TEMPO;
+	c->defesaRecarga = DEFESA_RECARGA;
+	Chat_Add1("&b%c &bse defende! Recebe metade do dano por 3 segundos.", especies_def[c->especie].nome);
+}
+
 static const struct { const char* texto; Widget_LeftClick click; } barraDescs[BARRA_BTNS] = {
 	{ "Atacar",    Barra_Atacar   },
+	{ "Especial",  Barra_Especial },
+	{ "Defender",  Barra_Defender },
 	{ "Capturar",  Barra_Capturar },
 	{ "Curar",     Barra_Curar    },
 	{ "Trocar",    Barra_Trocar   },
@@ -2406,10 +2634,11 @@ static void BarraScreen_ContextRecreated(void* screen) {
 static void BarraScreen_Layout(void* screen) {
 	struct BarraScreen* s = (struct BarraScreen*)screen;
 	int i;
-	/* coluna no canto de cima a esquerda (o resto da tela de toque fica livre) */
+	/* duas colunas no canto de cima a esquerda: batalha (4) e cuidados (3) */
 	for (i = 0; i < BARRA_BTNS; i++)
 	{
-		Widget_SetLocation(&s->btns[i], ANCHOR_MIN, ANCHOR_MIN, 10, 10 + i * 42);
+		if (i < 4) Widget_SetLocation(&s->btns[i], ANCHOR_MIN, ANCHOR_MIN, 10,  10 + i * 42);
+		else       Widget_SetLocation(&s->btns[i], ANCHOR_MIN, ANCHOR_MIN, 130, 10 + (i - 4) * 42);
 	}
 }
 
@@ -2475,6 +2704,7 @@ static void Criaturas_Init(void) {
 	Random_SeedFromCurrentTime(&rnd);
 	Especies_Register();
 	Equipe_Carregar();
+	Caixa_Carregar();
 	Casulos_Carregar();
 	Diario_Carregar();
 	Mestres_RegistrarTexturas();

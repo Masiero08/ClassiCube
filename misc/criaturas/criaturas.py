@@ -262,6 +262,12 @@ PLANOS["foca2"] = [
     ("nadadeira", 6, 0, -4, 10, 2, 0, (6, 2, -2), PERNA_B),
     ("cauda", -4, 0, 7, 4, 3, 12, (0, 1, 7), CAUDA),
 ]
+# bau das criaturas (kit do comeco): a tampa gira pela dobradica de tras (animacao CABECA)
+PLANOS["bau"] = [
+    ("caixa", -6, 0, -5, 6, 8, 5, (0, 0, 0), FIXO),
+    ("tampa", -6, 8, -5, 6, 11, 5, (0, 8, 5), CABECA),
+    ("fecho", -1, 6, -6, 1, 9, -5, (0, 8, 5), CABECA),
+]
 # casulo de captura (parece uma bolota: corpo, tampa e cabinho; nao e uma bola)
 PLANOS["casulo_item"] = [
     ("corpo", -2, 0, -2, 2, 5, 2, (0, 0, 0), FIXO),
@@ -271,7 +277,7 @@ PLANOS["casulo_item"] = [
 ]
 ORDEM_PLANOS = ["raposa", "porquinho", "esquilo", "ave", "bolha", "raposa2", "raposa3", "porquinho2", "porquinho3", "esquilo2", "ave2", "bolha2", "pedra2",
                 "lagarta", "casulo", "borboleta", "caranguejo", "caranguejo2", "toupeira", "toupeira2", "casulo_item",
-                "fantasma", "fantasma2", "foca", "foca2"]
+                "fantasma", "fantasma2", "foca", "foca2", "bau"]
 
 # ---------------------------------------------------------------- tipos
 TIPOS = ["FOGO", "AGUA", "PLANTA", "ELETRICO", "VENTO", "PEDRA", "INSETO", "FANTASMA", "GELO"]
@@ -555,6 +561,35 @@ def pintar_casulo(cs):
                             if face == "frente" and j == 0 and i == 1:
                                 c = (255, 255, 255)  # brilho
                     k = rnd.randint(-5, 5)
+                    img.putpixel((fx + i, fy + j), tuple(max(0, min(255, x + k)) for x in c) + (255,))
+    return img
+
+
+def pintar_bau():
+    rnd = random.Random("bau")
+    img = Image.new("RGBA", (TEX_W, TEX_H), (0, 0, 0, 0))
+    madeira, escura, metal, ouro = (165, 110, 60), (105, 65, 35), (200, 205, 215), (250, 205, 60)
+    folha = (90, 180, 80)
+    for idx, caixa in enumerate(PLANOS["bau"]):
+        nome = caixa[0]
+        sx, sy, sz = tamanho(caixa)
+        u, v = UVS["bau"][idx]
+        for face, (fx, fy, fw, fh) in regioes(u, v, sx, sy, sz).items():
+            for j in range(fh):
+                for i in range(fw):
+                    borda = i in (0, fw - 1) or j in (0, fh - 1)
+                    if nome == "fecho":
+                        c = ouro if not (face == "frente" and i == fw // 2 and j == fh // 2) else (60, 40, 20)
+                    elif borda:
+                        c = clar(metal, 0.85 if (i + j) % 2 else 1.0)  # cantoneiras de metal
+                    elif face in ("topo", "baixo"):
+                        c = clar(madeira, 0.92 if (j % 3) == 0 else 1.05)  # tabuas
+                    else:
+                        c = escura if j % 3 == 0 else clar(madeira, 1.0 - 0.15 * j / max(1, fh - 1))
+                    # folhinha verde (simbolo das criaturas) no meio da tampa
+                    if nome == "tampa" and face == "topo" and abs(i - fw // 2) + abs(j - fh // 2) <= 1:
+                        c = folha
+                    k = rnd.randint(-6, 6)
                     img.putpixel((fx + i, fy + j), tuple(max(0, min(255, x + k)) for x in c) + (255,))
     return img
 
@@ -1076,6 +1111,11 @@ def gerar_c(pngs):
         for i in range(0, len(data), 20):
             L.append("\t" + ",".join("%d" % b for b in data[i:i + 20]) + ",")
         L.append("};")
+    data = pngs["bau"]
+    L.append("static const cc_uint8 png_bau[%d] = {" % len(data))
+    for i in range(0, len(data), 20):
+        L.append("\t" + ",".join("%d" % b for b in data[i:i + 20]) + ",")
+    L.append("};")
     L.append("#define CASULOS_COUNT %d" % len(CASULOS))
     L.append("static const struct { const char* nome; const cc_uint8* png; int pngLen; } casulos_def[CASULOS_COUNT] = {")
     for cs in CASULOS:
@@ -1117,6 +1157,11 @@ def main():
         img.save(path, optimize=True)
         with open(path, "rb") as f:
             pngs["casulo_" + cs["id"]] = f.read()
+    img = pintar_bau()
+    path = os.path.join(TEX_DIR, "bau.png")
+    img.save(path, optimize=True)
+    with open(path, "rb") as f:
+        pngs["bau"] = f.read()
     for m in MESTRES:
         img = pintar_mestre(m)
         path = os.path.join(TEX_DIR, "mestre_" + m["id"] + ".png")

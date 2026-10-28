@@ -46,7 +46,7 @@ struct Especie {
 	int pngLen;
 };
 /* as especies e, depois delas, os modelos dos casulos de captura */
-static struct Especie especies[ESPECIES_COUNT + CASULOS_COUNT];
+static struct Especie especies[ESPECIES_COUNT + CASULOS_COUNT + 1]; /* + o bau */
 static struct ModelVertex plano_vertices[PLANOS_COUNT][MAX_PECAS * MODEL_BOX_VERTICES];
 static struct ModelPart   plano_partes[PLANOS_COUNT][MAX_PECAS];
 
@@ -154,7 +154,7 @@ static void Especies_Register(void) {
 	cc_string name;
 	int i, j, plano;
 
-	for (i = 0; i < ESPECIES_COUNT + CASULOS_COUNT; i++)
+	for (i = 0; i < ESPECIES_COUNT + CASULOS_COUNT + 1; i++)
 	{
 		struct Especie* sp = &especies[i];
 		const char* nome;
@@ -164,6 +164,11 @@ static void Especies_Register(void) {
 			sp->plano  = especies_def[i].plano;
 			sp->png    = especies_def[i].png;
 			sp->pngLen = especies_def[i].pngLen;
+		} else if (i == ESPECIES_COUNT + CASULOS_COUNT) {
+			nome       = "bau_criaturas";
+			sp->plano  = PLANO_BAU;
+			sp->png    = png_bau;
+			sp->pngLen = sizeof(png_bau);
 		} else {
 			nome       = casulos_def[i - ESPECIES_COUNT].nome;
 			sp->plano  = PLANO_CASULO_ITEM;
@@ -298,7 +303,7 @@ static void Diario_Marcar(int especie, cc_bool capturada) {
 /*########################################################################################################################*
 *--------------------------------------------------------Entidades--------------------------------------------------------*
 *#########################################################################################################################*/
-#define CRIATURAS_MAX     24
+#define CRIATURAS_MAX     23 /* 223 e do bau */
 #define CRIATURA_ID_BASE  200
 #define SELVAGENS_MAX     6
 #define DIST_SUMIR        (48.0f * 48.0f)
@@ -999,7 +1004,7 @@ static void Casulos_Recompensa(struct Criatura* c) {
 *-----------------------------------------------------Mestres de Bioma----------------------------------------------------*
 *#########################################################################################################################*/
 /* Treinadores (um por tipo) que aparecem pelo mundo. Vencer a equipe deles da uma insignia. */
-#define MESTRE_ID (CRIATURA_ID_BASE + CRIATURAS_MAX) /* 224 */
+#define MESTRE_ID 224
 
 struct Treinador { struct Entity base; cc_bool usado; int idx; };
 static struct Treinador treinador;
@@ -1360,6 +1365,8 @@ static void Hud_Atualizar(float delta) {
 }
 
 static float capturaTimer;
+static void Bau_Tick(float delta);
+static cc_bool Bau_Clique(void);
 static void Criaturas_TickGlobal(struct ScheduledTask* task) {
 	float delta = (float)task->interval;
 	capturaTimer -= delta;
@@ -1370,6 +1377,7 @@ static void Criaturas_TickGlobal(struct ScheduledTask* task) {
 	Spawner_Tick(delta);
 	Equipe_Descansar(delta);
 	Mestre_Tick(delta);
+	Bau_Tick(delta);
 	Hud_Atualizar(delta);
 }
 
@@ -1403,7 +1411,7 @@ static struct Criatura* CriaturaNaMira(float* tOut) {
 }
 
 /* --- Casulo jogado: voa ate a criatura, prende ela e balanca antes de decidir --- */
-#define LANCAMENTO_ID (CRIATURA_ID_BASE + CRIATURAS_MAX + 1) /* 225 */
+#define LANCAMENTO_ID 225
 #define VOO_TEMPO     0.5f
 #define BALANCO_TEMPO 0.7f
 
@@ -1636,6 +1644,7 @@ cc_bool Criaturas_HandleClick(cc_bool place) {
 	float tc, tm;
 	if (!Ativo()) return false;
 
+	if (Bau_Clique()) return true;
 	c = CriaturaNaMira(&tc);
 	p = Entities.CurPlayer;
 	if (MestreNaMira(Entity_GetEyePosition(&p->Base), Vec3_GetDirVector(p->Base.Yaw * MATH_DEG2RAD, p->Base.Pitch * MATH_DEG2RAD),
@@ -1803,6 +1812,7 @@ static struct ChatCommand InicialCommand = {
 
 
 /* Faz nascer criaturas selvagens na frente do jogador (para testar ou mostrar) */
+static void Bau_Reiniciar(void);
 static void CriaturaCommand_Execute(const cc_string* args, int argsCount) {
 	struct Entity* jogador = &Entities.CurPlayer->Base;
 	struct Criatura* c;
@@ -1820,6 +1830,10 @@ static void CriaturaCommand_Execute(const cc_string* args, int argsCount) {
 			nome = String_FromReadonly(especies_def[i].nome);
 			if (String_CaselessEquals(&args[0], &nome)) escolha = i;
 		}
+	}
+	if (argsCount && String_CaselessEqualsConst(&args[0], "bau")) {
+		Bau_Reiniciar();
+		return;
 	}
 	if (argsCount && String_CaselessEqualsConst(&args[0], "limpar")) {
 		for (i = 0; i < CRIATURAS_MAX; i++)
@@ -2107,6 +2121,129 @@ void Criaturas_AbrirMenu(void) {
 
 
 /*########################################################################################################################*
+*----------------------------------------------------Bau das Criaturas----------------------------------------------------*
+*#########################################################################################################################*/
+/* Kit do comeco: um bau perto de onde voce nasce, com casulos e o Diario. Abre uma vez so. */
+#define BAU_ID     223
+#define OPT_BAU    "criaturas-bau"
+#define BAU_ABRIR  0.6f
+#define BAU_SUMIR  4.0f
+
+static struct Bau {
+	struct Entity base;
+	cc_bool usado, aberto, menuAberto;
+	float t;
+} bau;
+static cc_bool bauPendente;
+
+static void Bau_Remover(void) {
+	if (!bau.usado) return;
+	Entities_Remove(BAU_ID);
+	bau.usado = false;
+}
+
+static void Bau_EntityTick(struct Entity* e, float delta) {
+	e->prev = e->next;
+	if (!bau.aberto) return;
+	bau.t += delta;
+	/* a tampa gira para tras pela dobradica */
+	e->next.pitch = -75.0f * min(1.0f, bau.t / BAU_ABRIR);
+}
+
+static const struct EntityVTABLE bau_VTABLE = {
+	Bau_EntityTick,         Criatura_Despawn,            Criatura_SetLocation, Treinador_GetCol,
+	Lancamento_RenderModel, Lancamento_ShouldRenderName
+};
+
+static void Bau_Aparecer(void) {
+	struct Entity* jogador = &Entities.CurPlayer->Base;
+	struct Entity* e = &bau.base;
+	float yaw = jogador->Yaw * MATH_DEG2RAD, y;
+	int x, z;
+	cc_string name;
+	Vec3 pos;
+
+	/* dois blocos na frente de onde voce nasce, virado para voce */
+	x = Math_Floor(jogador->Position.x + Math_SinF(yaw) * 2.5f);
+	z = Math_Floor(jogador->Position.z - Math_CosF(yaw) * 2.5f);
+	if (!AcharChaoEntre(x, z, Math_Floor(jogador->Position.y) + 4, Math_Floor(jogador->Position.y) - 8, false, &y)) {
+		x = Math_Floor(jogador->Position.x); z = Math_Floor(jogador->Position.z); y = jogador->Position.y;
+	}
+
+	Bau_Remover();
+	Mem_Set(&bau, 0, sizeof(bau));
+	Entity_Init(e);
+	e->VTABLE = &bau_VTABLE;
+	bau.usado = true;
+	Vec3_Set(pos, x + 0.5f, y, z + 0.5f);
+	e->prev.pos = e->next.pos = e->Position = pos;
+	e->next.yaw = e->prev.yaw = e->Yaw = jogador->Yaw + 180.0f;
+	e->next.rotY = e->prev.rotY = e->RotY = e->Yaw;
+
+	name = String_FromReadonly("bau_criaturas");
+	e->Model = Model_Get(&name);
+	Vec3_Set(e->ModelScale, 1.0f, 1.0f, 1.0f);
+	Entity_UpdateModelBounds(e);
+	Entities.List[BAU_ID] = e;
+
+	Chat_AddRaw("&eUm &6Bau das Criaturas &eapareceu na sua frente!");
+	Chat_AddRaw("&eBata nele (R) ou toque nele (L) para abrir.");
+}
+
+static void Bau_Abrir(void) {
+	IVec3 coords;
+	Vec3 p = bau.base.Position;
+	if (bau.aberto) return;
+	bau.aberto = true;
+	bau.t      = 0;
+
+	p.y += 0.6f;
+	IVec3_Floor(&coords, &p);
+	Particles_BreakBlockEffect(coords, BLOCK_GOLD, BLOCK_AIR);
+
+	Chat_AddRaw("&6Voce abriu o Bau das Criaturas!");
+	Casulos_Ganhar(CASULO_REFORCADO, 10);
+	Casulos_Ganhar(CASULO_MARE,       5);
+	Casulos_Ganhar(CASULO_MESTRE,     1);
+	Chat_AddRaw("&aVoce ganhou o &fDiario das Criaturas&a! Abra em Start > Criaturas... > Diario.");
+
+	Options_SetBool(OPT_BAU, true);
+	Options_SaveIfChanged();
+}
+
+static void Bau_Tick(float delta) {
+	if (bauPendente) {
+		bauPendente = false;
+		if (!Options_GetBool(OPT_BAU, false)) Bau_Aparecer();
+	}
+	if (!bau.usado || !bau.aberto) return;
+
+	/* depois de abrir: mostra a escolha da criatura inicial (ou o menu) e some */
+	if (!bau.menuAberto && bau.t >= BAU_ABRIR + 0.4f) {
+		bau.menuAberto = true;
+		Menu_Mostrar(equipeCount ? MENU_PRINCIPAL : MENU_INICIAL);
+	}
+	if (bau.t >= BAU_SUMIR) Bau_Remover();
+}
+
+static cc_bool Bau_Clique(void) {
+	struct LocalPlayer* p = Entities.CurPlayer;
+	float t0, t1;
+	if (!bau.usado) return false;
+	if (!Intersection_RayIntersectsRotatedBox(Entity_GetEyePosition(&p->Base),
+			Vec3_GetDirVector(p->Base.Yaw * MATH_DEG2RAD, p->Base.Pitch * MATH_DEG2RAD), &bau.base, &t0, &t1)) return false;
+	if (t0 < 0 || t0 > p->ReachDistance + 1.0f) return false;
+	Bau_Abrir();
+	return true;
+}
+
+static void Bau_Reiniciar(void) {
+	Options_SetBool(OPT_BAU, false);
+	Bau_Aparecer();
+}
+
+
+/*########################################################################################################################*
 *--------------------------------------------------------Componente-------------------------------------------------------*
 *#########################################################################################################################*/
 static void Criaturas_Init(void) {
@@ -2125,13 +2262,14 @@ static void Criaturas_Init(void) {
 	ScheduledTask_Add(GAME_DEF_TICKS, Criaturas_TickGlobal);
 }
 
-static void Criaturas_Reset(void) { Lancamento_Remover(); Mestre_Remover(); RemoverTodas(); }
+static void Criaturas_Reset(void) { Lancamento_Remover(); Mestre_Remover(); Bau_Remover(); RemoverTodas(); }
 
 static void Criaturas_OnNewMap(void) {
 	struct Criatura* minha = Criatura_DoJogador();
 	if (minha) Membro_SincronizarDe(minha);
 	Lancamento_Remover();
 	Mestre_Remover();
+	Bau_Remover();
 	RemoverTodas();
 	Hud_Limpar();
 	spawnTimer = 2.0f;
@@ -2139,6 +2277,7 @@ static void Criaturas_OnNewMap(void) {
 
 static void Criaturas_OnNewMapLoaded(void) {
 	criaturasLigadas = Options_GetBool(OPT_CRIATURAS, true);
+	bauPendente      = true;
 }
 
 static void Criaturas_Free(void) {
@@ -2146,6 +2285,7 @@ static void Criaturas_Free(void) {
 	if (minha) { Membro_SincronizarDe(minha); Equipe_Salvar(); }
 	Lancamento_Remover();
 	Mestre_Remover();
+	Bau_Remover();
 	RemoverTodas();
 }
 

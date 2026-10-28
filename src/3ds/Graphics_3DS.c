@@ -423,7 +423,15 @@ static void ToMortonTexture(C3D_Tex* tex, int originX, int originY,
 		Y = (Y - maskY) & maskY;
 		src += rowWidth;
 	}
-	// TODO flush data cache GSPGPU_FlushDataCache
+}
+
+// Textures that didn't fit in VRAM live in linear memory, which the CPU writes
+//  through its data cache. Without a flush the GPU can read stale memory there,
+//  which showed up on hardware as blocks drawn in a flat colour (lilac)
+static void FlushTexture(C3D_Tex* tex) {
+	u32 addr = (u32)tex->data;
+	if (addr >= 0x1F000000 && addr < 0x1F600000) return; // VRAM
+	CPU_FlushDataCache(tex->data, tex->size);
 }
 
 
@@ -433,15 +441,17 @@ GfxResourceID Gfx_AllocTexture(struct Bitmap* bmp, int rowWidth, cc_uint8 flags,
 
 	int can_vram = !(flags & TEXTURE_FLAG_DYNAMIC);
 	bool success = CreateNativeTexture(&tex->texture, bmp->width, bmp->height, can_vram);
-	if (!success) return NULL;
+	if (!success) { Mem_Free(tex); return NULL; }
 	
 	ToMortonTexture(&tex->texture, 0, 0, bmp, rowWidth);
-    return tex;
+	FlushTexture(&tex->texture);
+	return tex;
 }
 
 void Gfx_UpdateTexture(GfxResourceID texId, int x, int y, struct Bitmap* part, int rowWidth, cc_bool mipmaps) {
  	struct GPUTexture* tex = (struct GPUTexture*)texId;
 	ToMortonTexture(&tex->texture, x, y, part, rowWidth);
+	FlushTexture(&tex->texture);
 }
 
 void Gfx_DeleteTexture(GfxResourceID* texId) {

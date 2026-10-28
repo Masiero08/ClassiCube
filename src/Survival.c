@@ -487,7 +487,20 @@ void Survival_OnBlockBroken(BlockID block) {
 }
 
 cc_bool Survival_CanPlace(BlockID block) {
-	return !survival_active || blockCounts[block] > 0;
+	cc_string msg; char msgBuffer[STRING_SIZE];
+	cc_string name;
+	if (!survival_active || blockCounts[block] > 0) return true;
+
+	/* Tell the player why nothing happened (important on consoles) */
+	String_InitArray(msg, msgBuffer);
+	name = Block_UNSAFE_GetName(block);
+#ifdef CC_BUILD_3DS
+	String_Format1(&msg, "&cVoce nao tem %s. &eQuebre blocos (R) ou use o crafting (SELECT).", &name);
+#else
+	String_Format1(&msg, "&cVoce nao tem %s. &eQuebre blocos ou use o crafting.", &name);
+#endif
+	Chat_AddOf(&msg, MSG_TYPE_BOTTOMRIGHT_1);
+	return false;
 }
 
 void Survival_OnBlockPlaced(BlockID block) {
@@ -769,11 +782,39 @@ cc_bool Survival_Craft(int i) {
 cc_bool Survival_IsActive(void) { return survival_active; }
 
 /* Using (right click) a bed sets where the player respawns, and at night sleeps until morning */
+/* Eats the held block directly when it is a single-ingredient food */
+static cc_bool TryEatHeld(void) {
+	cc_string msg; char msgBuffer[STRING_SIZE];
+	cc_string name;
+	BlockID held = Inventory_SelectedBlock;
+	int i;
+
+	for (i = 0; i < FOODS_COUNT; i++)
+	{
+		if (foods[i].count2 || foods[i].input1 != held) continue;
+		/* Mushrooms are only eaten when not aiming at a block (else they get placed) */
+		if (held != LITEM_RAW_MEAT && held != LITEM_COOKED_MEAT && Game_SelectedPos.valid) return false;
+		if (food >= MAX_FOOD) {
+			Chat_AddOf(&(cc_string)String_FromConst("&eVoce esta sem fome."), MSG_TYPE_BOTTOMRIGHT_1);
+			return true;
+		}
+		if (!Eat(&foods[i])) return false;
+
+		String_InitArray(msg, msgBuffer);
+		name = String_FromReadonly(foods[i].name);
+		String_Format1(&msg, "&aNham! Voce comeu: %s", &name);
+		Chat_AddOf(&msg, MSG_TYPE_BOTTOMRIGHT_1);
+		return true;
+	}
+	return false;
+}
+
 cc_bool Survival_HandleUse(void) {
 	struct LocalPlayer* p;
 	IVec3 pos = Game_SelectedPos.pos;
-	if (!survival_active || !Game_SelectedPos.valid) return false;
-	if (!World_Contains(pos.x, pos.y, pos.z) || World_GetBlock(pos.x, pos.y, pos.z) != LBLOCK_BED) return false;
+	if (!survival_active) return false;
+	if (!Game_SelectedPos.valid || !World_Contains(pos.x, pos.y, pos.z) || 
+		World_GetBlock(pos.x, pos.y, pos.z) != LBLOCK_BED) return TryEatHeld();
 
 	p = (struct LocalPlayer*)Entities.CurPlayer;
 	p->Spawn.x = pos.x + 0.5f; p->Spawn.y = pos.y + 1.0f; p->Spawn.z = pos.z + 0.5f;

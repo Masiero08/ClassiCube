@@ -15,6 +15,12 @@ Todas as criaturas, nomes e texturas são originais.
 As criaturas ganham nível ajudando a derrotar selvagens e evoluem em certos níveis.
 A equipe fica salva nas opções (`criaturas-equipe`).
 
+## Bau das Criaturas (kit do começo)
+Na primeira vez que você entra num mundo com o mod ligado, aparece um **Baú das Criaturas** na sua frente.
+Bata nele (R) ou toque nele (L): ele abre a tampa e dá 10 Casulos Reforçados, 5 Casulos Maré, 1 Casulo
+Mestre e o Diário. Em seguida abre a escolha da criatura inicial. O baú só aparece uma vez (opção
+`criaturas-bau`); `/client criatura bau` faz ele aparecer de novo para testar.
+
 ## Batalha
 - A selvagem atacada **revida** contra a sua criatura; quando fica fraca (menos de 30% da vida), foge.
 - Cada golpe solta partículas do tipo (fogo, água, folhas, raio, vento, pedra, inseto).

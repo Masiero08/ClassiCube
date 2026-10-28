@@ -889,6 +889,12 @@ static void OnInputDown(void* obj, int key, cc_bool was, struct InputDevice* dev
 	}
 	if (Gui.InputGrab) return;
 
+	/* SELECT on a gamepad (e.g. 3DS) opens crafting in survival; pressing it again closes it */
+	if (key == CCPAD_SELECT && device->type == INPUT_DEVICE_GAMEPAD && Survival_IsActive()) {
+		if (!was) CraftingScreen_Show();
+		return;
+	}
+
 	if (InputDevice_IsPause(key, device)) {
 #ifdef CC_BUILD_WEB
 		/* Can't do this in KeyUp, because pressing escape without having */

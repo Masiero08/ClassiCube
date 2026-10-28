@@ -13,6 +13,7 @@
 #include "World.h"
 #include "ExtMath.h"
 #include "Minerios.h"
+#include "LateGame.h"
 #include "Paisagem_tex.h"
 
 /* Paisagem: makes newly generated singleplayer worlds feel alive. */
@@ -44,6 +45,12 @@ static const struct PaisagemBlockDef paisagem_blockDefs[PBLOCK_FIM - PBLOCK_GRAM
 { "Folhas de cerejeira",   T(CHERRY_LEAVES),   T(CHERRY_LEAVES),    T(CHERRY_LEAVES),   DRAW_TRANSPARENT_THICK, COLLIDE_SOLID, SOUND_GRASS },
 { "Folhas de pinheiro",    T(PINE_LEAVES),     T(PINE_LEAVES),      T(PINE_LEAVES),     DRAW_TRANSPARENT_THICK, COLLIDE_SOLID, SOUND_GRASS },
 { "Tronco de pinheiro",    T(BIRCH_TOP),       T(PINE_LOG_SIDE),    T(BIRCH_TOP),       DRAW_OPAQUE,            COLLIDE_SOLID, SOUND_WOOD  },
+{ "Emblema das Plantas",   T(EMBLEM_PLANTA),   T(EMBLEM_PLANTA),    T(EMBLEM_PLANTA),   DRAW_OPAQUE,            COLLIDE_SOLID, SOUND_STONE },
+{ "Emblema das Aguas",     T(EMBLEM_AGUA),     T(EMBLEM_AGUA),      T(EMBLEM_AGUA),     DRAW_OPAQUE,            COLLIDE_SOLID, SOUND_STONE },
+{ "Emblema das Pedras",    T(EMBLEM_PEDRA),    T(EMBLEM_PEDRA),     T(EMBLEM_PEDRA),    DRAW_OPAQUE,            COLLIDE_SOLID, SOUND_STONE },
+{ "Emblema dos Raios",     T(EMBLEM_ELETRICO), T(EMBLEM_ELETRICO),  T(EMBLEM_ELETRICO), DRAW_OPAQUE,            COLLIDE_SOLID, SOUND_STONE },
+{ "Emblema dos Ventos",    T(EMBLEM_VENTO),    T(EMBLEM_VENTO),     T(EMBLEM_VENTO),    DRAW_OPAQUE,            COLLIDE_SOLID, SOUND_STONE },
+{ "Emblema do Fogo",       T(EMBLEM_FOGO),     T(EMBLEM_FOGO),      T(EMBLEM_FOGO),     DRAW_OPAQUE,            COLLIDE_SOLID, SOUND_STONE },
 };
 
 
@@ -126,6 +133,11 @@ static void DefineBlock(BlockID block, const struct PaisagemBlockDef* def) {
 		Vec3_Set(Blocks.MinBB[block], 3.0f/16.0f, 0,           3.0f/16.0f);
 		Vec3_Set(Blocks.MaxBB[block], 13.0f/16.0f, 13.0f/16.0f, 13.0f/16.0f);
 	}
+	/* Gym emblems glow a little and can't be broken */
+	if (block >= PBLOCK_EMBLEMA_PLANTA && block <= PBLOCK_EMBLEMA_FOGO) {
+		Blocks.Brightness[block] = FANCY_LIGHTING_MAX_LEVEL / 2;
+		Blocks.CanDelete[block]  = false;
+	}
 	Block_DefineCustom(block, true);
 }
 
@@ -153,6 +165,7 @@ static RNGState gen_rnd;
 static int gen_seed;
 static BlockRaw GenGet(int x, int y, int z) { return Gen_Blocks[World_Pack(x, y, z)]; }
 static void GenSet(int x, int y, int z, BlockRaw b) { Gen_Blocks[World_Pack(x, y, z)] = b; }
+static cc_bool NearStructure(int x, int z, int margin);
 
 /* Only replaces air, so trees never cut into each other or the terrain */
 static void GenLeaf(int x, int y, int z, BlockRaw b) {
@@ -349,7 +362,7 @@ static void DecorateColumn(int x, int z, int waterLevel) {
 
 	/* Snowy peaks */
 	if (y >= waterLevel + 13) {
-		if (Random_Next(&gen_rnd, 30) == 0 && !NearTree(x, y + 1, z)) { GrowPine(x, y + 1, z); return; }
+		if (Random_Next(&gen_rnd, 30) == 0 && !NearTree(x, y + 1, z) && !NearStructure(x, z, 5)) { GrowPine(x, y + 1, z); return; }
 		GenSet(x, y + 1, z, BLOCK_SNOW);
 		return;
 	}
@@ -360,7 +373,7 @@ static void DecorateColumn(int x, int z, int waterLevel) {
 	r       = Random_Float(&gen_rnd);
 
 	/* Trees, denser in forests */
-	if (r < forest * forest * 0.09f && !NearTree(x, y + 1, z)) {
+	if (r < forest * forest * 0.09f && !NearTree(x, y + 1, z) && !NearStructure(x, z, 5)) {
 		if (y >= waterLevel + 9)  { GrowPine(x, y + 1, z); return; }
 		if (kind < 0.30f)         { GrowBirch(x, y + 1, z); return; }
 		if (kind > 0.78f)         { GrowCherry(x, y + 1, z); return; }
@@ -371,7 +384,7 @@ static void DecorateColumn(int x, int z, int waterLevel) {
 	r = Random_Float(&gen_rnd);
 
 	if (GenGet(x, y + 1, z) != BLOCK_AIR) return;
-	if (r < 0.004f && forest > 0.4f && !NearTree(x, y + 1, z)) { GrowBush(x, y + 1, z); return; }
+	if (r < 0.004f && forest > 0.4f && !NearTree(x, y + 1, z) && !NearStructure(x, z, 3)) { GrowBush(x, y + 1, z); return; }
 	if (r < 0.007f)            { GenSet(x, y + 1, z, PBLOCK_ARBUSTO); return; }
 	if (r < 0.0085f)           { GenSet(x, y + 1, z, PBLOCK_ABOBORA); return; }
 	if (flowers > 0.72f && r < 0.30f) { GenSet(x, y + 1, z, PickFlower(x, z)); return; }
@@ -380,6 +393,419 @@ static void DecorateColumn(int x, int z, int waterLevel) {
 	if (r < 0.18f + forest * 0.30f) {
 		GenSet(x, y + 1, z, (forest > 0.55f && Random_Next(&gen_rnd, 3) == 0) ? PBLOCK_SAMAMBAIA : PBLOCK_GRAMA_ALTA);
 	}
+}
+
+/*########################################################################################################################*
+*-------------------------------------------------------Underground-------------------------------------------------------*
+*#########################################################################################################################*/
+static cc_bool IsFluid(BlockRaw b) {
+	return b == BLOCK_WATER || b == BLOCK_STILL_WATER || b == BLOCK_LAVA || b == BLOCK_STILL_LAVA;
+}
+
+/* Turns a block into air, unless that would let water or lava flow into the hole */
+static void CarveAir(int x, int y, int z) {
+	static const int offsets[5][3] = { {1,0,0}, {-1,0,0}, {0,1,0}, {0,0,1}, {0,0,-1} };
+	BlockRaw b;
+	int i;
+	if (y < 2 || !World_Contains(x, y, z)) return;
+	b = GenGet(x, y, z);
+	if (b == BLOCK_AIR || b == BLOCK_BEDROCK || IsFluid(b)) return;
+
+	for (i = 0; i < 5; i++)
+	{
+		if (!World_Contains(x + offsets[i][0], y + offsets[i][1], z + offsets[i][2])) continue;
+		if (IsFluid(GenGet(x + offsets[i][0], y + offsets[i][1], z + offsets[i][2]))) return;
+	}
+	GenSet(x, y, z, BLOCK_AIR);
+}
+
+/* Big open caverns deep underground, some with a lava pool on the floor */
+static void GenCaverns(int waterLevel) {
+	int count = World.Volume / 140000 + 2;
+	int i, x, y, z, cx, cy, cz, rx, ry, rz;
+	float dx, dy, dz;
+
+	for (i = 0; i < count; i++)
+	{
+		rx = 5 + Random_Next(&gen_rnd, 5);
+		rz = 5 + Random_Next(&gen_rnd, 5);
+		ry = 3 + Random_Next(&gen_rnd, 2);
+		cx = Random_Next(&gen_rnd, World.Width);
+		cz = Random_Next(&gen_rnd, World.Length);
+		cy = 6 + ry + Random_Next(&gen_rnd, max(1, waterLevel - 14 - ry));
+
+		for (y = cy - ry; y <= cy + ry; y++)
+			for (z = cz - rz; z <= cz + rz; z++)
+				for (x = cx - rx; x <= cx + rx; x++)
+				{
+					dx = (float)(x - cx) / rx; dy = (float)(y - cy) / ry; dz = (float)(z - cz) / rz;
+					/* bumpy walls */
+					if (dx * dx + dy * dy + dz * dz > 1.0f - Random_Float(&gen_rnd) * 0.15f) continue;
+					CarveAir(x, y, z);
+				}
+
+		/* A small lava pool in some of the caverns */
+		if (Random_Next(&gen_rnd, 3) == 0) {
+			y = cy - ry + 1;
+			for (z = cz - 2; z <= cz + 2; z++)
+				for (x = cx - 2; x <= cx + 2; x++)
+				{
+					if (!World_Contains(x, y, z) || GenGet(x, y, z) != BLOCK_AIR) continue;
+					if (GenGet(x, y - 1, z) == BLOCK_AIR) continue;
+					GenSet(x, y, z, BLOCK_STILL_LAVA);
+				}
+		}
+	}
+}
+
+/* Ravines: long, deep cracks that open caves to the surface */
+static void GenRavines(void) {
+	int count = 1 + World.Width * World.Length / 12000;
+	int i, j, len, x, y, z, top, w, dx, dz;
+	float px, pz, ang;
+
+	for (i = 0; i < count; i++)
+	{
+		px  = (float)Random_Next(&gen_rnd, World.Width);
+		pz  = (float)Random_Next(&gen_rnd, World.Length);
+		ang = Random_Float(&gen_rnd) * 2 * MATH_PI;
+		len = 30 + Random_Next(&gen_rnd, 40);
+
+		for (j = 0; j < len; j++)
+		{
+			px  += Math_CosF(ang); pz += Math_SinF(ang);
+			ang += (Random_Float(&gen_rnd) - 0.5f) * 0.4f;
+			x = (int)px; z = (int)pz;
+			if (!World_ContainsXZ(x, z)) break;
+
+			/* narrow at the ends, widest in the middle */
+			w   = 1 + (int)(2.5f * Math_SinF(j * MATH_PI / len));
+			top = SurfaceY(x, z);
+			for (dz = -w; dz <= w; dz++)
+				for (dx = -w; dx <= w; dx++)
+					for (y = 5 + Random_Next(&gen_rnd, 3); y <= top; y++)
+					{
+						CarveAir(x + dx, y, z + dz);
+					}
+		}
+	}
+}
+
+/* Ores and other details on the walls of caves, so exploring them is worth it */
+static void DecorateCaveWalls(int waterLevel) {
+	int x, y, z, r;
+	BlockRaw b;
+
+	for (y = 2; y < waterLevel - 2; y++)
+		for (z = 1; z < World.Length - 1; z++)
+			for (x = 1; x < World.Width - 1; x++)
+			{
+				if (GenGet(x, y, z) != BLOCK_STONE) continue;
+				/* Only stone that touches the air of a cave */
+				if (GenGet(x + 1, y, z) != BLOCK_AIR && GenGet(x - 1, y, z) != BLOCK_AIR &&
+					GenGet(x, y, z + 1) != BLOCK_AIR && GenGet(x, y, z - 1) != BLOCK_AIR &&
+					GenGet(x, y + 1, z) != BLOCK_AIR && GenGet(x, y - 1, z) != BLOCK_AIR) continue;
+
+				r = Random_Next(&gen_rnd, 1000);
+				b = BLOCK_STONE;
+				if      (r < 30)  b = BLOCK_COAL_ORE;
+				else if (r < 48)  b = BLOCK_IRON_ORE;
+				else if (r < 54)  b = BLOCK_GOLD_ORE;
+				else if (r < 57 && y < 14) b = LBLOCK_DIAMOND_ORE;
+				else if (r < 61 && Minerios_Enabled) b = MBLOCK_RUBI_MINERIO;
+				else if (r < 63 && Minerios_Enabled) b = MBLOCK_TITANIO_MINERIO;
+				else if (r < 64 && Minerios_Enabled && y < 16) b = MBLOCK_URANIO_MINERIO;
+				else if (r < 90)  b = BLOCK_MOSSY_ROCKS;
+				else if (r < 104) b = BLOCK_GRAVEL;
+				/* Glowing stone on cave ceilings lights up the way */
+				else if (r < 108 && GenGet(x, y - 1, z) == BLOCK_AIR) b = LBLOCK_GLOWSTONE;
+				GenSet(x, y, z, b);
+			}
+}
+
+
+/*########################################################################################################################*
+*-------------------------------------------------------Structures--------------------------------------------------------*
+*#########################################################################################################################*/
+#define MAX_STRUCTURES 16
+static int structX[MAX_STRUCTURES], structZ[MAX_STRUCTURES], structSize[MAX_STRUCTURES], structCount;
+
+/* Whether the column is on or near a structure (so no trees grow in front of a door) */
+static cc_bool NearStructure(int x, int z, int margin) {
+	int i;
+	for (i = 0; i < structCount; i++)
+	{
+		if (x >= structX[i] - margin && x < structX[i] + structSize[i] + margin &&
+			z >= structZ[i] - margin && z < structZ[i] + structSize[i] + margin) return true;
+	}
+	return false;
+}
+
+/* Highest block in the column that is real ground (not a plant, log or leaves), or -1 */
+static int GroundY(int x, int z) {
+	int y;
+	BlockRaw b;
+	for (y = World.MaxY; y >= 0; y--)
+	{
+		b = GenGet(x, y, z);
+		if (b == BLOCK_AIR || b == BLOCK_LOG || b == BLOCK_LEAVES || Blocks.Draw[b] == DRAW_SPRITE) continue;
+		return y;
+	}
+	return -1;
+}
+
+/* Finds a dry, fairly flat spot of the given size far from other structures. Returns floor y or -1 */
+static int FindSite(int size, int* outX, int* outZ, int waterLevel) {
+	int tries, i, x, z, dx, dz, y, h, minH, maxH;
+	cc_bool ok;
+
+	for (tries = 0; tries < 250; tries++)
+	{
+		x = 4 + Random_Next(&gen_rnd, World.Width  - size - 8);
+		z = 4 + Random_Next(&gen_rnd, World.Length - size - 8);
+		ok = true;
+
+		for (i = 0; i < structCount; i++)
+		{
+			if (Math_AbsI(structX[i] - x) < 22 && Math_AbsI(structZ[i] - z) < 22) { ok = false; break; }
+		}
+		if (!ok) continue;
+
+		minH = World.Height; maxH = 0;
+		for (dz = 0; dz < size && ok; dz += 2)
+			for (dx = 0; dx < size && ok; dx += 2)
+			{
+				h = GroundY(x + dx, z + dz);
+				if (h <= waterLevel || (GenGet(x + dx, h, z + dz) != BLOCK_GRASS && GenGet(x + dx, h, z + dz) != BLOCK_DIRT)) ok = false;
+				minH = min(minH, h); maxH = max(maxH, h);
+			}
+		if (!ok || maxH - minH > 4) continue;
+
+		y = minH + 1;
+		if (y + 10 > World.MaxY) continue;
+		*outX = x; *outZ = z;
+		if (structCount < MAX_STRUCTURES) {
+			structX[structCount] = x; structZ[structCount] = z; structSize[structCount] = size; structCount++;
+		}
+		return y;
+	}
+	return -1;
+}
+
+/* Flattens the ground under a structure and clears the space above it */
+static void PrepareSite(int x0, int y, int z0, int size, int height) {
+	int x, z, yy;
+	for (z = z0; z < z0 + size; z++)
+		for (x = x0; x < x0 + size; x++)
+		{
+			for (yy = y - 1; yy >= 1; yy--)
+			{
+				BlockRaw b = GenGet(x, yy, z);
+				if (b != BLOCK_AIR && !IsFluid(b) && Blocks.Draw[b] != DRAW_SPRITE) break;
+				GenSet(x, yy, z, BLOCK_DIRT);
+			}
+			GenSet(x, y - 1, z, BLOCK_GRASS);
+			for (yy = y; yy < y + height && yy <= World.MaxY; yy++) GenSet(x, yy, z, BLOCK_AIR);
+		}
+
+	/* Clear trees right around it, so the building can be seen */
+	for (z = z0 - 3; z < z0 + size + 3; z++)
+		for (x = x0 - 3; x < x0 + size + 3; x++)
+			for (yy = y - 2; yy < y + height + 6 && yy <= World.MaxY; yy++)
+			{
+				if (!World_Contains(x, yy, z)) continue;
+				if (GenGet(x, yy, z) == BLOCK_LOG || GenGet(x, yy, z) == BLOCK_LEAVES) GenSet(x, yy, z, BLOCK_AIR);
+			}
+}
+
+struct GymStyle { BlockRaw floor, wall, corner, roof, window, deco; };
+/* Same order as mestres_def: plants, water, rocks, lightning, wind, fire */
+static const struct GymStyle gymStyles[6] = {
+	{ BLOCK_WOOD,        BLOCK_WOOD,        BLOCK_LOG,         BLOCK_LEAVES,      BLOCK_GLASS, BLOCK_ROSE        },
+	{ BLOCK_CYAN,        BLOCK_BLUE,        BLOCK_STONE_BRICK, BLOCK_DEEP_BLUE,   BLOCK_GLASS, BLOCK_STILL_WATER },
+	{ BLOCK_COBBLE,      BLOCK_STONE_BRICK, BLOCK_COBBLE,      BLOCK_COBBLE_SLAB, BLOCK_GLASS, BLOCK_GRAVEL      },
+	{ BLOCK_GOLD,        BLOCK_YELLOW,      BLOCK_IRON,        BLOCK_IRON,        BLOCK_GLASS, BLOCK_IRON        },
+	{ BLOCK_WHITE,       BLOCK_WHITE,       BLOCK_PILLAR,      BLOCK_AQUA,        BLOCK_GLASS, BLOCK_GLASS       },
+	{ BLOCK_BRICK,       BLOCK_RED,         BLOCK_BRICK,       BLOCK_MAGMA,       BLOCK_GLASS, BLOCK_STILL_LAVA  },
+};
+
+/* A small arena house for one Mestre de Bioma: walls, windows, roof, door and the emblem */
+static void BuildGym(int idx, int waterLevel) {
+	const struct GymStyle* st = &gymStyles[idx];
+	int size = 9, wallH = 4, x0, z0, y, x, z, yy;
+	cc_bool edgeX, edgeZ;
+
+	y = FindSite(size, &x0, &z0, waterLevel);
+	if (y < 0) return;
+	PrepareSite(x0, y, z0, size, wallH + 6);
+
+	for (z = 0; z < size; z++)
+		for (x = 0; x < size; x++)
+		{
+			edgeX = x == 0 || x == size - 1;
+			edgeZ = z == 0 || z == size - 1;
+			GenSet(x0 + x, y - 1, z0 + z, st->floor);
+
+			for (yy = 0; yy < wallH; yy++)
+			{
+				if (!edgeX && !edgeZ) continue;
+				if (edgeX && edgeZ) { GenSet(x0 + x, y + yy, z0 + z, st->corner); continue; }
+				/* windows in the middle of the walls */
+				if (yy == 2 && ((edgeX && (z == 2 || z == 6)) || (edgeZ && (x == 2 || x == 6)))) {
+					GenSet(x0 + x, y + yy, z0 + z, st->window); continue;
+				}
+				GenSet(x0 + x, y + yy, z0 + z, st->wall);
+			}
+		}
+
+	/* Stepped roof */
+	for (yy = 0; yy < 3; yy++)
+		for (z = yy; z < size - yy; z++)
+			for (x = yy; x < size - yy; x++)
+			{
+				if (yy < 2 && x > yy && x < size - 1 - yy && z > yy && z < size - 1 - yy) continue;
+				GenSet(x0 + x, y + wallH + yy, z0 + z, st->roof);
+			}
+	GenSet(x0 + 4, y + wallH + 3, z0 + 4, st->roof);
+
+	/* Door (2 high) facing -Z and a path out front */
+	GenSet(x0 + 4, y,     z0, BLOCK_AIR);
+	GenSet(x0 + 4, y + 1, z0, BLOCK_AIR);
+	if (z0 > 0) GenSet(x0 + 4, y - 1, z0 - 1, BLOCK_GRAVEL);
+
+	/* Emblem at the back on a pedestal, with decorations on both sides */
+	GenSet(x0 + 4, y,     z0 + size - 2, st->corner);
+	GenSet(x0 + 4, y + 1, z0 + size - 2, (BlockRaw)(PBLOCK_EMBLEMA_PLANTA + idx));
+	if (Blocks.Draw[st->deco] == DRAW_SPRITE || st->deco == BLOCK_STILL_WATER || st->deco == BLOCK_STILL_LAVA) {
+		/* sunken into the floor so liquids can't spread */
+		GenSet(x0 + 2, y - 1, z0 + size - 2, st->deco == BLOCK_ROSE ? BLOCK_GRASS : st->deco);
+		GenSet(x0 + 6, y - 1, z0 + size - 2, st->deco == BLOCK_ROSE ? BLOCK_GRASS : st->deco);
+		if (st->deco == BLOCK_ROSE) {
+			GenSet(x0 + 2, y, z0 + size - 2, BLOCK_ROSE);
+			GenSet(x0 + 6, y, z0 + size - 2, PBLOCK_TULIPA);
+		}
+	} else {
+		GenSet(x0 + 2, y, z0 + size - 2, st->deco);
+		GenSet(x0 + 6, y, z0 + size - 2, st->deco);
+	}
+	/* Lights inside */
+	GenSet(x0 + 1, y + wallH - 1, z0 + 1, LBLOCK_GLOWSTONE);
+	GenSet(x0 + size - 2, y + wallH - 1, z0 + size - 2, LBLOCK_GLOWSTONE);
+}
+
+/* Ruins with the altar of the first boss of Minerios & Monstros (place the altar to call it) */
+static void BuildAltarRuin(int waterLevel) {
+	int size = 7, x0, z0, y, x, z, h;
+	y = FindSite(size, &x0, &z0, waterLevel);
+	if (y < 0) return;
+	PrepareSite(x0, y, z0, size, 6);
+
+	for (z = 0; z < size; z++)
+		for (x = 0; x < size; x++)
+		{
+			GenSet(x0 + x, y - 1, z0 + z, Random_Next(&gen_rnd, 3) ? BLOCK_STONE_BRICK : BLOCK_MOSSY_ROCKS);
+		}
+	/* Broken pillars in the corners */
+	for (z = 0; z < size; z += size - 1)
+		for (x = 0; x < size; x += size - 1)
+			for (h = 0; h < 1 + Random_Next(&gen_rnd, 4); h++)
+			{
+				GenSet(x0 + x, y + h, z0 + z, h ? BLOCK_MOSSY_ROCKS : BLOCK_PILLAR);
+			}
+
+	GenSet(x0 + 3, y, z0 + 3, BLOCK_OBSIDIAN);
+	GenSet(x0 + 3, y + 1, z0 + 3, MBLOCK_ALTAR_RAINHA);
+	GenSet(x0 + 1, y, z0 + 3, MBLOCK_SORTE);
+	GenSet(x0 + 5, y, z0 + 3, MBLOCK_RUBI_MINERIO);
+}
+
+/* A dragon nest: a ring of stones around a dragon egg (it hatches into a dragon) */
+static void BuildDragonNest(int waterLevel) {
+	int size = 7, x0, z0, y, x, z;
+	float d;
+	y = FindSite(size, &x0, &z0, waterLevel);
+	if (y < 0) return;
+	PrepareSite(x0, y, z0, size, 4);
+
+	for (z = 0; z < size; z++)
+		for (x = 0; x < size; x++)
+		{
+			d = Math_SqrtF((float)((x - 3) * (x - 3) + (z - 3) * (z - 3)));
+			if (d > 3.4f) continue;
+			GenSet(x0 + x, y - 1, z0 + z, d < 2.2f ? BLOCK_GRAVEL : BLOCK_COBBLE);
+			if (d >= 2.4f && Random_Next(&gen_rnd, 3)) GenSet(x0 + x, y, z0 + z, BLOCK_OBSIDIAN);
+		}
+	GenSet(x0 + 3, y, z0 + 3, MBLOCK_OVO_DRAGAO);
+	GenSet(x0 + 2, y, z0 + 3, BLOCK_LOG);
+	GenSet(x0 + 4, y, z0 + 4, BLOCK_LOG);
+}
+
+/* A watchtower with ores to collect and a lucky block on top */
+static void BuildOreTower(int waterLevel) {
+	int size = 5, x0, z0, y, x, z, h, height = 8;
+	cc_bool edge;
+	y = FindSite(size, &x0, &z0, waterLevel);
+	if (y < 0) return;
+	PrepareSite(x0, y, z0, size, height + 3);
+
+	for (h = 0; h < height; h++)
+		for (z = 0; z < size; z++)
+			for (x = 0; x < size; x++)
+			{
+				edge = x == 0 || z == 0 || x == size - 1 || z == size - 1;
+				if (!edge) continue;
+				if (h < 2 && x == 2 && z == 0) continue; /* door */
+				GenSet(x0 + x, y + h, z0 + z, (h == 3 || h == 6) && (x == 2 || z == 2) ? BLOCK_GLASS : BLOCK_COBBLE);
+			}
+	for (z = 0; z < size; z++)
+		for (x = 0; x < size; x++)
+		{
+			GenSet(x0 + x, y + height, z0 + z, BLOCK_WOOD);
+			if (x == 0 || z == 0 || x == size - 1 || z == size - 1) {
+				if ((x + z) % 2 == 0) GenSet(x0 + x, y + height + 1, z0 + z, BLOCK_COBBLE);
+			}
+		}
+	/* Ores to mine on the ground floor */
+	GenSet(x0 + 1, y, z0 + 3, BLOCK_IRON_ORE);
+	GenSet(x0 + 3, y, z0 + 3, BLOCK_GOLD_ORE);
+	GenSet(x0 + 1, y, z0 + 1, BLOCK_COAL_ORE);
+	if (Minerios_Enabled) {
+		GenSet(x0 + 3, y, z0 + 1, MBLOCK_TITANIO_MINERIO);
+		GenSet(x0 + 2, y + height + 1, z0 + 2, MBLOCK_SORTE);
+	} else {
+		GenSet(x0 + 3, y, z0 + 1, BLOCK_IRON_ORE);
+	}
+}
+
+static void GenStructures(int waterLevel) {
+	int i;
+	structCount = 0;
+	Gen_CurrentState = "Construindo ginasios e ruinas";
+
+	for (i = 0; i < 6; i++) BuildGym(i, waterLevel);
+	BuildOreTower(waterLevel);
+	if (!Minerios_Enabled) return;
+
+	BuildAltarRuin(waterLevel);
+	BuildDragonNest(waterLevel);
+	BuildOreTower(waterLevel);
+}
+
+int Paisagem_AcharGinasio(int x, int y, int z, int radius, IVec3* pos) {
+	int xx, yy, zz;
+	BlockID b;
+
+	for (yy = y - 8; yy <= y + 8; yy++)
+		for (zz = z - radius; zz <= z + radius; zz++)
+			for (xx = x - radius; xx <= x + radius; xx++)
+			{
+				if (!World_Contains(xx, yy, zz)) continue;
+				b = World_GetBlock(xx, yy, zz);
+				if (b < PBLOCK_EMBLEMA_PLANTA || b > PBLOCK_EMBLEMA_FOGO) continue;
+				pos->x = xx; pos->y = yy; pos->z = zz;
+				return b - PBLOCK_EMBLEMA_PLANTA;
+			}
+	return -1;
 }
 
 void Paisagem_GenOverworld(void) {
@@ -391,6 +817,14 @@ void Paisagem_GenOverworld(void) {
 	Gen_CurrentState = "Deixando o mundo mais vivo";
 	Random_SeedFromCurrentTime(&gen_rnd);
 	gen_seed = Random_Next(&gen_rnd, 0x7FFFFFFF);
+
+	Gen_CurrentState = "Abrindo cavernas";
+	GenCaverns(waterLevel);
+	GenRavines();
+	DecorateCaveWalls(waterLevel);
+	GenStructures(waterLevel);
+
+	Gen_CurrentState = "Deixando o mundo mais vivo";
 
 	for (z = 0; z < World.Length; z++)
 	{

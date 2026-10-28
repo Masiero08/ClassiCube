@@ -24,10 +24,11 @@ Mestre e o Diário. Em seguida abre a escolha da criatura inicial. O baú só ap
 ## Botões de toque (tela de baixo do 3DS)
 Com o mod ligado, a tela de baixo mostra uma coluna de botões no canto de cima à esquerda:
 **Atacar** (bate na criatura da mira ou na selvagem mais perto, ou desafia um Mestre perto),
+**Especial**, **Defender**,
 **Capturar** (joga um casulo nela), **Curar** (fruta-cura na sua criatura), **Trocar** (próxima da
 equipe; sem equipe, abre a escolha da inicial) e **Criaturas** (o menu do mod). O menu tem também
 "Como batalhar", que mostra a explicação no chat. No PC, `/client criatura botoes` mostra os botões e
-`/client criatura toque 1..5` aperta um deles (para testar).
+`/client criatura toque 1..7` aperta um deles (para testar).
 
 ## Batalha
 - A selvagem atacada **revida** contra a sua criatura; quando fica fraca (menos de 30% da vida), foge.
@@ -41,6 +42,18 @@ equipe; sem equipe, abre a escolha da inicial) e **Criaturas** (o menu do mod). 
 Tipos: fogo > planta/inseto; água > fogo/pedra; planta > água/pedra; elétrico > água/vento;
 vento > planta/inseto; pedra > fogo/vento/gelo; inseto > planta; fantasma > fantasma/elétrico;
 gelo > planta/vento; fogo também > gelo.
+
+### Golpes
+A batalha continua em tempo real. Além do golpe normal, cada criatura tem um **Especial** do seu tipo
+(Bafo de Brasa, Jato de Água, Chicote de Cipó, Choque Forte, Rajada, Rolar Pedra, Ferroada, Susto Sombrio,
+Sopro Gelado): 2,2x de dano, recarga de 8 s. **Defender** corta o dano pela metade por 3 s (recarga 10 s).
+Selvagens e criaturas de Mestres também usam o especial de vez em quando. No canto de cima, `E` amarelo =
+especial pronto, `D` = defendendo.
+
+## Caixa das Criaturas
+A equipe tem até 6. Capturas com a equipe cheia vão para a **Caixa** (até 30), que fica na primeira linha
+do Diário. Tocar numa criatura da Caixa coloca ela na equipe; se a equipe estiver cheia, escolha quem vai
+para a Caixa no lugar. Fica salva na opção `criaturas-caixa`.
 
 ## Casulos de captura
 | Casulo | Como ganhar | Efeito |

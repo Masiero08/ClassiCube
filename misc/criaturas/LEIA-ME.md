@@ -50,6 +50,21 @@ Sopro Gelado): 2,2x de dano, recarga de 8 s. **Defender** corta o dano pela meta
 Selvagens e criaturas de Mestres também usam o especial de vez em quando. No canto de cima, `E` amarelo =
 especial pronto, `D` = defendendo.
 
+Cada especial tem um efeito do tipo: fogo queima e inseto envenena (dano por 3 s), água encharca e gelo
+congela (o alvo ataca mais devagar), elétrico paralisa, planta e fantasma roubam vida, vento ataca de novo
+logo, pedra endurece a pele. A partir do **nível 15** o especial vira um super golpe (3x): Erupção,
+Maremoto, Floresta Furiosa, Trovão, Furacão, Avalanche, Enxame, Pesadelo, Nevasca.
+
+## Lendárias
+Três criaturas lendárias originais, nível 35: **Celestrel** (vento, montanhas altas), **Vulcarno** (fogo,
+areia) e **Abissal** (água). Só aparecem depois de 3 insígnias, muito raramente e uma por vez (até ser
+capturada). Resistem a casulos: sem o Casulo Mestre a chance cai para 30%.
+
+## Liga dos Biomas
+Depois dos 6 Mestres aparecem, na ordem, os Conselheiros Geada (gelo), Breu (fantasma), Terra (pedra) e
+Trovão (elétrico), com criaturas de nível 30 a 35, e por fim a **Campeã Aurora** (4 criaturas, até nível
+40). Vencer a Campeã faz de você o Campeão da Liga (e dá 3 Casulos Mestre).
+
 ## Caixa das Criaturas
 A equipe tem até 6. Capturas com a equipe cheia vão para a **Caixa** (até 30), que fica na primeira linha
 do Diário. Tocar numa criatura da Caixa coloca ela na equipe; se a equipe estiver cheia, escolha quem vai

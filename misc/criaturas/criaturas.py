@@ -268,6 +268,33 @@ PLANOS["bau"] = [
     ("tampa", -6, 8, -5, 6, 11, 5, (0, 8, 5), CABECA),
     ("fecho", -1, 6, -6, 1, 9, -5, (0, 8, 5), CABECA),
 ]
+# --- lendarias
+PLANOS["ave_lenda"] = [
+    ("cabeca", -3, 9, -6, 3, 15, 0, (0, 10, -2), CABECA),
+    ("bico", -1, 10, -8, 1, 12, -6, (0, 10, -2), CABECA),
+    ("crista", -1, 15, -5, 1, 21, 2, (0, 10, -2), CABECA),
+    ("corpo", -4, 3, -4, 4, 11, 6, (0, 0, 0), FIXO),
+    ("asa_e", -14, 8, -3, -4, 9, 6, (-4, 9, 0), ASA_E),
+    ("asa_d", 4, 8, -3, 14, 9, 6, (4, 9, 0), ASA_D),
+    ("perna", -2, 0, 1, -1, 3, 2, (-1, 3, 1), PERNA_A),
+    ("perna", 1, 0, 1, 2, 3, 2, (1, 3, 1), PERNA_B),
+    ("cauda", -3, 5, 6, 3, 6, 16, (0, 5, 6), CAUDA),
+]
+PLANOS["lobo_lenda"] = PLANOS["raposa3"] + [
+    ("rocha", -3, 11, -4, -1, 14, -1, (0, 0, 0), FIXO),
+    ("rocha", 1, 11, 0, 3, 15, 3, (0, 0, 0), FIXO),
+    ("rocha", -2, 11, 3, 0, 13, 5, (0, 0, 0), FIXO),
+]
+PLANOS["serpente"] = [
+    ("cabeca", -3, 10, -14, 3, 16, -8, (0, 12, -8), CABECA),
+    ("focinho", -2, 10, -16, 2, 13, -14, (0, 12, -8), CABECA),
+    ("chifre", -1, 16, -12, 1, 19, -9, (0, 12, -8), CABECA),
+    ("corpo", -3, 4, -8, 3, 10, -2, (0, 0, 0), FIXO),
+    ("barbatana", -1, 10, -7, 1, 13, -3, (0, 0, 0), FIXO),
+    ("segmento", -3, 1, -2, 3, 7, 4, (0, 4, -2), PERNA_A),
+    ("segmento", -2, 0, 4, 2, 5, 10, (0, 3, 4), PERNA_B),
+    ("cauda", -1, 0, 10, 1, 3, 16, (0, 2, 10), CAUDA),
+]
 # casulo de captura (parece uma bolota: corpo, tampa e cabinho; nao e uma bola)
 PLANOS["casulo_item"] = [
     ("corpo", -2, 0, -2, 2, 5, 2, (0, 0, 0), FIXO),
@@ -277,7 +304,8 @@ PLANOS["casulo_item"] = [
 ]
 ORDEM_PLANOS = ["raposa", "porquinho", "esquilo", "ave", "bolha", "raposa2", "raposa3", "porquinho2", "porquinho3", "esquilo2", "ave2", "bolha2", "pedra2",
                 "lagarta", "casulo", "borboleta", "caranguejo", "caranguejo2", "toupeira", "toupeira2", "casulo_item",
-                "fantasma", "fantasma2", "foca", "foca2", "bau"]
+                "fantasma", "fantasma2", "foca", "foca2", "bau",
+                "ave_lenda", "lobo_lenda", "serpente"]
 
 # ---------------------------------------------------------------- tipos
 TIPOS = ["FOGO", "AGUA", "PLANTA", "ELETRICO", "VENTO", "PEDRA", "INSETO", "FANTASMA", "GELO"]
@@ -378,6 +406,16 @@ ESPECIES = [
     dict(id="geleirao", nome="Geleirao", cor="&b", tipo="GELO", plano="foca2", escala=1.25,
          vida=26, dano=7, vel=2.6, evolui=None, nivel=0, habitat="NEVE", inicial=0,
          pal=dict(base=(150, 190, 225), barriga=(230, 242, 252), detalhe=(170, 235, 255), olho=(20, 30, 70), sobrancelha=True)),
+    # lendarias: uma de cada, raras, nivel alto
+    dict(id="celestrel", nome="Celestrel", cor="&d", tipo="VENTO", plano="ave_lenda", escala=1.6,
+         vida=60, dano=12, vel=6.0, evolui=None, nivel=0, habitat="ALTO", inicial=0, lendaria=1,
+         pal=dict(base=(70, 60, 160), barriga=(235, 240, 255), detalhe=(120, 250, 200), olho=(255, 240, 150), crista_longa=True, aurora=True, sobrancelha=True)),
+    dict(id="vulcarno", nome="Vulcarno", cor="&4", tipo="FOGO", plano="lobo_lenda", escala=1.6,
+         vida=70, dano=13, vel=5.0, evolui=None, nivel=0, habitat="AREIA", inicial=0, lendaria=1,
+         pal=dict(base=(60, 45, 45), barriga=(40, 30, 30), detalhe=(255, 120, 20), olho=(255, 230, 60), lava=True, sobrancelha=True)),
+    dict(id="abissal", nome="Abissal", cor="&1", tipo="AGUA", plano="serpente", escala=1.5,
+         vida=65, dano=12, vel=4.5, evolui=None, nivel=0, habitat="AGUA", inicial=0, lendaria=1,
+         pal=dict(base=(25, 60, 120), barriga=(150, 220, 230), detalhe=(80, 230, 220), olho=(255, 255, 255), sobrancelha=True)),
 ]
 
 
@@ -402,6 +440,22 @@ MESTRES = [
     dict(id="brasa", nome="Mestra Brasa", titulo="Mestra do Fogo", insignia="Chama", cor="&c", tipo="FOGO",
          equipe=[("labareda", 20), ("labareda", 22), ("fornalobo", 25)],
          pal=dict(pele=(230, 185, 150), cabelo=(200, 50, 30), camisa=(220, 80, 30), calca=(60, 30, 30), detalhe=(255, 210, 60), sapato=(40, 20, 20), longo=True)),
+    # Liga dos Biomas: depois das 6 insignias
+    dict(id="geada", nome="Conselheira Geada", titulo="Liga dos Biomas", insignia="Cristal", cor="&b", tipo="GELO",
+         equipe=[("friozinho", 30), ("tenazor", 31), ("geleirao", 33)],
+         pal=dict(pele=(245, 215, 195), cabelo=(220, 240, 255), camisa=(150, 200, 240), calca=(240, 245, 255), detalhe=(100, 180, 255), sapato=(220, 230, 240), longo=True)),
+    dict(id="breu", nome="Conselheiro Breu", titulo="Liga dos Biomas", insignia="Sombra", cor="&5", tipo="FANTASMA",
+         equipe=[("vultinho", 31), ("asalume", 32), ("assombrao", 34)],
+         pal=dict(pele=(200, 190, 210), cabelo=(40, 30, 60), camisa=(80, 50, 120), calca=(30, 25, 40), detalhe=(140, 255, 210), sapato=(20, 20, 30))),
+    dict(id="terra", nome="Conselheira Terra", titulo="Liga dos Biomas", insignia="Terra", cor="&6", tipo="PEDRA",
+         equipe=[("cavucao", 33), ("pedregulho", 33), ("tenazor", 34)],
+         pal=dict(pele=(150, 100, 70), cabelo=(60, 40, 30), camisa=(160, 120, 70), calca=(90, 70, 50), detalhe=(230, 200, 120), sapato=(60, 45, 30), capacete=True)),
+    dict(id="trovao", nome="Conselheiro Trovao", titulo="Liga dos Biomas", insignia="Trovao", cor="&e", tipo="ELETRICO",
+         equipe=[("trovesquilo", 34), ("ventania", 34), ("tsunamor", 35)],
+         pal=dict(pele=(220, 175, 140), cabelo=(250, 240, 120), camisa=(40, 40, 60), calca=(250, 220, 60), detalhe=(255, 255, 255), sapato=(40, 40, 60))),
+    dict(id="aurora", nome="Campea Aurora", titulo="Campea da Liga", insignia="Coroa", cor="&d", tipo="VENTO",
+         equipe=[("florestauro", 38), ("fornalobo", 38), ("tsunamor", 38), ("trovesquilo", 40)],
+         pal=dict(pele=(240, 200, 170), cabelo=(250, 160, 220), camisa=(250, 250, 255), calca=(120, 90, 200), detalhe=(255, 215, 80), sapato=(250, 215, 80), longo=True)),
 ]
 
 # caixas da pele de humano 64x64: (nome, u, v, sx, sy, sz)
@@ -506,6 +560,9 @@ DESCRICOES = {
     "assombrao": "Os olhos brilham no escuro e guiam quem se perdeu.",
     "friozinho": "Escorrega de barriga no gelo mais rapido que corre.",
     "geleirao": "Os cristais das costas nunca derretem, nem no deserto.",
+    "celestrel": "Lendaria. Suas asas pintam auroras no ceu das montanhas.",
+    "vulcarno": "Lendario. Dorme dentro de vulcoes e acorda com terremotos.",
+    "abissal": "Lendaria. Vive no fundo do mar e so sobe em noites calmas.",
 }
 for _e in ESPECIES:
     _e["desc"] = DESCRICOES[_e["id"]]
@@ -701,8 +758,7 @@ def cor_pixel(esp, nome, face, i, j, w, h, rnd):
     pal = esp["pal"]
     base, barriga, det = pal["base"], pal["barriga"], pal["detalhe"]
     plano = esp["plano"].rstrip("23")
-    if plano == "pedra":
-        plano = "bolha"
+    plano = {"pedra": "bolha", "ave_lenda": "ave", "lobo_lenda": "raposa"}.get(plano, plano)
     # sombreado suave: topo claro, laterais escurecem para baixo
     if face == "topo":
         c = clar(base, 1.12)
@@ -842,6 +898,12 @@ def cor_pixel(esp, nome, face, i, j, w, h, rnd):
             return clar(base, 0.75)
         if nome == "corpo" and face == "frente":
             return barriga
+        if pal.get("aurora") and (nome.startswith("asa") or nome == "cauda"):
+            # asas de aurora: faixas que vao do azul ao verde e rosa
+            t = (i + j * 0.5) / max(1, w)
+            if t < 0.5:
+                return mix(base, det, t * 2)
+            return mix(det, (250, 130, 220), (t - 0.5) * 2)
         if nome.startswith("asa"):
             return clar(base, 0.8) if j < h - 1 else clar(base, 0.6)
         if nome == "cauda":
@@ -1002,6 +1064,24 @@ def cor_pixel(esp, nome, face, i, j, w, h, rnd):
             return mix(base, barriga, 0.3)
         return c
 
+    if plano == "serpente":
+        if nome == "cabeca" and face == "frente":
+            r = rosto(esp, i, j, w, h, base, olho_y=1)
+            if r:
+                return r
+        if nome == "focinho":
+            if face == "frente" and j == h - 1 and 0 < i < w - 1:
+                return (250, 250, 245, 255)  # dentinhos
+            return barriga
+        if nome in ("chifre", "barbatana"):
+            return clar(det, 1.0 if (i + j) % 2 else 0.8)
+        if face == "baixo" or (face in ("esq", "dir", "frente") and j >= h - 2):
+            return barriga
+        # escamas brilhantes
+        if face in ("esq", "dir", "topo") and (i + j * 2) % 4 == 0:
+            return mix(base, det, 0.5)
+        return c
+
     if plano == "foca":
         if nome == "cabeca" and face == "frente":
             r = rosto(esp, i, j, w, h, base, olho_y=1)
@@ -1064,7 +1144,7 @@ def gerar_c(pngs):
     L.append("struct PecaDef { cc_uint8 u, v; cc_int8 x1,y1,z1, x2,y2,z2, px,py,pz; cc_uint8 anim; };")
     L.append("struct PlanoDef { const struct PecaDef* pecas; int count; float nameY, eyeY; cc_int8 bb[6]; };")
     L.append("struct EspecieDef { const char* nome; const char* cor; cc_uint8 tipo, plano; float escala;")
-    L.append("\tcc_uint8 vida, dano; float vel; int evolui, nivelEvolui; cc_uint8 habitat, inicial;")
+    L.append("\tcc_uint8 vida, dano; float vel; int evolui, nivelEvolui; cc_uint8 habitat, inicial, lendaria;")
     L.append("\tconst cc_uint8* png; int pngLen; const char* desc; };")
     L.append("")
     for p in ORDEM_PLANOS:
@@ -1100,9 +1180,9 @@ def gerar_c(pngs):
     L.append("static const struct EspecieDef especies_def[ESPECIES_COUNT] = {")
     for e in ESPECIES:
         evo = ids.index(e["evolui"]) if e["evolui"] else -1
-        L.append('\t{ "%s", "%s", TIPO_%s, %d, %.2ff, %d, %d, %.1ff, %d, %d, HABITAT_%s, %d, png_%s, sizeof(png_%s), "%s" },' % (
+        L.append('\t{ "%s", "%s", TIPO_%s, %d, %.2ff, %d, %d, %.1ff, %d, %d, HABITAT_%s, %d, %d, png_%s, sizeof(png_%s), "%s" },' % (
             e["nome"], e["cor"], e["tipo"], ORDEM_PLANOS.index(e["plano"]), e["escala"], e["vida"], e["dano"],
-            e["vel"], evo, e["nivel"], e["habitat"], e["inicial"], e["id"], e["id"], e["desc"]))
+            e["vel"], evo, e["nivel"], e["habitat"], e["inicial"], e.get("lendaria", 0), e["id"], e["id"], e["desc"]))
     L.append("};")
     L.append("")
     for cs in CASULOS:
@@ -1123,7 +1203,7 @@ def gerar_c(pngs):
     L.append("};")
     L.append("")
     L.append("struct MestreDef { const char* nome; const char* titulo; const char* insignia; const char* cor; cc_uint8 tipo, count;")
-    L.append("\tcc_uint8 especies[3], niveis[3]; const cc_uint8* png; int pngLen; };")
+    L.append("\tcc_uint8 especies[4], niveis[4]; const cc_uint8* png; int pngLen; };")
     for m in MESTRES:
         data = pngs["mestre_" + m["id"]]
         L.append("static const cc_uint8 png_mestre_%s[%d] = {" % (m["id"], len(data)))
@@ -1133,7 +1213,7 @@ def gerar_c(pngs):
     L.append("#define MESTRES_COUNT %d" % len(MESTRES))
     L.append("static const struct MestreDef mestres_def[MESTRES_COUNT] = {")
     for m in MESTRES:
-        eq = m["equipe"] + [m["equipe"][-1]] * (3 - len(m["equipe"]))
+        eq = m["equipe"] + [m["equipe"][-1]] * (4 - len(m["equipe"]))
         L.append('\t{ "%s", "%s", "%s", "%s", TIPO_%s, %d, { %s }, { %s }, png_mestre_%s, sizeof(png_mestre_%s) },' % (
             m["nome"], m["titulo"], m["insignia"], m["cor"], m["tipo"], len(m["equipe"]),
             ", ".join(str(ids.index(e)) for e, _ in eq), ", ".join(str(n) for _, n in eq), m["id"], m["id"]))

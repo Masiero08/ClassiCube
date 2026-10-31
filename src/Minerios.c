@@ -36,6 +36,7 @@
 #include "Logger.h"
 #include "Minerios_tex.h"
 #include "LateGame.h"
+#include "Equipamento.h"
 
 /* Minerios & Monstros: um mod pequeno inspirado no OreSpawn.
    Os nomes e as texturas sao originais (misc/minerios/gen_textures.py).
@@ -475,7 +476,6 @@ struct Monstro {
 	Vec3 destino;
 };
 static struct Monstro monstros[MONSTROS_MAX];
-static cc_bool armadura; /* jogador esta usando a armadura de titanio */
 static cc_bool montado;  /* jogador esta montado no dragao */
 static int dragaoPendente; /* trazer o dragao domado (1 a 3, o tipo) para o mundo novo */
 #define OPT_DRAGAO "minerios-dragao"
@@ -557,8 +557,7 @@ static void Monstro_AtualizarNome(struct Monstro* m) {
 /* Machuca o jogador (so tira vida no modo sobrevivencia) */
 static void DanoJogador(int dano) {
 	if (dano <= 0 || !Survival_IsActive()) return;
-	/* a armadura de titanio corta o dano pela metade */
-	if (armadura) dano = max(1, dano / 2);
+	/* a armadura (Equipamento.c) e aplicada pelo Survival_Damage */
 	Survival_Damage(dano);
 }
 
@@ -1450,17 +1449,10 @@ cc_bool Minerios_HandleClick(cc_bool place) {
 		/* com rubi na mao nao precisa mirar certinho: vale o dragao mais perto */
 		if ((!m || !EhDragao(m->tipo)) && SegurandoRubi()) m = DragaoPerto(8.0f);
 		if (m && EhDragao(m->tipo)) { DragaoClique(m, held); return true; }
-		if (!EhItem(held)) return false;
+		/* a armadura de titanio e vestida pelo Equipamento.c (peitoral de titanio) */
+		if (held == MITEM_ARMADURA_TITANIO) return false;
 		/* itens nao sao colocados no mundo */
-		if (held == MITEM_ARMADURA_TITANIO) {
-			if (armadura) {
-				Chat_AddRaw("&7Voce ja esta usando a armadura de titanio.");
-			} else {
-				armadura = true;
-				Chat_AddRaw("&bVoce vestiu a armadura de titanio! &7(leva metade do dano)");
-			}
-		}
-		return true;
+		return EhItem(held);
 	}
 
 	if (montado) { SoproDragao(); return true; }
@@ -1501,6 +1493,7 @@ static Vec3  posSegura; /* ultima posicao do jogador fora de um portal */
 static cc_bool survLevar;
 static int     survVida, survComida;
 static cc_uint8 survFerramentas[SURVIVAL_TOOLS_SIZE];
+static cc_uint8 survArmadura[EQUIP_ARMOR_SIZE];
 static cc_uint8 survBlocos[BLOCK_COUNT * 2];
 
 static cc_result SalvarMundo(const char* arquivo) {
@@ -1555,6 +1548,7 @@ static void Viajar(int destino) {
 		survComida = Survival_GetFood();
 		Survival_GetCounts(survBlocos);
 		Survival_GetTools(survFerramentas);
+		Equip_SaveArmor(survArmadura);
 	}
 
 	viajando   = true;
@@ -2040,7 +2034,6 @@ static void OnNewMap(void) {
 	mosquitoTimer = 180.0f;
 	/* um mundo carregado pelo menu volta a ser o "mundo normal" */
 	dimAtual = viajando ? dimDestino : DIM_NORMAL;
-	if (!viajando) armadura = false;
 }
 
 static void OnNewMapLoaded(void) {
@@ -2071,6 +2064,7 @@ static void OnNewMapLoaded(void) {
 		Survival_LoadFood(survComida);
 		Survival_LoadCounts(survBlocos, sizeof(survBlocos));
 		Survival_LoadTools(survFerramentas, sizeof(survFerramentas));
+		Equip_LoadArmor(survArmadura, sizeof(survArmadura));
 	}
 	if (dimGerando >= 0) {
 		AplicarCeu(dimAtual, dimAtual != DIM_NORMAL);

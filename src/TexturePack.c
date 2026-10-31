@@ -20,6 +20,7 @@
 #include "ModernBlocks.h"
 #include "LateGame.h"
 #include "Paisagem.h"
+#include "Equipamento.h"
 
 /* Simple fallback terrain for when no texture packs are available at all */
 static BitmapCol fallback_terrain[16 * 8] = {
@@ -177,6 +178,7 @@ static void Atlas_Update(struct Bitmap* bmp) {
 	ModernBlocks_PatchAtlas(bmp);
 	LateGame_PatchAtlas(bmp);
 	Paisagem_PatchAtlas(bmp);
+	Equip_PatchAtlas(bmp);
 	Atlas2D.Bmp       = *bmp;
 	Atlas2D.TileSize  = bmp->width  / ATLAS2D_TILES_PER_ROW;
 	Atlas2D.RowsCount = bmp->height / Atlas2D.TileSize;

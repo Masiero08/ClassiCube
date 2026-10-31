@@ -18,6 +18,7 @@
 #include "Utils.h"
 #include "Audio.h"
 #include "Survival.h"
+#include "Equipamento.h"
 #include "DayNight.h"
 
 #ifdef CC_BUILD_FILESYSTEM
@@ -702,6 +703,14 @@ static void Cw_Callback_2(struct NbtTag* tag) {
 			arr = NbtTag_U8_Array(tag, 0);
 			if (arr) Survival_LoadCounts(arr, tag->dataSize);
 		}
+		return;
+	}
+	if (IsTag(tag->parent, "Equipamento")) {
+		arr = NbtTag_U8_Array(tag, 0);
+		if (!arr) return;
+		if (IsTag(tag, "Armadura"))  Equip_LoadArmor(arr, tag->dataSize);
+		if (IsTag(tag, "Baus"))      Equip_LoadChests(arr, tag->dataSize);
+		if (IsTag(tag, "Fornalhas")) Equip_LoadFurnaces(arr, tag->dataSize);
 		return;
 	}
 	if (!IsTag(tag->parent, "Spawn")) return;
@@ -1592,6 +1601,34 @@ static cc_result Cw_WriteBockDef(struct Stream* stream, int b) {
 	return Stream_Write(stream, buffer, (int)(cur - buffer));
 }
 
+/* Armour, chests and furnaces (Equipamento.c) */
+static cc_result Cw_WriteEquipamento(struct Stream* stream) {
+	static cc_uint8 data[EQUIP_MAX_SAVE_SIZE];
+	cc_uint8 buffer[64];
+	cc_uint8* cur;
+	cc_result res;
+	int size;
+
+	cur = buffer;
+	cur = Nbt_WriteDict(cur,  "Equipamento");
+	cur = Nbt_WriteArray(cur, "Armadura", EQUIP_ARMOR_SIZE);
+	Equip_SaveArmor(cur); cur += EQUIP_ARMOR_SIZE;
+	if ((res = Stream_Write(stream, buffer, (int)(cur - buffer)))) return res;
+
+	size = Equip_SaveChests(data);
+	cur  = Nbt_WriteArray(buffer, "Baus", size);
+	if ((res = Stream_Write(stream, buffer, (int)(cur - buffer)))) return res;
+	if ((res = Stream_Write(stream, data, size)))                  return res;
+
+	size = Equip_SaveFurnaces(data);
+	cur  = Nbt_WriteArray(buffer, "Fornalhas", size);
+	if ((res = Stream_Write(stream, buffer, (int)(cur - buffer)))) return res;
+	if ((res = Stream_Write(stream, data, size)))                  return res;
+
+	buffer[0] = NBT_END;
+	return Stream_Write(stream, buffer, 1);
+}
+
 cc_result Cw_Save(struct Stream* stream) {
 	struct LocalPlayer* p = Entities.CurPlayer;
 	cc_uint8 buffer[2048];
@@ -1654,6 +1691,7 @@ cc_result Cw_Save(struct Stream* stream) {
 		if ((res = Stream_Write(stream, counts, sizeof(counts))))      return res;
 		buffer[0] = NBT_END;
 		if ((res = Stream_Write(stream, buffer, 1)))                   return res;
+		if ((res = Cw_WriteEquipamento(stream)))                       return res;
 	}
 
 	cur = buffer;

@@ -191,6 +191,12 @@
     <ClInclude Include="LateGame.h">
       <Filter>Header Files\Map</Filter>
     </ClInclude>
+    <ClInclude Include="Equipamento.h">
+      <Filter>Header Files\Map</Filter>
+    </ClInclude>
+    <ClInclude Include="Equipamento_tex.h">
+      <Filter>Header Files\Map</Filter>
+    </ClInclude>
     <ClInclude Include="LateGame_tex.h">
       <Filter>Header Files\Map</Filter>
     </ClInclude>
@@ -430,6 +436,12 @@
       <Filter>Source Files\Entities</Filter>
     </ClCompile>
     <ClCompile Include="LateGame.c">
+      <Filter>Source Files\Map</Filter>
+    </ClCompile>
+    <ClCompile Include="Equipamento.c">
+      <Filter>Source Files\Map</Filter>
+    </ClCompile>
+    <ClCompile Include="InventarioScreen.c">
       <Filter>Source Files\Map</Filter>
     </ClCompile>
     <ClCompile Include="DayNight.c">

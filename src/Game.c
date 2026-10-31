@@ -9,6 +9,7 @@
 #include "Minerios.h"
 #include "LateGame.h"
 #include "Paisagem.h"
+#include "Equipamento.h"
 #include "Graphics.h"
 #include "Camera.h"
 #include "Options.h"
@@ -423,6 +424,7 @@ static void Game_Load(void) {
 	Game_AddComponent(&Minerios_Component);
 	Game_AddComponent(&LateGame_Component);
 	Game_AddComponent(&Paisagem_Component);
+	Game_AddComponent(&Equipamento_Component);
 	Game_AddComponent(&Survival_Component);
 	Game_AddComponent(&DayNight_Component);
 	Game_AddComponent(&Drawer2D_Component);

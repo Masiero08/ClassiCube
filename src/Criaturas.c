@@ -370,6 +370,7 @@ struct Criatura {
 	cc_bool capturando; /* dentro de um casulo que ainda esta balancando */
 	float especialTimer, defesaTimer, defesaRecarga; /* golpe especial e defender */
 	cc_bool querEspecial; /* o jogador pediu o especial: usa no proximo golpe */
+	float queimaTimer, queimaTick; /* queimadura/veneno: perde vida aos poucos */
 };
 static struct Criatura criaturas[CRIATURAS_MAX];
 static RNGState rnd;
@@ -697,10 +698,42 @@ static void Criatura_Olhar(struct Criatura* c, Vec3 alvo) {
 #define ESPECIAL_RECARGA 8.0f
 #define DEFESA_TEMPO     3.0f
 #define DEFESA_RECARGA   10.0f
+#define SUPER_NIVEL      15
 static const char* const golpeNomes[TIPO_COUNT] = {
 	"Bafo de Brasa", "Jato de Agua", "Chicote de Cipo", "Choque Forte", "Rajada",
 	"Rolar Pedra", "Ferroada", "Susto Sombrio", "Sopro Gelado"
 };
+/* do nivel 15 em diante o especial vira um super golpe (3x) */
+static const char* const superNomes[TIPO_COUNT] = {
+	"Erupcao", "Maremoto", "Floresta Furiosa", "Trovao", "Furacao",
+	"Avalanche", "Enxame", "Pesadelo", "Nevasca"
+};
+static const char* const efeitoTexto[TIPO_COUNT] = {
+	"&cqueimou o alvo!", "&bo alvo ficou encharcado e lento!", "&aroubou vida!", "&eparalisou o alvo!",
+	"&3ganhou velocidade!", "&7endureceu a pele!", "&2envenenou o alvo!", "&5assustou e roubou vida!", "&bcongelou o alvo!"
+};
+static const char* Golpe_Nome(const struct Criatura* c) {
+	int tipo = especies_def[c->especie].tipo;
+	return c->nivel >= SUPER_NIVEL ? superNomes[tipo] : golpeNomes[tipo];
+}
+
+/* Efeito extra do especial, conforme o tipo de quem ataca */
+static void Golpe_Efeito(struct Criatura* atk, struct Criatura* alvo, int dano) {
+	int vidaMax = VidaMax(atk->especie, atk->nivel);
+	switch (especies_def[atk->especie].tipo)
+	{
+	case TIPO_FOGO:
+	case TIPO_INSETO:   alvo->queimaTimer = 3.5f; alvo->queimaTick = 1.0f; break;
+	case TIPO_AGUA:     alvo->atkTimer += 1.0f; break;
+	case TIPO_PLANTA:   atk->vida = min(vidaMax, atk->vida + dano / 2 + 1); atk->nomeSujo = true; break;
+	case TIPO_ELETRICO: alvo->atkTimer += 2.0f; break;
+	case TIPO_VENTO:    atk->atkTimer = 0.3f; break;
+	case TIPO_PEDRA:    atk->defesaTimer = 2.5f; break;
+	case TIPO_FANTASMA: alvo->atkTimer += 1.0f; atk->vida = min(vidaMax, atk->vida + dano / 3 + 1); atk->nomeSujo = true; break;
+	case TIPO_GELO:     alvo->atkTimer += 2.5f; break;
+	}
+	if (!atk->selvagem) Membro_SincronizarDe(atk);
+}
 
 static void Criatura_Golpear(struct Criatura* atk, struct Criatura* alvo) {
 	const struct EspecieDef* da = &especies_def[atk->especie];
@@ -715,13 +748,14 @@ static void Criatura_Golpear(struct Criatura* atk, struct Criatura* alvo) {
 	Efeito_Golpe(alvo, da->tipo);
 
 	if (especial) {
-		dano = (int)(dano * 2.2f) + 1;
+		dano = (int)(dano * (atk->nivel >= SUPER_NIVEL ? 3.0f : 2.2f)) + 1;
 		atk->especialTimer = ESPECIAL_RECARGA;
 		atk->querEspecial  = false;
 		atk->atkTimer     += 0.5f;
 		Efeito_Golpe(atk, da->tipo);
 		Efeito_Golpe(alvo, da->tipo);
-		Chat_Add4("%c%c &fusou &e%c&f!%c", da->cor, da->nome, golpeNomes[da->tipo], atk->selvagem ? " &7(cuidado!)" : "");
+		Chat_Add4("%c%c &fusou &e%c&f! %c", da->cor, da->nome, Golpe_Nome(atk), efeitoTexto[da->tipo]);
+		Golpe_Efeito(atk, alvo, dano);
 	}
 
 	if (!atk->selvagem) {
@@ -855,6 +889,18 @@ static void Criatura_Tick(struct Entity* e, float delta) {
 	c->defesaTimer   -= delta;
 	c->defesaRecarga -= delta;
 
+	/* queimadura ou veneno: 1 de dano por segundo enquanto durar */
+	if (c->queimaTimer > 0) {
+		c->queimaTimer -= delta;
+		c->queimaTick  -= delta;
+		if (c->queimaTick <= 0) {
+			c->queimaTick = 1.0f;
+			Efeito_Golpe(c, especies_def[c->especie].tipo == TIPO_INSETO ? TIPO_INSETO : TIPO_FOGO);
+			Criatura_Dano(c, 1 + c->nivel / 12, e->next.pos);
+			if (!c->usada) return;
+		}
+	}
+
 	if (c->capturando) {
 		/* esta dentro do casulo: nao anda nem pensa */
 		return;
@@ -874,6 +920,21 @@ static void Criatura_Tick(struct Entity* e, float delta) {
 /*########################################################################################################################*
 *---------------------------------------------------------Nascer----------------------------------------------------------*
 *#########################################################################################################################*/
+static void Anunciar(const char* texto) {
+	cc_string str = String_FromReadonly(texto);
+	Chat_AddOf(&str, MSG_TYPE_ANNOUNCEMENT);
+}
+
+static int Insignias_Total(void);
+static cc_bool LendariaSolta(void) {
+	int i;
+	for (i = 0; i < CRIATURAS_MAX; i++)
+	{
+		if (criaturas[i].usada && criaturas[i].selvagem && especies_def[criaturas[i].especie].lendaria) return true;
+	}
+	return false;
+}
+
 static int EspecieDoHabitat(int habitat) {
 	int opcoes[ESPECIES_COUNT], count = 0, i;
 	const struct EspecieDef* def;
@@ -881,7 +942,7 @@ static int EspecieDoHabitat(int habitat) {
 	for (i = 0; i < ESPECIES_COUNT; i++)
 	{
 		def = &especies_def[i];
-		if (def->habitat != habitat) continue;
+		if (def->habitat != habitat || def->lendaria) continue;
 		/* formas evoluidas sao raras na natureza */
 		if (!def->inicial && i > 0 && especies_def[i - 1].evolui == i && Random_Next(&rnd, 4)) continue;
 		opcoes[count++] = i;
@@ -923,6 +984,21 @@ static void Spawner_Tick(float delta) {
 	else if (y > Env.EdgeHeight + 10)                habitat = HABITAT_ALTO;
 	else if (chao == BLOCK_GRASS)                    habitat = Random_Next(&rnd, 5) == 0 ? HABITAT_ALTO : HABITAT_CAMPO;
 	else return;
+
+	/* lendarias: muito raras, so depois de 3 insignias e uma por vez */
+	if (Insignias_Total() >= 3 && !LendariaSolta() && Random_Next(&rnd, 120) == 0) {
+		for (especie = 0; especie < ESPECIES_COUNT; especie++)
+		{
+			if (!especies_def[especie].lendaria || especies_def[especie].habitat != habitat) continue;
+			if (diarioCapturadas & (1 << especie)) continue;
+			Vec3_Set(pos, x + 0.5f, y, z + 0.5f);
+			if (Criatura_Criar(especie, 35, pos, true)) {
+				Anunciar("&dUma presenca lendaria...");
+				Chat_Add2("&dA lendaria %c%c &dapareceu por perto! Use um Casulo Mestre.", especies_def[especie].cor, especies_def[especie].nome);
+			}
+			return;
+		}
+	}
 
 	especie = EspecieDoHabitat(habitat);
 	if (especie < 0) return;
@@ -1211,7 +1287,7 @@ static void Mestre_Aparecer(int idx, Vec3 pos) {
 
 	Mem_Set(&luta, 0, sizeof(luta));
 	luta.criatura = -1;
-	Chat_Add2("&eUm Mestre de Bioma apareceu por perto: %c%c&e!", m->cor, m->nome);
+	Chat_Add3("%c%c &7(%c) &eapareceu por perto!", m->cor, m->nome, m->titulo);
 	Chat_AddRaw("&eBata nele (quebrar bloco / R) para desafiar.");
 }
 
@@ -1240,6 +1316,13 @@ static void Mestre_CriaturaCaiu(void) {
 	luta.timer    = 2.0f;
 }
 
+#define GINASIOS 6 /* os 6 primeiros sao os Mestres dos ginasios; depois vem a Liga */
+static int Insignias_Total(void) {
+	int i, total = 0;
+	for (i = 0; i < MESTRES_COUNT; i++) { if (insignias & (1 << i)) total++; }
+	return total;
+}
+
 static void Mestre_Vencido(void) {
 	const struct MestreDef* m = &mestres_def[treinador.idx];
 	cc_string msg; char msgBuffer[STRING_SIZE];
@@ -1260,7 +1343,15 @@ static void Mestre_Vencido(void) {
 	casulos[CASULO_REFORCADO] = min(99, casulos[CASULO_REFORCADO] + 3);
 	Casulos_Ganhar(CASULO_MESTRE, 1);
 	Chat_AddRaw("&aE mais 3 Casulos &7Reforcados&a.");
-	if (total == MESTRES_COUNT) Chat_AddRaw("&dVoce tem todas as insignias! Agora voce e Campeao dos Biomas!");
+	if (total == GINASIOS && treinador.idx < GINASIOS) {
+		Anunciar("&dA Liga dos Biomas te espera!");
+		Chat_AddRaw("&dVoce venceu os 6 Mestres! Agora os 4 Conselheiros da Liga e a Campea vao aparecer.");
+	}
+	if (treinador.idx == MESTRES_COUNT - 1) {
+		Anunciar("&6VOCE E O NOVO CAMPEAO!");
+		Chat_AddRaw("&6Voce venceu a Campea Aurora e agora e o Campeao da Liga dos Biomas!");
+		Casulos_Ganhar(CASULO_MESTRE, 3);
+	}
 }
 
 static void Mestre_MandarCriatura(void) {
@@ -1458,7 +1549,8 @@ static void Hud_Atualizar(float delta) {
 		String_Append(&str, 'o');
 	}
 	String_Format3(&str, " &7Casulos &fR%i &bM%i &dS%i", &casulos[CASULO_REFORCADO], &casulos[CASULO_MARE], &casulos[CASULO_MESTRE]);
-	for (i = 0; i < MESTRES_COUNT; i++) { if (insignias & (1 << i)) String_AppendConst(&str, " &6*"); }
+	i = Insignias_Total();
+	if (i) String_Format1(&str, " &6*%i", &i);
 	Hud_Linha(2, &str);
 }
 
@@ -1654,6 +1746,7 @@ static void TentarCapturar(struct Criatura* c) {
 	/* casulos melhores: chance = 1 - (1 - base) ^ mult */
 	tipo   = Casulo_Escolher(c);
 	chance = 1.0f - (float)Math_Exp2(Math_Log2(1.0f - chance) * Casulo_Mult(tipo, c));
+	if (especies_def[c->especie].lendaria && tipo != CASULO_MESTRE) chance *= 0.3f; /* lendarias resistem */
 	if (tipo != CASULO_COMUM) { casulos[tipo]--; Casulos_Salvar(); }
 	Chat_Add2("&7Voce jogou um Casulo %c%c&7...", casuloCores[tipo], casuloNomes[tipo]);
 
@@ -2584,7 +2677,7 @@ static void Barra_Especial(void* s, void* w) {
 		return;
 	}
 	c->querEspecial = true;
-	Chat_Add2("&e%c &evai usar &f%c &eno proximo golpe!", especies_def[c->especie].nome, golpeNomes[especies_def[c->especie].tipo]);
+	Chat_Add2("&e%c &evai usar &f%c &eno proximo golpe!", especies_def[c->especie].nome, Golpe_Nome(c));
 	if (c->alvo < 0) Barra_Atacar(s, w); /* sem briga: comeca uma */
 }
 

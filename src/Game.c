@@ -456,6 +456,7 @@ static void Game_Load(void) {
 	Game_AddComponent(&Formats_Component);
 	Game_AddComponent(&EntityRenderers_Component);
 
+	{ extern struct IGameComponent Demo_Component; Game_AddComponent(&Demo_Component); }
 	Plugins_LoadAll();
 	for (comp = comps_head; comp; comp = comp->next) {
 		if (comp->Init) comp->Init();

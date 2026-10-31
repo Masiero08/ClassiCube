@@ -1,0 +1,99 @@
+w 2
+c /client inicial Faiscol
+give 17 6
+give 5 10
+give 4 16
+c /client tempo dia
+aberto 5
+w 3
+limpa
+mark mundo
+t 200 0 10
+w 10
+t 60 -12 3
+w 3.3
+mark craft
+limpa
+craft
+w 1.5
+tap 504 60
+w 1.2
+tap 360 108
+w 1.5
+tap 552 60
+w 1.2
+tap 360 108
+w 1.5
+tap 504 60
+w 1.2
+tap 360 108
+w 1.5
+tap 504 108
+w 1.2
+tap 360 108
+w 2
+fechar
+mark criaturas
+aberto 8
+l 0 10 0
+c /client criatura todas 8
+w 0.5
+limpa
+t -40 0 2.5
+w 2.5
+t 80 0 5
+w 5
+c /client criatura limpar
+c /client equipe 1
+c /client casulo mestre
+c /client criatura Labareda 5
+w 0.3
+limpa
+mirar Labareda 20
+w 1.5
+c /client criatura botoes
+w 1
+c /client criatura toque 1
+w 1.4
+c /client criatura toque 2
+w 1.8
+c /client criatura toque 4
+w 5
+c /client criatura botoes
+mirar x 0
+mark caverna
+caverna
+limpa
+w 0.5
+t 140 -10 7
+w 7
+mark ginasio
+ginasio
+limpa
+w 3.5
+ginasio2
+w 1
+limpa
+w 4
+mark monstros
+aberto 8
+c /client tempo noite
+c /client criatura limpar
+w 0.3
+limpa
+c /client minerios dragao 1
+w 0.3
+mirar dragao_esmeralda 4
+w 4
+c /client minerios chefe 1
+w 0.3
+mirar rainha_mosquito 6
+w 6
+mark fim
+c /client minerios ir fim
+w 1
+limpa
+mirar dragao_fim 6
+w 6
+mark acabou
+q

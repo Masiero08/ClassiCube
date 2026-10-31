@@ -1,4 +1,6 @@
 #include "Screens.h"
+#include "Survival.h"
+#include "Equipamento.h"
 #include "Widgets.h"
 #include "Game.h"
 #include "Event.h"
@@ -1943,6 +1945,8 @@ static const struct ScreenVTABLE InventoryScreen_VTABLE = {
 };
 void InventoryScreen_Show(void) {
 	struct InventoryScreen* s = &InventoryScreen;
+	/* In survival the player's own items are shown instead of every block */
+	if (Survival_IsActive()) { InventarioScreen_Show(); return; }
 	s->grabsInput = true;
 	s->closable   = true;
 

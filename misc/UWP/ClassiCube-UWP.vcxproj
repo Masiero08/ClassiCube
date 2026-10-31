@@ -270,6 +270,8 @@
     <ClCompile Include="..\..\src\CraftingScreen.c" />
     <ClCompile Include="..\..\src\Survival.c" />
     <ClCompile Include="..\..\src\LateGame.c" />
+    <ClCompile Include="..\..\src\Equipamento.c" />
+    <ClCompile Include="..\..\src\InventarioScreen.c" />
     <ClCompile Include="..\..\src\Criaturas.c" />
     <ClCompile Include="..\..\src\DayNight.c" />
     <ClCompile Include="..\..\src\Logger.c" />

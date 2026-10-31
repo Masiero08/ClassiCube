@@ -26,6 +26,14 @@ cc_bool Survival_HandleUse(void);
 void Survival_Damage(int amount);
 /* Damage the player's next hit does to a monster (and wears out their sword) */
 int  Survival_AttackDamage(void);
+/* Most of one item the player can carry */
+#define SURVIVAL_MAX_COUNT 999
+/* Takes some of the given block away from the player (e.g. put in a chest) */
+void Survival_TakeBlocks(BlockID block, int count);
+/* Whether the given item can be eaten on its own */
+cc_bool Survival_IsFood(BlockID block);
+/* Eats one of the given item, appending what happened to msg. Returns false if it is not food or the player has none */
+cc_bool Survival_EatItem(BlockID block, cc_string* msg);
 /* Gives the player some of the given block, e.g. dropped by a monster */
 void Survival_AddBlocks(BlockID block, int count);
 
@@ -54,6 +62,8 @@ int  Survival_RecipeTool(int i);
 void Survival_RecipeName(int i, cc_string* str);
 /* Why the recipe can't be made right now, or NULL if it can */
 const char* Survival_RecipeProblem(int i);
+/* Tier (0 = none, 1 = wood .. 4 = diamond) and remaining uses of the player's tool of the given kind */
+void Survival_ToolInfo(int kind, int* tier, int* uses, int* maxUses);
 /* How many of the given block the player has */
 int  Survival_GetCount(BlockID block);
 /* Short Portuguese name of the given block */

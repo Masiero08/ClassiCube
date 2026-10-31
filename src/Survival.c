@@ -1,6 +1,7 @@
 #include "Survival.h"
 #include "Minerios.h"
 #include "LateGame.h"
+#include "Equipamento.h"
 #include "Paisagem.h"
 #include "Block.h"
 #include "BlockID.h"
@@ -31,7 +32,7 @@
 #define SAFE_FALL_BLOCKS 3.0f
 #define MAX_AIR_SECONDS  10.0f
 #define REGEN_DELAY      4.0f
-#define MAX_BLOCK_COUNT  999
+#define MAX_BLOCK_COUNT  SURVIVAL_MAX_COUNT
 #define OPT_SURVIVAL     "survival-mode"
 #define MAX_FOOD         20
 #define REGEN_MIN_FOOD   18
@@ -187,12 +188,19 @@ static void Die(void) {
 	Mem_Set(blockCounts, 0, sizeof(blockCounts));
 	ClearHotbar();
 	ResetTools();
+	Equip_ClearArmor();
 
 	LocalPlayer_DoRespawn(p);
 	ResetPlayerState();
 }
 
-void Survival_Damage(int amount) { if (survival_active) Damage(amount); }
+/* Armour protects against monsters and fire, but not falling, drowning or hunger */
+static void ArmoredDamage(int amount) {
+	if (amount <= 0 || hurtCooldown > 0) return;
+	Damage(Equip_ReduceDamage(amount));
+}
+
+void Survival_Damage(int amount) { if (survival_active) ArmoredDamage(amount); }
 
 static void Damage(int amount) {
 	if (amount <= 0 || hurtCooldown > 0) return;
@@ -275,7 +283,7 @@ static cc_bool Survival_Tick(struct ScheduledTask2* task) {
 	UpdateFalling(e);
 	/* Falling out of the world (e.g. off the island in the End) */
 	if (e->Position.y < -8.0f) Damage(4);
-	if (Entity_TouchesAnyLava(e)) Damage(4);
+	if (Entity_TouchesAnyLava(e)) ArmoredDamage(4);
 
 	if (HeadInWater(e)) {
 		airLeft -= delta;
@@ -314,6 +322,7 @@ static BlockID GetDrop(BlockID block) {
 	case MBLOCK_OVO_DRAGAO: return BLOCK_AIR; /* choca um dragao (Minerios.c) */
 	case LBLOCK_DIAMOND_ORE:   return LITEM_DIAMOND;
 	case LBLOCK_QUARTZ_ORE:    return LITEM_QUARTZ;
+	case EBLOCK_FORNALHA_ACESA: return LBLOCK_FURNACE;
 	case BLOCK_LEAVES: case PBLOCK_FOLHAS_BETULA: case PBLOCK_FOLHAS_CEREJEIRA: case PBLOCK_FOLHAS_PINHEIRO:
 		return Random_Next(&survival_rnd, 8) == 0 ? BLOCK_SAPLING : BLOCK_AIR;
 	case PBLOCK_GRAMA_ALTA: case PBLOCK_SAMAMBAIA:
@@ -335,7 +344,7 @@ static int GetHardness(BlockID block) {
 	case BLOCK_DIRT: case BLOCK_GRASS: case BLOCK_SAND: case BLOCK_GRAVEL: case BLOCK_SPONGE:
 		return 2;
 	case BLOCK_WOOD: case BLOCK_LOG: case BLOCK_BOOKSHELF: case BLOCK_CRATE:
-	case PBLOCK_TRONCO_BETULA: case PBLOCK_TRONCO_PINHEIRO: case PBLOCK_ABOBORA:
+	case PBLOCK_TRONCO_BETULA: case PBLOCK_TRONCO_PINHEIRO: case PBLOCK_ABOBORA: case EBLOCK_BAU:
 		return 4;
 	case BLOCK_GOLD_ORE: case BLOCK_IRON_ORE: case BLOCK_COAL_ORE:
 	case BLOCK_GOLD: case BLOCK_IRON:
@@ -364,9 +373,9 @@ static int GetToolKind(BlockID block) {
 	case MBLOCK_RUBI_MINERIO: case MBLOCK_TITANIO_MINERIO: case MBLOCK_URANIO_MINERIO: case MBLOCK_OVO_MINERIO:
 	case MBLOCK_RUBI: case MBLOCK_TITANIO: case MBLOCK_URANIO: case MBLOCK_PEDRA_CRISTAL:
 	case LBLOCK_DIAMOND_ORE: case LBLOCK_DIAMOND: case LBLOCK_NETHERRACK: case LBLOCK_NETHER_BRICKS:
-	case LBLOCK_QUARTZ_ORE: case LBLOCK_END_STONE: case LBLOCK_FURNACE:
+	case LBLOCK_QUARTZ_ORE: case LBLOCK_END_STONE: case LBLOCK_FURNACE: case EBLOCK_FORNALHA_ACESA:
 		return TOOL_PICKAXE;
-	case BLOCK_WOOD: case BLOCK_LOG: case BLOCK_BOOKSHELF: case BLOCK_CRATE: case LBLOCK_BED:
+	case BLOCK_WOOD: case BLOCK_LOG: case BLOCK_BOOKSHELF: case BLOCK_CRATE: case LBLOCK_BED: case EBLOCK_BAU:
 	case PBLOCK_TRONCO_BETULA: case PBLOCK_TRONCO_PINHEIRO: case PBLOCK_ABOBORA:
 		return TOOL_AXE;
 	case BLOCK_DIRT: case BLOCK_GRASS: case BLOCK_SAND: case BLOCK_GRAVEL: case BLOCK_SNOW:
@@ -477,6 +486,10 @@ void Survival_AddBlocks(BlockID block, int count) {
 	AddToHotbar(block);
 }
 
+void Survival_TakeBlocks(BlockID block, int count) {
+	blockCounts[block] = max(0, blockCounts[block] - count);
+}
+
 void Survival_OnBlockBroken(BlockID block) {
 	BlockID drop;
 	cc_bool harvested;
@@ -533,16 +546,18 @@ static const struct Recipe recipes[] = {
 	{ 4, BLOCK_WOOD,      0, BLOCK_AIR,      1, BLOCK_CRATE        },
 	{ 6, BLOCK_WOOD,      0, BLOCK_AIR,      1, BLOCK_BOOKSHELF    },
 	{ 2, BLOCK_LEAVES,    0, BLOCK_AIR,      1, BLOCK_ROPE         },
-	{ 1, BLOCK_SAND,      1, BLOCK_COAL_ORE, 4, BLOCK_GLASS        },
 	{ 4, BLOCK_SAND,      0, BLOCK_AIR,      1, BLOCK_SANDSTONE    },
-	{ 1, BLOCK_COBBLE,    1, BLOCK_COAL_ORE, 4, BLOCK_STONE        },
 	{ 4, BLOCK_STONE,     0, BLOCK_AIR,      4, BLOCK_STONE_BRICK  },
 	{ 3, BLOCK_STONE,     0, BLOCK_AIR,      6, BLOCK_SLAB         },
 	{ 3, BLOCK_COBBLE,    0, BLOCK_AIR,      6, BLOCK_COBBLE_SLAB  },
 	{ 4, BLOCK_COBBLE,    1, BLOCK_LEAVES,   4, BLOCK_MOSSY_ROCKS  },
 	{ 4, BLOCK_DIRT,      1, BLOCK_COAL_ORE, 4, BLOCK_BRICK        },
-	{ 4, BLOCK_IRON_ORE,  1, BLOCK_COAL_ORE, 1, BLOCK_IRON         },
-	{ 4, BLOCK_GOLD_ORE,  1, BLOCK_COAL_ORE, 1, BLOCK_GOLD         },
+	/* Ores are smelted into bars in the furnace (Equipamento.c) */
+	{ 9, EITEM_BARRA_FERRO, 0, BLOCK_AIR,    1, BLOCK_IRON         },
+	{ 1, BLOCK_IRON,        0, BLOCK_AIR,    9, EITEM_BARRA_FERRO  },
+	{ 9, EITEM_BARRA_OURO,  0, BLOCK_AIR,    1, BLOCK_GOLD         },
+	{ 1, BLOCK_GOLD,        0, BLOCK_AIR,    9, EITEM_BARRA_OURO   },
+	{ 8, BLOCK_WOOD,        0, BLOCK_AIR,    1, EBLOCK_BAU         },
 	{ 4, BLOCK_SAND,      1, BLOCK_COAL_ORE, 1, BLOCK_TNT          },
 	/* Minerios & Monstros (inspirado no OreSpawn) */
 	{ 4, MBLOCK_RUBI_MINERIO,    0, BLOCK_AIR,              1, MBLOCK_RUBI            },
@@ -551,7 +566,6 @@ static const struct Recipe recipes[] = {
 	{ 3, MBLOCK_TITANIO_MINERIO, 1, BLOCK_WOOD,             1, MITEM_ESPADA_TITANIO   },
 	{ 2, MBLOCK_RUBI,            1, MITEM_ESPADA_TITANIO,   1, MITEM_ESPADA_SUPREMA   },
 	{ 2, MBLOCK_URANIO,          1, MITEM_ESPADA_SUPREMA,   1, MITEM_BIG_BERTHA       },
-	{ 3, MBLOCK_TITANIO,         0, BLOCK_AIR,              1, MITEM_ARMADURA_TITANIO },
 	{ 1, MBLOCK_URANIO,          4, BLOCK_GOLD,             2, MBLOCK_PORTAL_UTOPIA   },
 	{ 1, MBLOCK_RUBI,            4, BLOCK_GLASS,            2, MBLOCK_PORTAL_CRISTAL  },
 	{ 1, MBLOCK_RUBI_MINERIO,    2, BLOCK_GOLD_ORE,         1, MBLOCK_SORTE           },
@@ -566,9 +580,7 @@ static const struct Recipe recipes[] = {
 	{ 1, LBLOCK_DIAMOND,         0, BLOCK_AIR,              4, LITEM_DIAMOND          },
 	/* Animais, fornalha e cama */
 	{ 8, BLOCK_COBBLE,           0, BLOCK_AIR,              1, LBLOCK_FURNACE         },
-	{ 2, LITEM_RAW_MEAT,         1, BLOCK_COAL_ORE,         2, LITEM_COOKED_MEAT      },
 	{ 3, BLOCK_WHITE,            3, BLOCK_WOOD,             1, LBLOCK_BED             },
-	{ 4, LBLOCK_NETHERRACK,      1, BLOCK_COAL_ORE,         4, LBLOCK_NETHER_BRICKS   },
 	{ 8, BLOCK_OBSIDIAN,         1, BLOCK_COAL_ORE,         2, LBLOCK_NETHER_PORTAL   },
 	{ 4, LITEM_ENDER_PEARL,      1, LITEM_DIAMOND,          2, LBLOCK_END_PORTAL      },
 };
@@ -605,19 +617,43 @@ static const struct ToolRecipe tools[] = {
 	{ TOOL_AXE,     2, 3, BLOCK_COBBLE,  2, LITEM_GRAVETO },
 	{ TOOL_SHOVEL,  2, 1, BLOCK_COBBLE,  2, LITEM_GRAVETO },
 	{ TOOL_SWORD,   2, 2, BLOCK_COBBLE,  1, LITEM_GRAVETO },
-	{ TOOL_PICKAXE, 3, 3, BLOCK_IRON,    2, LITEM_GRAVETO },
-	{ TOOL_AXE,     3, 3, BLOCK_IRON,    2, LITEM_GRAVETO },
-	{ TOOL_SHOVEL,  3, 1, BLOCK_IRON,    2, LITEM_GRAVETO },
-	{ TOOL_SWORD,   3, 2, BLOCK_IRON,    1, LITEM_GRAVETO },
+	{ TOOL_PICKAXE, 3, 3, EITEM_BARRA_FERRO, 2, LITEM_GRAVETO },
+	{ TOOL_AXE,     3, 3, EITEM_BARRA_FERRO, 2, LITEM_GRAVETO },
+	{ TOOL_SHOVEL,  3, 1, EITEM_BARRA_FERRO, 2, LITEM_GRAVETO },
+	{ TOOL_SWORD,   3, 2, EITEM_BARRA_FERRO, 1, LITEM_GRAVETO },
 	{ TOOL_PICKAXE, 4, 3, LITEM_DIAMOND, 2, LITEM_GRAVETO },
 	{ TOOL_AXE,     4, 3, LITEM_DIAMOND, 2, LITEM_GRAVETO },
 	{ TOOL_SHOVEL,  4, 1, LITEM_DIAMOND, 2, LITEM_GRAVETO },
 	{ TOOL_SWORD,   4, 2, LITEM_DIAMOND, 1, LITEM_GRAVETO },
 };
 
-#define FOODS_COUNT Array_Elems(foods)
-#define TOOLS_COUNT Array_Elems(tools)
-int Survival_RecipesCount(void) { return FOODS_COUNT + TOOLS_COUNT + Array_Elems(recipes); }
+/* Armour is made from one material in the shape of the piece, like in Minecraft */
+static const BlockID armorMaterials[ARMOR_TIERS] = {
+	BLOCK_AIR, BLOCK_WHITE, EITEM_BARRA_OURO, EITEM_BARRA_FERRO, LITEM_DIAMOND, EITEM_BARRA_TITANIO
+};
+static const char* const armorShapes[ARMOR_PIECES] = {
+	"MMM" "M.M" "...", /* Capacete */
+	"M.M" "MMM" "MMM", /* Peitoral */
+	"MMM" "M.M" "M.M", /* Calca    */
+	"M.M" "M.M" "...", /* Botas    */
+};
+#define ARMORS_COUNT ((ARMOR_TIERS - 1) * ARMOR_PIECES)
+
+#define FOODS_COUNT   Array_Elems(foods)
+#define TOOLS_COUNT   Array_Elems(tools)
+#define RECIPES_COUNT Array_Elems(recipes)
+int Survival_RecipesCount(void) { return FOODS_COUNT + TOOLS_COUNT + RECIPES_COUNT + ARMORS_COUNT; }
+
+static int ArmorTier(int i)  { return 1 + i / ARMOR_PIECES; }
+static int ArmorPiece(int i) { return i % ARMOR_PIECES; }
+static BlockID ArmorOutput(int i) { return Equip_ArmorItem(ArmorTier(i), ArmorPiece(i)); }
+
+static int ArmorCost(int i) {
+	const char* shape = armorShapes[ArmorPiece(i)];
+	int j, n = 0;
+	for (j = 0; j < CRAFT_GRID_CELLS; j++) { if (shape[j] == 'M') n++; }
+	return n;
+}
 
 static cc_bool HasInputs(int count1, BlockID input1, int count2, BlockID input2) {
 	if (blockCounts[input1] < count1) return false;
@@ -629,26 +665,8 @@ static void UseInputs(int count1, BlockID input1, int count2, BlockID input2) {
 	if (count2) blockCounts[input2] -= count2;
 }
 
-/* Cooking needs a furnace placed near the player */
-static cc_bool NeedsFurnace(BlockID output) { return output == LITEM_COOKED_MEAT; }
-
-static cc_bool NearFurnace(void) {
-	Vec3 pos = Entities.CurPlayer->Base.Position;
-	int cx = Math_Floor(pos.x), cy = Math_Floor(pos.y), cz = Math_Floor(pos.z);
-	int x, y, z;
-
-	for (y = cy - 2; y <= cy + 3; y++)
-		for (z = cz - 4; z <= cz + 4; z++)
-			for (x = cx - 4; x <= cx + 4; x++)
-			{
-				if (World_Contains(x, y, z) && World_GetBlock(x, y, z) == LBLOCK_FURNACE) return true;
-			}
-	return false;
-}
-
 static cc_bool CanCraft(const struct Recipe* r) {
 	if (!HasInputs(r->count1, r->input1, r->count2, r->input2)) return false;
-	if (NeedsFurnace(r->output) && !NearFurnace()) return false;
 	return blockCounts[r->output] + r->outCount <= MAX_BLOCK_COUNT;
 }
 
@@ -692,6 +710,11 @@ static cc_string GetShortName(BlockID block) {
 	case LITEM_COOKED_MEAT:  name = "Bife";       break;
 	case BLOCK_WHITE:        name = "La";         break;
 	case LITEM_GRAVETO:      name = "Graveto";    break;
+	case EITEM_BARRA_FERRO:  name = "Barra ferro"; break;
+	case EITEM_BARRA_OURO:   name = "Barra ouro"; break;
+	case EITEM_BARRA_TITANIO: name = "Barra titanio"; break;
+	case LITEM_DIAMOND:      name = "Diamante";   break;
+	case EBLOCK_BAU:         name = "Bau";        break;
 	}
 	return name ? String_FromReadonly(name) : Block_UNSAFE_GetName(block);
 }
@@ -740,13 +763,20 @@ void Survival_DescribeRecipe(int i, cc_string* str) {
 	i -= FOODS_COUNT;
 	if (i < TOOLS_COUNT) { DescribeTool(&tools[i], str); return; }
 	i -= TOOLS_COUNT;
+	if (i >= RECIPES_COUNT) {
+		i -= RECIPES_COUNT;
+		name     = GetShortName(ArmorOutput(i));
+		outCount = ArmorCost(i);
+		String_Format3(str, "%c%s&7: ", HasInputs(outCount, armorMaterials[ArmorTier(i)], 0, BLOCK_AIR) ? "&f" : "&7", &name, NULL);
+		AppendIngredient(str, outCount, armorMaterials[ArmorTier(i)]);
+		return;
+	}
 
 	r        = &recipes[i];
 	name     = GetShortName(r->output);
 	outCount = r->outCount;
 	String_Format3(str, "%c%i %s&7: ", CanCraft(r) ? "&f" : "&7", &outCount, &name);
 	AppendIngredients(str, r->count1, r->input1, r->count2, r->input2);
-	if (NeedsFurnace(r->output)) String_AppendConst(str, NearFurnace() ? " &a(forno)" : " &c(forno)");
 }
 
 static cc_bool Eat(const struct FoodRecipe* f) {
@@ -779,12 +809,16 @@ cc_bool Survival_Craft(int i) {
 	i -= FOODS_COUNT;
 	if (i < TOOLS_COUNT) return MakeTool(&tools[i]);
 	i -= TOOLS_COUNT;
+	if (i >= RECIPES_COUNT) {
+		i -= RECIPES_COUNT;
+		if (Survival_RecipeProblem(FOODS_COUNT + TOOLS_COUNT + RECIPES_COUNT + i)) return false;
+		UseInputs(ArmorCost(i), armorMaterials[ArmorTier(i)], 0, BLOCK_AIR);
+		blockCounts[ArmorOutput(i)]++;
+		AddToHotbar(ArmorOutput(i));
+		return true;
+	}
 
 	r = &recipes[i];
-	if (NeedsFurnace(r->output) && !NearFurnace()) {
-		Chat_AddRaw("&ePrecisa de uma fornalha perto de voce (ate 4 blocos).");
-		return false;
-	}
 	if (!CanCraft(r)) return false;
 	UseInputs(r->count1, r->input1, r->count2, r->input2);
 	blockCounts[r->output] += r->outCount;
@@ -838,6 +872,24 @@ static void ToolLayout(const struct ToolRecipe* t, BlockID* grid) {
 	}
 }
 
+static void ArmorLayout(int i, BlockID* grid) {
+	const char* shape = armorShapes[ArmorPiece(i)];
+	int j;
+	for (j = 0; j < CRAFT_GRID_CELLS; j++)
+	{
+		grid[j] = shape[j] == 'M' ? armorMaterials[ArmorTier(i)] : BLOCK_AIR;
+	}
+}
+
+/* Whether the trimmed grid is exactly the given (untrimmed) layout */
+static cc_bool MatchesLayout(const BlockID* layout, const BlockID* trimmed) {
+	BlockID trimmedShape[CRAFT_GRID_CELLS];
+	int i;
+	TrimGrid(layout, trimmedShape, false);
+	for (i = 0; i < CRAFT_GRID_CELLS; i++) { if (trimmed[i] != trimmedShape[i]) return false; }
+	return true;
+}
+
 static cc_bool MatchesTool(const struct ToolRecipe* t, const BlockID* trimmed, const BlockID* mirrored) {
 	BlockID shape[CRAFT_GRID_CELLS], trimmedShape[CRAFT_GRID_CELLS];
 	int i;
@@ -877,7 +929,13 @@ int Survival_MatchGrid(const BlockID* grid) {
 	{
 		if (MatchesTool(&tools[i], trimmed, mirrored)) return FOODS_COUNT + i;
 	}
-	for (i = 0; i < Array_Elems(recipes); i++)
+	for (i = 0; i < ARMORS_COUNT; i++)
+	{
+		BlockID layout[CRAFT_GRID_CELLS];
+		ArmorLayout(i, layout);
+		if (MatchesLayout(layout, trimmed)) return FOODS_COUNT + TOOLS_COUNT + RECIPES_COUNT + i;
+	}
+	for (i = 0; i < RECIPES_COUNT; i++)
 	{
 		r = &recipes[i];
 		if (MatchesShapeless(grid, r->count1, r->input1, r->count2, r->input2)) return FOODS_COUNT + TOOLS_COUNT + i;
@@ -926,6 +984,7 @@ void Survival_RecipeLayout(int i, BlockID* grid) {
 	i -= FOODS_COUNT;
 	if (i < TOOLS_COUNT) { ToolLayout(&tools[i], grid); return; }
 	i -= TOOLS_COUNT;
+	if (i >= RECIPES_COUNT) { ArmorLayout(i - RECIPES_COUNT, grid); return; }
 
 	r = &recipes[i];
 	ShapelessLayout(grid, r->count1, r->input1, r->count2, r->input2);
@@ -937,6 +996,7 @@ BlockID Survival_RecipeIcon(int i, int* count) {
 	i -= FOODS_COUNT;
 	if (i < TOOLS_COUNT) return tools[i].input1;
 	i -= TOOLS_COUNT;
+	if (i >= RECIPES_COUNT) { *count = 1; return ArmorOutput(i - RECIPES_COUNT); }
 
 	*count = recipes[i].outCount;
 	return recipes[i].output;
@@ -965,6 +1025,10 @@ void Survival_RecipeName(int i, cc_string* str) {
 		String_Format2(str, "%c de %c", toolNames[tools[i].kind], tierNames[tools[i].tier]); return;
 	}
 	i -= TOOLS_COUNT;
+	if (i >= RECIPES_COUNT) {
+		name = Block_UNSAFE_GetName(ArmorOutput(i - RECIPES_COUNT));
+		String_AppendString(str, &name); return;
+	}
 
 	name  = GetShortName(recipes[i].output);
 	count = recipes[i].outCount;
@@ -989,50 +1053,74 @@ const char* Survival_RecipeProblem(int i) {
 		return HasInputs(t->count1, t->input1, t->count2, t->input2) ? NULL : "Falta material";
 	}
 	i -= TOOLS_COUNT;
+	if (i >= RECIPES_COUNT) {
+		i -= RECIPES_COUNT;
+		if (!HasInputs(ArmorCost(i), armorMaterials[ArmorTier(i)], 0, BLOCK_AIR)) return "Falta material";
+		return blockCounts[ArmorOutput(i)] >= MAX_BLOCK_COUNT ? "Voce ja tem muitos" : NULL;
+	}
 
 	r = &recipes[i];
 	if (!HasInputs(r->count1, r->input1, r->count2, r->input2)) return "Falta material";
-	if (NeedsFurnace(r->output) && !NearFurnace()) return "Precisa de uma fornalha perto";
 	if (blockCounts[r->output] + r->outCount > MAX_BLOCK_COUNT) return "Voce ja tem muitos";
 	return NULL;
 }
 
 int Survival_GetCount(BlockID block) { return blockCounts[block]; }
+
+void Survival_ToolInfo(int kind, int* tier, int* uses, int* maxUses) {
+	*tier    = toolTier[kind];
+	*uses    = toolTier[kind] ? toolUses[kind] : 0;
+	*maxUses = tierUses[toolTier[kind]];
+}
 cc_string Survival_BlockName(BlockID block) { return GetShortName(block); }
 
 
 /* Using (right click) a bed sets where the player respawns, and at night sleeps until morning */
 /* Eats the held block directly when it is a single-ingredient food */
-static cc_bool TryEatHeld(void) {
-	cc_string msg; char msgBuffer[STRING_SIZE];
-	cc_string name;
-	BlockID held = Inventory_SelectedBlock;
+static int FindFood(BlockID block) {
 	int i;
-
 	for (i = 0; i < FOODS_COUNT; i++)
 	{
-		if (foods[i].count2 || foods[i].input1 != held) continue;
-		/* Mushrooms are only eaten when not aiming at a block (else they get placed) */
-		if (held != LITEM_RAW_MEAT && held != LITEM_COOKED_MEAT && held != PITEM_FRUTINHAS && Game_SelectedPos.valid) return false;
-		if (food >= MAX_FOOD) {
-			Chat_AddOf(&(cc_string)String_FromConst("&eVoce esta sem fome."), MSG_TYPE_BOTTOMRIGHT_1);
-			return true;
-		}
-		if (!Eat(&foods[i])) return false;
-
-		String_InitArray(msg, msgBuffer);
-		name = String_FromReadonly(foods[i].name);
-		String_Format1(&msg, "&aNham! Voce comeu: %s", &name);
-		Chat_AddOf(&msg, MSG_TYPE_BOTTOMRIGHT_1);
-		return true;
+		if (!foods[i].count2 && foods[i].input1 == block) return i;
 	}
-	return false;
+	return -1;
+}
+
+cc_bool Survival_IsFood(BlockID block) { return FindFood(block) >= 0; }
+
+cc_bool Survival_EatItem(BlockID block, cc_string* msg) {
+	cc_string name;
+	int i = FindFood(block);
+	if (i < 0) return false;
+
+	if (food >= MAX_FOOD) {
+		String_AppendConst(msg, "&eVoce esta sem fome."); return true;
+	}
+	if (!Eat(&foods[i])) return false;
+
+	name = String_FromReadonly(foods[i].name);
+	String_Format1(msg, "&aNham! Voce comeu: %s", &name);
+	return true;
+}
+
+static cc_bool TryEatHeld(void) {
+	cc_string msg; char msgBuffer[STRING_SIZE];
+	BlockID held = Inventory_SelectedBlock;
+	if (FindFood(held) < 0) return false;
+	/* Mushrooms are only eaten when not aiming at a block (else they get placed) */
+	if (held != LITEM_RAW_MEAT && held != LITEM_COOKED_MEAT && held != PITEM_FRUTINHAS && Game_SelectedPos.valid) return false;
+
+	String_InitArray(msg, msgBuffer);
+	if (!Survival_EatItem(held, &msg)) return false;
+	Chat_AddOf(&msg, MSG_TYPE_BOTTOMRIGHT_1);
+	return true;
 }
 
 cc_bool Survival_HandleUse(void) {
 	struct LocalPlayer* p;
 	IVec3 pos = Game_SelectedPos.pos;
 	if (!survival_active) return false;
+	if (Equip_HandleUse()) return true;
 	if (!Game_SelectedPos.valid || !World_Contains(pos.x, pos.y, pos.z) || 
 		World_GetBlock(pos.x, pos.y, pos.z) != LBLOCK_BED) return TryEatHeld();
 

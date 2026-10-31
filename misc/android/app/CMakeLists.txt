@@ -64,6 +64,8 @@ add_library(classicube SHARED
         ../../src/ModernBlocks.c
         ../../src/Survival.c
         ../../src/LateGame.c
+        ../../src/Equipamento.c
+        ../../src/InventarioScreen.c
         ../../src/Criaturas.c
         ../../src/DayNight.c
         ../../src/Resources.c

@@ -9,6 +9,8 @@
 #include "../Errors.h"
 #include "../ExtMath.h"
 #include "../Gui.h"
+#include "../Chat.h"
+#include <malloc.h>
 
 #include <3ds.h>
 
@@ -55,7 +57,16 @@ void Window_Init(void) {
 	Window_Alt.Height = btm_height;
 }
 
-void Window_Free(void) { irrstExit(); }
+static Result irrst_result;
+static void CPP_Free(void);
+
+// libctru would otherwise start ir:rst in hidInit, which blocks ir:USER (Circle Pad Pro on Old 3DS)
+bool hidShouldUseIrrst(void) { return false; }
+
+void Window_Free(void) {
+	if (irrst_result == 0) irrstExit();
+	CPP_Free();
+}
 
 void Window_Create2D(int width, int height) {
 	Window_Main.Is3D  = false;
@@ -152,9 +163,263 @@ static const BindMapping defaults_3ds[BIND_COUNT] = {
 	[BIND_HOTBAR_RIGHT] = { CCPAD_ZR    }
 };
 
-static Result irrst_result;
+static Result irrst_result = -1;
+static cc_bool isNew3DS;
+
+/*########################################################################################################################*
+*---------------------------------------------Circle Pad Pro (Old 3DS, ir:USER)-------------------------------------------*
+*#########################################################################################################################*/
+// On the Old 3DS the Circle Pad Pro is an infrared accessory. Games such as Resident Evil Revelations
+//  talk to it through the ir:USER service: connect to device 1, ask it to send its inputs every few ms,
+//  then read the 6 byte input packets it sends back from shared memory.
+// ir:USER and ir:rst cannot be used at the same time, so ir:rst is only used on the New 3DS (C-Stick).
+// Protocol details: https://www.3dbrew.org/wiki/Circle_Pad_Pro and https://www.3dbrew.org/wiki/IR_Services
+#define CPP_RECV_PACKETS  16
+#define CPP_PACKET_SIZE   32
+#define CPP_RECV_SIZE     (CPP_RECV_PACKETS * (8 + CPP_PACKET_SIZE))
+#define CPP_SEND_PACKETS  4
+#define CPP_SEND_SIZE     (CPP_SEND_PACKETS * (8 + CPP_PACKET_SIZE))
+#define CPP_SHAREDMEM_SIZE 0x1000
+#define CPP_RECV_OFFSET   0x20
+
+enum CPP_STATE { CPP_NONE, CPP_IDLE, CPP_CONNECTING, CPP_CONNECTED };
+static Handle cpp_handle, cpp_memHandle;
+static u8* cpp_mem;
+static int cpp_state;
+static float cpp_timer, cpp_lastPacket, cpp_lastRequest;
+static cc_bool cpp_hasInput, cpp_centred, cpp_announced;
+static int cpp_rawX, cpp_rawY, cpp_centreX = 0x800, cpp_centreY = 0x800;
+static u32 cpp_buttons;
+
+static Result CPP_Simple(u32 header, int argc, u32 arg) {
+	u32* cmd = getThreadCommandBuffer();
+	Result res;
+	cmd[0] = header;
+	if (argc) cmd[1] = arg;
+
+	if ((res = svcSendSyncRequest(cpp_handle))) return res;
+	return (Result)cmd[1];
+}
+
+static Result CPP_InitShared(void) {
+	u32* cmd = getThreadCommandBuffer();
+	Result res;
+	cmd[0] = IPC_MakeHeader(0x18, 6, 2); // InitializeIrNopShared
+	cmd[1] = CPP_SHAREDMEM_SIZE;
+	cmd[2] = CPP_RECV_SIZE;
+	cmd[3] = CPP_RECV_PACKETS;
+	cmd[4] = CPP_SEND_SIZE;
+	cmd[5] = CPP_SEND_PACKETS;
+	cmd[6] = 4; // 96000 bps, what the Circle Pad Pro uses
+	cmd[7] = IPC_Desc_SharedHandles(1);
+	cmd[8] = cpp_memHandle;
+
+	if ((res = svcSendSyncRequest(cpp_handle))) return res;
+	return (Result)cmd[1];
+}
+
+static Result CPP_Send(const u8* data, u32 size) {
+	u32* cmd = getThreadCommandBuffer();
+	Result res;
+	cmd[0] = IPC_MakeHeader(0x0D, 1, 2); // SendIrNop
+	cmd[1] = size;
+	cmd[2] = IPC_Desc_StaticBuffer(size, 0);
+	cmd[3] = (u32)data;
+
+	if ((res = svcSendSyncRequest(cpp_handle))) return res;
+	return (Result)cmd[1];
+}
+
+#define CPP_RequireConnection() CPP_Simple(IPC_MakeHeader(0x06, 1, 0), 1, 1) // device 1 = Circle Pad Pro
+#define CPP_Disconnect()        CPP_Simple(IPC_MakeHeader(0x09, 0, 0), 0, 0)
+#define CPP_Finalize()          CPP_Simple(IPC_MakeHeader(0x02, 0, 0), 0, 0)
+#define CPP_Release(count)      CPP_Simple(IPC_MakeHeader(0x19, 1, 0), 1, count)
+
+static void CPP_Init(void) {
+	Result res;
+	cpp_mem = (u8*)memalign(0x1000, CPP_SHAREDMEM_SIZE);
+	if (!cpp_mem) return;
+	Mem_Set(cpp_mem, 0, CPP_SHAREDMEM_SIZE);
+
+	if ((res = srvGetServiceHandle(&cpp_handle, "ir:USER"))) {
+		Platform_Log1("ir:USER unavailable: %e", &res); return;
+	}
+	if ((res = svcCreateMemoryBlock(&cpp_memHandle, (u32)cpp_mem, CPP_SHAREDMEM_SIZE,
+									MEMPERM_READ, MEMPERM_READWRITE))) {
+		Platform_Log1("ir:USER memblock failed: %e", &res); return;
+	}
+	if ((res = CPP_InitShared())) {
+		Platform_Log1("ir:USER init failed: %e", &res); return;
+	}
+	cpp_state = CPP_IDLE;
+}
+
+static void CPP_Free(void) {
+	if (cpp_state == CPP_NONE) return;
+	CPP_Disconnect();
+	CPP_Finalize();
+	svcCloseHandle(cpp_memHandle);
+	svcCloseHandle(cpp_handle);
+	cpp_state = CPP_NONE;
+}
+
+static void CPP_RequestInputs(void) {
+	// Request 1 = read inputs: [1, period in ms, unknown (what official games send)]
+	static u8 request[3] = { 1, 8, (8 + 2) << 2 };
+	CPP_Send(request, 3);
+	cpp_lastRequest = 0;
+}
+
+static void CPP_Announce(const char* msg) {
+	cc_string str = String_FromReadonly(msg);
+	if (!Gui.ScreensCount) return; // still in the launcher
+	Chat_AddOf(&str, MSG_TYPE_SMALLANNOUNCEMENT);
+}
+
+// Parses the payload of an IR packet that starts at 'offset' in the data area
+static void CPP_ParsePacket(u8* data, u32 dataSize, u32 offset, u32 length) {
+	u8 hdr[4], p[6];
+	u32 i, payloadBeg, payloadLen;
+	if (length < 4) return;
+
+	for (i = 0; i < 4; i++) hdr[i] = data[(offset + i) % dataSize];
+	if (hdr[0] != 0xA5) return;
+
+	if (hdr[2] & 0x40) {
+		payloadBeg = 4;
+		payloadLen = ((hdr[2] & 0x3F) << 8) | hdr[3];
+	} else {
+		payloadBeg = 3;
+		payloadLen = hdr[2];
+	}
+	if (payloadLen != 6 || length < payloadBeg + payloadLen) return;
+
+	for (i = 0; i < 6; i++) p[i] = data[(offset + payloadBeg + i) % dataSize];
+	if (p[0] != 0x10) return; // not an input response
+
+	cpp_rawX    = p[1] | ((p[2] & 0x0F) << 8);
+	cpp_rawY    = (p[2] >> 4) | (p[3] << 4);
+	cpp_buttons = 0;
+	// Button bits are 1 when NOT pressed
+	if (!(p[4] & 0x20)) cpp_buttons |= KEY_ZL;
+	if (!(p[4] & 0x40)) cpp_buttons |= KEY_ZR;
+	if (!(p[4] & 0x80)) cpp_buttons |= KEY_R;
+
+	// The stick rests near 0x800, but every unit is slightly off, so
+	//  use the first reading as the centre when the stick is not being held
+	if (!cpp_centred) {
+		if (Math_AbsI(cpp_rawX - 0x800) < 0x180 && Math_AbsI(cpp_rawY - 0x800) < 0x180) {
+			cpp_centreX = cpp_rawX; cpp_centreY = cpp_rawY;
+		}
+		cpp_centred = true;
+	}
+	cpp_hasInput   = true;
+	cpp_lastPacket = 0;
+}
+
+static void CPP_ReadPackets(void) {
+	u8* recv  = cpp_mem + CPP_RECV_OFFSET;
+	u8* data  = recv + CPP_RECV_PACKETS * 8;
+	u32 dataSize = CPP_RECV_SIZE - CPP_RECV_PACKETS * 8;
+	u32 start = *(volatile u32*)(cpp_mem + 0x10);
+	u32 count = *(volatile u32*)(cpp_mem + 0x18);
+	u32 i, idx, offset, length;
+
+	if (!count) return;
+	if (count > CPP_RECV_PACKETS) count = CPP_RECV_PACKETS;
+
+	for (i = 0; i < count; i++)
+	{
+		idx    = (start + i) % CPP_RECV_PACKETS;
+		offset = *(u32*)(recv + idx * 8 + 0);
+		length = *(u32*)(recv + idx * 8 + 4);
+		CPP_ParsePacket(data, dataSize, offset % dataSize, length);
+	}
+	// Free up the receive buffer, otherwise new packets stop arriving
+	CPP_Release(count);
+}
+
+static void CPP_Reset(void) {
+	CPP_Disconnect();
+	cpp_state    = CPP_IDLE;
+	cpp_timer    = 0;
+	cpp_hasInput = false;
+	cpp_buttons  = 0;
+}
+
+static void CPP_Update(float delta) {
+	u8 status;
+	if (cpp_state == CPP_NONE) return;
+	status = *(volatile u8*)(cpp_mem + 0x08); // 0 = disconnected, 1 = connecting, 2 = connected
+	cpp_timer += delta;
+
+	switch (cpp_state)
+	{
+	case CPP_IDLE:
+		// Look for the accessory every 1.5 seconds
+		if (cpp_timer < 1.5f) break;
+		cpp_timer = 0;
+		if (!CPP_RequireConnection()) cpp_state = CPP_CONNECTING;
+		break;
+
+	case CPP_CONNECTING:
+		if (status == 2) {
+			cpp_state      = CPP_CONNECTED;
+			cpp_timer      = 0;
+			cpp_lastPacket = 0;
+			cpp_centred    = false;
+			CPP_RequestInputs();
+		} else if (cpp_timer > 0.5f) {
+			CPP_Reset(); // nothing answered, try again later
+		}
+		break;
+
+	case CPP_CONNECTED:
+		cpp_lastPacket  += delta;
+		cpp_lastRequest += delta;
+		CPP_ReadPackets();
+
+		if (status != 2 || cpp_lastPacket > 2.0f) {
+			if (cpp_announced) CPP_Announce("&eCircle Pad Pro desconectado");
+			cpp_announced = false;
+			CPP_Reset();
+			break;
+		}
+		if (cpp_hasInput && !cpp_announced) {
+			CPP_Announce("&aCircle Pad Pro conectado: Circle Pad anda, direcional da direita gira a camera");
+			cpp_announced = true;
+		}
+		// Keep reminding it that we are listening (also retries the first request)
+		if (cpp_lastRequest > (cpp_hasInput ? 0.5f : 0.1f)) CPP_RequestInputs();
+		break;
+	}
+}
+
+// Fills in the Circle Pad Pro stick, in the same units as the normal Circle Pad (about -156 to 156)
+static void CPP_GetStick(circlePosition* pos) {
+	int dx = (cpp_rawX - cpp_centreX) / 8;
+	int dy = (cpp_rawY - cpp_centreY) / 8;
+	Math_Clamp(dx, -156, 156);
+	Math_Clamp(dy, -156, 156);
+	pos->dx = (s16)dx;
+	pos->dy = (s16)dy;
+}
+
+
+/*########################################################################################################################*
+*-------------------------------------------------------Gamepads----------------------------------------------------------*
+*#########################################################################################################################*/
 void Gamepads_PreInit(void) {
-	irrst_result = irrstInit();
+	bool isNew = false;
+	APT_CheckNew3DS(&isNew);
+	isNew3DS = isNew;
+
+	if (isNew3DS) {
+		// C-Stick and ZL/ZR on the New 3DS come from ir:rst
+		irrst_result = irrstInit();
+	} else {
+		CPP_Init();
+	}
 }
 
 void Gamepads_Init(void) { }
@@ -181,15 +446,32 @@ static void HandleButtons(int port, u32 mods) {
 }
 
 #define AXIS_SCALE 8.0f
+#define AXIS_DEADZONE 20
+#define AXIS_MAX 156.0f
 static void ProcessCircleInput(int port, int axis, circlePosition* pos, float delta) {
 	// May not be exactly 0 on actual hardware
-	if (Math_AbsI(pos->dx) <= 24) pos->dx = 0;
-	if (Math_AbsI(pos->dy) <= 24) pos->dy = 0;
-		
-	Gamepad_SetAxis(port, axis, pos->dx / AXIS_SCALE, -pos->dy / AXIS_SCALE, delta);
+	float x = Math_AbsI(pos->dx) <= AXIS_DEADZONE ? 0 : pos->dx;
+	float y = Math_AbsI(pos->dy) <= AXIS_DEADZONE ? 0 : pos->dy;
+	Gamepad_SetAxis(port, axis, x / AXIS_SCALE, -y / AXIS_SCALE, delta);
 }
 
-// Set once the Circle Pad Pro (Old 3DS) or C-Stick (New 3DS) has been used
+// Camera stick: slow near the centre for precise aiming, full speed at the edge
+//  (like the camera in Resident Evil Revelations / Luigi's Mansion with the Circle Pad Pro)
+static float CameraCurve(int v) {
+	float n, a = (float)Math_AbsI(v);
+	if (a <= AXIS_DEADZONE) return 0;
+
+	n = (a - AXIS_DEADZONE) / (AXIS_MAX - AXIS_DEADZONE);
+	if (n > 1.0f) n = 1.0f;
+	n = n * (0.35f + 0.65f * n);
+	return (v < 0 ? -n : n) * (AXIS_MAX / AXIS_SCALE) * 1.2f;
+}
+
+static void ProcessCameraStick(int port, circlePosition* pos, float delta) {
+	Gamepad_SetAxis(port, PAD_AXIS_RIGHT, CameraCurve(pos->dx), -CameraCurve(pos->dy), delta);
+}
+
+// Set once the C-Stick (New 3DS) has been used or the Circle Pad Pro (Old 3DS) is connected
 static cc_bool rightStickSeen;
 
 void Gamepads_Process(float delta) {
@@ -197,23 +479,29 @@ void Gamepads_Process(float delta) {
 	circlePosition hid_pos, stk_pos = { 0 };
 	int port = Gamepad_Connect(0x3D5, defaults_3ds);
 
-	// Circle Pad Pro / C-Stick and (on Old 3DS) ZL/ZR come from ir:rst
-	if (irrst_result == 0) {
+	if (isNew3DS && irrst_result == 0) {
 		irrstScanInput();
 		mods |= irrstKeysHeld();
 		irrstCstickRead(&stk_pos);
 		if (Math_AbsI(stk_pos.dx) > 24 || Math_AbsI(stk_pos.dy) > 24) rightStickSeen = true;
+	} else if (!isNew3DS) {
+		CPP_Update(delta);
+		if (cpp_state == CPP_CONNECTED && cpp_hasInput) {
+			mods |= cpp_buttons;
+			CPP_GetStick(&stk_pos);
+		}
+		rightStickSeen = cpp_announced;
 	}
 	HandleButtons(port, mods);
 	hidCircleRead(&hid_pos);
 
 	if (rightStickSeen) {
-		// With the right stick: Circle Pad walks, right stick turns the camera
-		ProcessCircleInput(port, PAD_AXIS_LEFT,  &hid_pos, delta);
-		ProcessCircleInput(port, PAD_AXIS_RIGHT, &stk_pos, delta);
+		// Resident Evil Revelations style: Circle Pad walks, right stick turns the camera
+		ProcessCircleInput(port, PAD_AXIS_LEFT, &hid_pos, delta);
+		ProcessCameraStick(port, &stk_pos, delta);
 	} else {
-		// Without it: Circle Pad turns the camera (D-Pad walks)
-		ProcessCircleInput(port, PAD_AXIS_RIGHT, &hid_pos, delta);
+		// Without a right stick: Circle Pad turns the camera (D-Pad walks)
+		ProcessCameraStick(port, &hid_pos, delta);
 	}
 }
 

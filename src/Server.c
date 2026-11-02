@@ -25,6 +25,7 @@
 #include "Input.h"
 #include "Errors.h"
 #include "Options.h"
+#include "LanGame.h"
 
 static char nameBuffer[STRING_SIZE];
 static char motdBuffer[STRING_SIZE];
@@ -182,6 +183,8 @@ static void SPConnection_AddPart(const cc_string* text) {
 static void SPConnection_SendChat(const cc_string* text) {
 	cc_string left, part;
 	if (!text->length) return;
+	/* Jogar juntos: a mensagem vai para os amigos com o nome do anfitriao */
+	if (LanGame_IsHosting()) { LanGame_HostChat(text); return; }
 
 	sp_lastCol = '\0';
 	left = *text;
@@ -202,6 +205,7 @@ static void SPConnection_SendData(const cc_uint8* data, cc_uint32 len) { }
 
 static cc_bool SPConnection_Tick(struct ScheduledTask2* task) {
 	if (Server.Disconnected) return true;
+	LanGame_Tick();
 	/* 60 -> 20 ticks a second */
 	if ((ticks++ % 3) != 0)  return true;
 	

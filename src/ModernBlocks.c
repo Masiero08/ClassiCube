@@ -1,3 +1,4 @@
+#include "LanGame.h"
 #include "ModernBlocks.h"
 #include "Block.h"
 #include "Bitmap.h"
@@ -148,7 +149,7 @@ static void OnNewMapLoaded(void) {
 	BlockID block;
 	int i;
 	/* Multiplayer servers decide which blocks exist */
-	if (!Server.IsSinglePlayer || !Game_AllowCustomBlocks) return;
+	if (!LanGame_LocalBlocks() || !Game_AllowCustomBlocks) return;
 	/* Can be turned off from the mod selection menu */
 	if (!Options_GetBool(OPT_MODERN_BLOCKS, true)) return;
 

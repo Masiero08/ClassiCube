@@ -1139,6 +1139,10 @@ static void LanScreen_Host(void* w) {
 
 	/* abre o mundo para amigos assim que ele carregar */
 	Options_SetBool(LAN_OPT_HOST, true);
+#ifdef SALVAR_OPT_CONTINUAR
+	/* continua o mundo salvo, se tiver um */
+	Options_SetBool(SALVAR_OPT_CONTINUAR, Salvar_ExisteMundo());
+#endif
 	LanDiscovery_Stop();
 	Launcher_StartGame(&name, &String_Empty, &String_Empty, &String_Empty, &String_Empty, 1);
 }

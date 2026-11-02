@@ -39,6 +39,7 @@
 #include "Protocol.h"
 #include "Survival.h"
 #include "Criaturas.h"
+#include "Conquistas.h"
 
 /*########################################################################################################################*
 *--------------------------------------------------------Menu base--------------------------------------------------------*
@@ -237,6 +238,8 @@ static void Menu_SwitchTexPacks(void* a, void* b)        { TexturePackScreen_Sho
 static void Menu_SwitchHotkeys(void* a, void* b)         { HotkeyListScreen_Show(); }
 static void Menu_SwitchCrafting(void* a, void* b)        { CraftingScreen_Show(); }
 static void Menu_SwitchCriaturas(void* a, void* b)       { Criaturas_AbrirMenu(); }
+static void Menu_SwitchConquistas(void* a, void* b)      { Conquistas_Mostrar(); }
+static void Menu_SalvarMundo(void* a, void* b)           { Salvar_Agora(false); }
 
 
 /*########################################################################################################################*
@@ -614,6 +617,14 @@ static void PauseScreen_Init(void* screen) {
 	if (Criaturas_Ativo()) {
 		pauseDescs[1].title   = "Criaturas...";
 		pauseDescs[1].onClick = Menu_SwitchCriaturas;
+	}
+	/* um jogador: salvar com um toque (sem digitar nome) e a lista de conquistas */
+	/*  (o crafting continua no Inventario, e atalhos de teclado nao servem no 3DS) */
+	if (Server.IsSinglePlayer) {
+		pauseDescs[2].title   = "Conquistas...";
+		pauseDescs[2].onClick = Menu_SwitchConquistas;
+		pauseDescs[5].title   = "Salvar mundo";
+		pauseDescs[5].onClick = Menu_SalvarMundo;
 	}
 	s->descs      = pauseDescs;
 	s->descsCount = Array_Elems(descs);

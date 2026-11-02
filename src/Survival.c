@@ -1,4 +1,5 @@
 #include "Survival.h"
+#include "Conquistas.h"
 #include "Minerios.h"
 #include "LateGame.h"
 #include "Equipamento.h"
@@ -185,6 +186,7 @@ static void ClearHotbar(void) {
 static void Die(void) {
 	struct LocalPlayer* p = (struct LocalPlayer*)Entities.CurPlayer;
 	Chat_AddOf(&(cc_string)String_FromConst("&cVoce morreu!"), MSG_TYPE_ANNOUNCEMENT);
+	Conquistas_Evento(CONQ_EV_MORTE);
 	Mem_Set(blockCounts, 0, sizeof(blockCounts));
 	ClearHotbar();
 	ResetTools();
@@ -1130,6 +1132,7 @@ cc_bool Survival_HandleUse(void) {
 	if (DayNight_IsNight() && DayNight_GetMode() == DAYNIGHT_NORMAL) {
 		DayNight_SetTime(0);
 		Chat_AddOf(&(cc_string)String_FromConst("&eVoce dormiu... Bom dia!"), MSG_TYPE_ANNOUNCEMENT);
+		Conquistas_Evento(CONQ_EV_DORMIR);
 	} else {
 		Chat_AddRaw("&eVoce vai renascer nesta cama. So da para dormir a noite.");
 	}

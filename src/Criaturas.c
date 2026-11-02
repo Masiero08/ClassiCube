@@ -1,4 +1,5 @@
 #include "Criaturas.h"
+#include "Conquistas.h"
 #include "Entity.h"
 #include "EntityRenderers.h"
 #include "Model.h"
@@ -621,6 +622,7 @@ static void Criatura_GanharXp(struct Criatura* c, int xp) {
 			Criatura_DefinirEspecie(c, def->evolui);
 			c->vida = VidaMax(c->especie, c->nivel);
 			Diario_Marcar(c->especie, true);
+			Conquistas_Evento(CONQ_EV_EVOLUCAO);
 		}
 	}
 	c->nomeSujo = true;
@@ -1642,6 +1644,7 @@ static void Captura_Concluir(struct Criatura* c) {
 		Caixa_Salvar();
 		Diario_Marcar(c->especie, true);
 		Chat_Add2("&aPegou! %c%c &afoi para a Caixa das Criaturas (sua equipe esta cheia).", def->cor, def->nome);
+		Conquistas_Evento(def->lendaria ? CONQ_EV_LENDARIA : CONQ_EV_CAPTURA);
 		Chat_AddRaw("&7Abra em Criaturas > Diario > Caixa para trocar com a equipe.");
 		Lancamento_Efeito(pos, BLOCK_GOLD);
 		Criatura_Remover(c);
@@ -1654,6 +1657,7 @@ static void Captura_Concluir(struct Criatura* c) {
 		Diario_Marcar(c->especie, true);
 
 		Chat_Add2("&aPegou! Voce capturou %c%c&a!", def->cor, def->nome);
+		Conquistas_Evento(def->lendaria ? CONQ_EV_LENDARIA : CONQ_EV_CAPTURA);
 		Lancamento_Efeito(pos, BLOCK_GOLD);
 		Criatura_Remover(c);
 		if (!Criatura_DoJogador()) SoltarMembro(equipeCount - 1);
@@ -2836,6 +2840,14 @@ static void Criaturas_Free(void) {
 	Mestre_Remover();
 	Bau_Remover();
 	RemoverTodas();
+}
+
+/* Para as conquistas: quantas especies ja foram capturadas e quais insignias foram ganhas */
+void Criaturas_Progresso(int* especies, int* insigniasGanhas) {
+	int i, total = 0;
+	for (i = 0; i < ESPECIES_COUNT; i++) { if (diarioCapturadas & (1 << i)) total++; }
+	*especies        = total;
+	*insigniasGanhas = insignias;
 }
 
 struct IGameComponent Criaturas_Component = {

@@ -415,7 +415,7 @@ ESPECIES = [
          pal=dict(base=(60, 45, 45), barriga=(40, 30, 30), detalhe=(255, 120, 20), olho=(255, 230, 60), lava=True, sobrancelha=True)),
     dict(id="abissal", nome="Abissal", cor="&1", tipo="AGUA", plano="serpente", escala=1.5,
          vida=65, dano=12, vel=4.5, evolui=None, nivel=0, habitat="AGUA", inicial=0, lendaria=1,
-         pal=dict(base=(25, 60, 120), barriga=(150, 220, 230), detalhe=(80, 230, 220), olho=(255, 255, 255), sobrancelha=True)),
+         pal=dict(base=(25, 60, 120), barriga=(150, 220, 230), detalhe=(80, 230, 220), olho=(255, 200, 40), sobrancelha=True)),
 ]
 
 

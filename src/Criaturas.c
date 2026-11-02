@@ -1659,11 +1659,8 @@ static void Captura_Concluir(struct Criatura* c) {
 		Caixa_Salvar();
 		Diario_Marcar(c->especie, true);
 		Chat_Add2("&aPegou! %c%c &afoi para a Caixa das Criaturas (sua equipe esta cheia).", def->cor, def->nome);
-<<<<<<< HEAD
 		Conquistas_Evento(def->lendaria ? CONQ_EV_LENDARIA : CONQ_EV_CAPTURA);
-=======
 		Sons_Tocar("captura");
->>>>>>> origin/claude/project-thread-ovxco9
 		Chat_AddRaw("&7Abra em Criaturas > Diario > Caixa para trocar com a equipe.");
 		Lancamento_Efeito(pos, BLOCK_GOLD);
 		Criatura_Remover(c);
@@ -1676,11 +1673,8 @@ static void Captura_Concluir(struct Criatura* c) {
 		Diario_Marcar(c->especie, true);
 
 		Chat_Add2("&aPegou! Voce capturou %c%c&a!", def->cor, def->nome);
-<<<<<<< HEAD
 		Conquistas_Evento(def->lendaria ? CONQ_EV_LENDARIA : CONQ_EV_CAPTURA);
-=======
 		Sons_Tocar("captura");
->>>>>>> origin/claude/project-thread-ovxco9
 		Lancamento_Efeito(pos, BLOCK_GOLD);
 		Criatura_Remover(c);
 		if (!Criatura_DoJogador()) SoltarMembro(equipeCount - 1);

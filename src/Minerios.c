@@ -1220,12 +1220,9 @@ static void Monstro_Derrotado(struct Monstro* m) {
 	const struct MonstroDef* def = &monstro_defs[m->tipo];
 	int i;
 	Chat_Add1("&e%c &efoi derrotado(a)!", def->nome);
-<<<<<<< HEAD
 	Conquistas_Evento(def->chefe ? CONQ_EV_CHEFAO : CONQ_EV_MONSTRO);
-=======
 	Sons_Voz(&m->base, 75);
 	if (def->chefe) Sons_Tocar("insignia");
->>>>>>> origin/claude/project-thread-ovxco9
 	if (def->chefe == CHEFOES) {
 		Chat_AddRaw("&6Voce venceu todos os chefoes! &eJunte o Coracao de uranio com a Big Bertha");
 		Chat_AddRaw("&epara fazer a &6Espada Devastadora&e.");

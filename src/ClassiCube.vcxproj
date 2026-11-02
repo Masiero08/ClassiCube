@@ -419,11 +419,8 @@
     <ClInclude Include="Survival.h" />
     <ClInclude Include="LateGame.h" />
     <ClInclude Include="Equipamento.h" />
-<<<<<<< HEAD
     <ClInclude Include="Conquistas.h" />
-=======
     <ClInclude Include="Sons.h" />
->>>>>>> origin/claude/project-thread-ovxco9
     <ClInclude Include="Equipamento_tex.h" />
     <ClInclude Include="LateGame_tex.h" />
     <ClInclude Include="DayNight.h" />
@@ -638,11 +635,8 @@
     <ClCompile Include="Survival.c" />
     <ClCompile Include="LateGame.c" />
     <ClCompile Include="Equipamento.c" />
-<<<<<<< HEAD
     <ClCompile Include="Conquistas.c" />
-=======
     <ClCompile Include="Sons.c" />
->>>>>>> origin/claude/project-thread-ovxco9
     <ClCompile Include="InventarioScreen.c" />
     <ClCompile Include="DayNight.c" />
     <ClCompile Include="Entity.c" />

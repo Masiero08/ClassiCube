@@ -194,6 +194,9 @@
     <ClInclude Include="Equipamento.h">
       <Filter>Header Files\Map</Filter>
     </ClInclude>
+    <ClInclude Include="Sons.h">
+      <Filter>Header Files\Map</Filter>
+    </ClInclude>
     <ClInclude Include="Equipamento_tex.h">
       <Filter>Header Files\Map</Filter>
     </ClInclude>
@@ -439,6 +442,9 @@
       <Filter>Source Files\Map</Filter>
     </ClCompile>
     <ClCompile Include="Equipamento.c">
+      <Filter>Source Files\Map</Filter>
+    </ClCompile>
+    <ClCompile Include="Sons.c">
       <Filter>Source Files\Map</Filter>
     </ClCompile>
     <ClCompile Include="InventarioScreen.c">

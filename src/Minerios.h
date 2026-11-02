@@ -47,6 +47,8 @@ int Minerios_DimensaoGerando(void);
 /* Chamado quando o jogador aperta colocar (place = true) ou quebrar bloco. */
 /* Retorna true se o clique foi usado pelo mod (bater num monstro, usar um item). */
 cc_bool Minerios_HandleClick(cc_bool place);
+/* Se tem um chefao por perto (barra de vida na tela) */
+cc_bool Minerios_ChefePerto(void);
 
 CC_END_HEADER
 #endif

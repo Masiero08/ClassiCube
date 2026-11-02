@@ -1,4 +1,5 @@
 #include "Survival.h"
+#include "Sons.h"
 #include "Minerios.h"
 #include "LateGame.h"
 #include "Equipamento.h"
@@ -185,6 +186,7 @@ static void ClearHotbar(void) {
 static void Die(void) {
 	struct LocalPlayer* p = (struct LocalPlayer*)Entities.CurPlayer;
 	Chat_AddOf(&(cc_string)String_FromConst("&cVoce morreu!"), MSG_TYPE_ANNOUNCEMENT);
+	Sons_Tocar("morte");
 	Mem_Set(blockCounts, 0, sizeof(blockCounts));
 	ClearHotbar();
 	ResetTools();
@@ -207,6 +209,7 @@ static void Damage(int amount) {
 	health      -= amount;
 	hurtCooldown = 0.5f;
 	regenTimer   = 0;
+	if (health > 0) Sons_Tocar("dano");
 	if (health <= 0) Die();
 }
 
@@ -465,6 +468,7 @@ static void WearToolKind(int kind) {
 	name = String_FromReadonly(toolNames[kind]);
 	tier = String_FromReadonly(tierNames[toolTier[kind]]);
 	Chat_Add2("&cSua %s de %s quebrou!", &name, &tier);
+	Sons_Tocar("quebrou");
 	toolTier[kind] = 0;
 }
 
@@ -784,6 +788,7 @@ static cc_bool Eat(const struct FoodRecipe* f) {
 
 	UseInputs(f->count1, f->input1, f->count2, f->input2);
 	food = min(food + f->value, MAX_FOOD);
+	Sons_Tocar("comer");
 	return true;
 }
 
@@ -798,6 +803,7 @@ static cc_bool MakeTool(const struct ToolRecipe* t) {
 	name = String_FromReadonly(toolNames[t->kind]);
 	tier = String_FromReadonly(tierNames[t->tier]);
 	Chat_Add2("&aVoce fez: %s de %s", &name, &tier);
+	Sons_Tocar("criar");
 	return true;
 }
 
@@ -815,6 +821,7 @@ cc_bool Survival_Craft(int i) {
 		UseInputs(ArmorCost(i), armorMaterials[ArmorTier(i)], 0, BLOCK_AIR);
 		blockCounts[ArmorOutput(i)]++;
 		AddToHotbar(ArmorOutput(i));
+		Sons_Tocar("criar");
 		return true;
 	}
 
@@ -823,6 +830,7 @@ cc_bool Survival_Craft(int i) {
 	UseInputs(r->count1, r->input1, r->count2, r->input2);
 	blockCounts[r->output] += r->outCount;
 	AddToHotbar(r->output);
+	Sons_Tocar("criar");
 	return true;
 }
 
@@ -1129,6 +1137,7 @@ cc_bool Survival_HandleUse(void) {
 
 	if (DayNight_IsNight() && DayNight_GetMode() == DAYNIGHT_NORMAL) {
 		DayNight_SetTime(0);
+		Sons_Tocar("dormir");
 		Chat_AddOf(&(cc_string)String_FromConst("&eVoce dormiu... Bom dia!"), MSG_TYPE_ANNOUNCEMENT);
 	} else {
 		Chat_AddRaw("&eVoce vai renascer nesta cama. So da para dormir a noite.");

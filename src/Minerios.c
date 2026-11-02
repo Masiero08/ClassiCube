@@ -1,4 +1,5 @@
 #include "Minerios.h"
+#include "Sons.h"
 #include "Block.h"
 #include "BlockID.h"
 #include "Bitmap.h"
@@ -626,6 +627,7 @@ static void Monstro_Atacar(struct Monstro* m, struct Entity* jogador) {
 	}
 	DanoJogador(def->dano);
 	m->ataqueTimer = def->voa ? 2.0f : 1.5f;
+	if (def->chefe) Sons_Voz(&m->base, 100);
 }
 
 static struct Monstro* Monstro_Criar(int tipo, Vec3 pos);
@@ -693,6 +695,7 @@ static void Chefe_Especial(struct Monstro* m, struct Entity* jogador, float d2) 
 		m->especialTimer = 6.0f;
 		if (d2 > 7 * 7) return;
 		jogador->Velocity.y = 0.9f;
+		Sons_TocarTom("golem", pos, 70);
 		DanoJogador(5);
 		Chat_AddRaw("&bO Golem de Titanio pisou forte no chao!");
 		break;
@@ -700,6 +703,7 @@ static void Chefe_Especial(struct Monstro* m, struct Entity* jogador, float d2) 
 		/* da um bote: corre muito rapido por um tempinho */
 		m->especialTimer = 7.0f;
 		m->correndo      = 1.5f;
+		Sons_Voz(&m->base, 90);
 		Chat_AddRaw("&dA Aranha de Cristal deu um bote!");
 		break;
 	case M_REI_CREEPER:
@@ -707,6 +711,7 @@ static void Chefe_Especial(struct Monstro* m, struct Entity* jogador, float d2) 
 		m->especialTimer = 8.0f;
 		if (d2 > 10 * 10) return;
 		Explodir(Math_Floor(pos.x), Math_Floor(pos.y), Math_Floor(pos.z), 3);
+		Sons_TocarEm("explosao", pos);
 		if (d2 < 5 * 5) DanoJogador(8);
 		Chat_AddRaw("&aO Rei Creeper explodiu de raiva!");
 		break;
@@ -1011,6 +1016,7 @@ static void SorteExplosao(int x, int y, int z) {
 				if (b == BLOCK_BEDROCK || b == BLOCK_AIR) continue;
 				Game_UpdateBlock(x + dx, y + dy, z + dz, BLOCK_AIR);
 			}
+	{ Vec3 p; Vec3_Set(p, x + 0.5f, y + 0.5f, z + 0.5f); Sons_TocarEm("explosao", p); }
 	DanoJogador(6);
 	Chat_AddRaw("&cAzar! &fO bloco da sorte explodiu!");
 }
@@ -1081,6 +1087,7 @@ static void AbrirSorte(int x, int y, int z) {
 		if (r < sorte_chances[i]) break;
 		r -= sorte_chances[i];
 	}
+	Sons_Tocar(i == S_MOSQUITOS || i == S_GIGANTE || i == S_EXPLOSAO || i >= S_SORTE_COUNT - 1 ? "azar" : "sorte");
 
 	switch (i)
 	{
@@ -1134,6 +1141,7 @@ static void SoltarRainha(void) {
 	if (!m) return;
 	m->pensarTimer = 6.0f;
 	Chat_AddRaw("&5BZZZZZZ! &dA Rainha dos Mosquitos apareceu! &7(chefao 1 de 4)");
+	Sons_Tocar("chefao");
 }
 
 /* Chama o chefao do altar, um pouco atras do altar (visto pelo jogador) */
@@ -1156,6 +1164,7 @@ static void ChamarChefe(int tipo, int x, int y, int z) {
 	m = Monstro_Criar(tipo, pos);
 	if (!m) return;
 	Chat_Add2("&cO chao treme... %c &capareceu! &7(chefao %i de 4)", def->nome, &def->chefe);
+	Sons_Tocar("chefao");
 }
 
 /* Choca um dragao (tipo < 0: sorteia entre Esmeralda, Fogo e Gelo) */
@@ -1168,6 +1177,7 @@ static void ChocarDragao(int x, int y, int z, int tipo) {
 	m = Monstro_Criar(tipo, pos);
 	if (!m) return;
 	Chat_Add1("&eNasceu um %c&e! Segure um rubi na mao, ele vem ate voce: aperte colocar 3 vezes para domar.", monstro_defs[tipo].nome);
+	Sons_Voz(&m->base, 140); /* filhote */
 }
 
 static void OnBlockChanged(void* obj, IVec3 coords, BlockID old, BlockID now) {
@@ -1209,6 +1219,8 @@ static void Monstro_Derrotado(struct Monstro* m) {
 	const struct MonstroDef* def = &monstro_defs[m->tipo];
 	int i;
 	Chat_Add1("&e%c &efoi derrotado(a)!", def->nome);
+	Sons_Voz(&m->base, 75);
+	if (def->chefe) Sons_Tocar("insignia");
 	if (def->chefe == CHEFOES) {
 		Chat_AddRaw("&6Voce venceu todos os chefoes! &eJunte o Coracao de uranio com a Big Bertha");
 		Chat_AddRaw("&epara fazer a &6Espada Devastadora&e.");
@@ -1234,7 +1246,9 @@ static void Monstro_Dano(struct Monstro* m, int dano, Vec3 origem, float empurra
 
 	m->vida     -= dano;
 	m->hurtTimer = 0.3f;
+	Sons_TocarEm("golpe", m->base.Position);
 	if (m->vida <= 0) { Monstro_Derrotado(m); return; }
+	Sons_Voz(&m->base, 120);
 
 	/* empurrao para tras (gigantes quase nao se mexem) */
 	empurrao /= def->escala;
@@ -1374,6 +1388,7 @@ static void DragaoClique(struct Monstro* m, BlockID held) {
 	}
 
 	m->comida++;
+	Sons_TocarEm("comer", m->base.Position);
 	if (m->comida < RUBIS_PARA_DOMAR) {
 		Chat_Add2("&2O dragao comeu o rubi! &e(%i de %i)", &m->comida, &total);
 		return;
@@ -1384,6 +1399,8 @@ static void DragaoClique(struct Monstro* m, BlockID held) {
 		return;
 	}
 	m->domado = true;
+	Sons_Voz(&m->base, 100);
+	Sons_Tocar("nivel");
 	Monstro_AtualizarNome(m);
 	Options_SetInt(OPT_DRAGAO, m->tipo - M_DRAGAO + 1); /* lembra qual dragao e o seu */
 	Chat_AddRaw("&aO dragao agora e seu! &eEle te segue e briga com os monstros. Aperte colocar nele para montar.");
@@ -1406,6 +1423,7 @@ static void SoproDragao(void) {
 	if (!dragao || soproTimer > 0) return;
 	def = &monstro_defs[dragao->tipo];
 	soproTimer = 1.0f;
+	Sons_Tocar(dragao->tipo == M_DRAGAO_GELO ? "sopro_gelo" : "sopro_fogo");
 
 	eye = Entity_GetEyePosition(jogador);
 	dir = Vec3_GetDirVector(jogador->Yaw * MATH_DEG2RAD, jogador->Pitch * MATH_DEG2RAD);
@@ -1553,6 +1571,7 @@ static void Viajar(int destino) {
 
 	viajando   = true;
 	dimDestino = destino;
+	Sons_Tocar("portal");
 	if (ArquivoExiste(dim_arquivos[destino])) {
 		path = String_FromReadonly(dim_arquivos[destino]);
 		Map_LoadFrom(&path);
@@ -1953,6 +1972,8 @@ static cc_bool PertoDaAgua(void) {
 
 /* Barra de vida do chefao mais perto, no canto de cima da tela */
 static cc_bool barraVisivel;
+/* para a musica de chefao: a barra de vida aparece com um chefao a menos de 48 blocos */
+cc_bool Minerios_ChefePerto(void) { return barraVisivel; }
 static void AtualizarBarraChefe(void) {
 	struct Entity* jogador = &Entities.CurPlayer->Base;
 	struct Monstro* chefe = NULL;

@@ -419,6 +419,7 @@
     <ClInclude Include="Survival.h" />
     <ClInclude Include="LateGame.h" />
     <ClInclude Include="Equipamento.h" />
+    <ClInclude Include="Sons.h" />
     <ClInclude Include="Equipamento_tex.h" />
     <ClInclude Include="LateGame_tex.h" />
     <ClInclude Include="DayNight.h" />
@@ -633,6 +634,7 @@
     <ClCompile Include="Survival.c" />
     <ClCompile Include="LateGame.c" />
     <ClCompile Include="Equipamento.c" />
+    <ClCompile Include="Sons.c" />
     <ClCompile Include="InventarioScreen.c" />
     <ClCompile Include="DayNight.c" />
     <ClCompile Include="Entity.c" />

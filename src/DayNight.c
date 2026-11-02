@@ -1,4 +1,5 @@
 #include "DayNight.h"
+#include "Sons.h"
 #include "Survival.h"
 #include "Block.h"
 #include "BlockID.h"
@@ -258,6 +259,7 @@ static void Explode(struct Monster* m) {
 			}
 
 	d2 = Dist2XZ(pos, player->Position) + (pos.y - player->Position.y) * (pos.y - player->Position.y);
+	Sons_TocarEm("explosao", pos);
 	if (d2 < 3.0f * 3.0f) Survival_Damage(d2 < 1.5f * 1.5f ? 12 : 7);
 	Chat_AddOf(&(cc_string)String_FromConst("&cBOOM!"), MSG_TYPE_ANNOUNCEMENT);
 	Monster_Remove(m);
@@ -321,6 +323,7 @@ static void Monster_Tick(struct Entity* e, float delta) {
 		if (m->type == MONSTER_CREEPER) {
 			/* Creepers hiss and blow up when they stay close */
 			if (d2 < 2.5f * 2.5f) {
+				if (m->fuseTimer <= 0) Sons_TocarEm("chiado", pos); /* o pavio acendeu */
 				m->fuseTimer += delta;
 				if (m->fuseTimer >= 1.5f) { Explode(m); return; }
 			} else {
@@ -502,6 +505,8 @@ cc_bool DayNight_HandleAttack(void) {
 	damage = Survival_AttackDamage();
 	best->health   -= damage;
 	best->hurtTimer = 0.3f;
+	Sons_TocarEm("golpe", best->base.Position);
+	Sons_Voz(&best->base, best->health <= 0 ? 80 : 120);
 	best->fuseTimer = IsAnimal(best->type) ? 4.0f : 0; /* animals run away for a while */
 
 	if (best->health <= 0) {

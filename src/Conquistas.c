@@ -520,6 +520,8 @@ cc_bool Salvar_Agora(cc_bool automatico) {
 	}
 	/* as outras dimensoes ficam nos arquivos do Minerios (maps/orespawn_*.cw) */
 	if (Minerios_DimensaoAtual() != MINERIOS_DIM_NORMAL) {
+		/* automatico/ao fechar: guarda pelo menos o que mudou nesta dimensao */
+		if (automatico) Minerios_SalvarDimensao();
 		if (!automatico) {
 			Chat_AddRaw("&eSo da para salvar no mundo normal.");
 			Chat_AddRaw("&eVolte pelo portal e salve de la (a outra dimensao fica guardada).");

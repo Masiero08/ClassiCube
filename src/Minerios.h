@@ -50,6 +50,8 @@ cc_bool Minerios_HandleClick(cc_bool place);
 /* Em qual dimensao o jogador esta agora (o mundo normal, se as dimensoes estao desligadas) */
 enum MineriosDimensao { MINERIOS_DIM_NORMAL, MINERIOS_DIM_UTOPIA, MINERIOS_DIM_CRISTAL, MINERIOS_DIM_NETHER, MINERIOS_DIM_FIM };
 int Minerios_DimensaoAtual(void);
+/* Salva a dimensao atual (fora do mundo normal) no arquivo dela. Retorna 0 se deu certo. */
+cc_result Minerios_SalvarDimensao(void);
 
 CC_END_HEADER
 #endif

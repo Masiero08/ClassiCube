@@ -2032,6 +2032,10 @@ static void Minerios_Tick(struct ScheduledTask* task) {
 }
 
 int Minerios_DimensaoAtual(void) { return dimAtual; }
+cc_result Minerios_SalvarDimensao(void) {
+	if (dimAtual == DIM_NORMAL || viajando) return ERR_NOT_SUPPORTED;
+	return SalvarMundo(dim_arquivos[dimAtual]);
+}
 
 static void OnNewMap(void) {
 	if (montado) Desmontar();

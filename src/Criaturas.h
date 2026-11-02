@@ -20,6 +20,10 @@ cc_bool Criaturas_Ativo(void);
 void Criaturas_AbrirMenu(void);
 /* Quantas especies ja foram capturadas e as insignias ganhas (um bit por Mestre) */
 void Criaturas_Progresso(int* especies, int* insignias);
+/* Tipo (fogo, agua...) da especie com esse nome de modelo, ou -1 (para a voz dela) */
+int Criaturas_TipoDoModelo(const char* modelo);
+/* 0 = sem batalha, 1 = criatura do jogador lutando, 2 = luta contra uma lendaria */
+int Criaturas_Batalha(void);
 
 CC_END_HEADER
 #endif

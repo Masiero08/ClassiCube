@@ -29,6 +29,8 @@ void LateGame_GenNether(void);
 void LateGame_GenEnd(void);
 /* Hits the Ender Dragon if the player is looking at it. Returns whether it was hit */
 cc_bool LateGame_HandleAttack(void);
+/* Se o Ender Dragon esta vivo (para a musica de chefao) */
+cc_bool LateGame_DragaoVivo(void);
 
 CC_END_HEADER
 #endif

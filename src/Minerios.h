@@ -52,6 +52,8 @@ enum MineriosDimensao { MINERIOS_DIM_NORMAL, MINERIOS_DIM_UTOPIA, MINERIOS_DIM_C
 int Minerios_DimensaoAtual(void);
 /* Salva a dimensao atual (fora do mundo normal) no arquivo dela. Retorna 0 se deu certo. */
 cc_result Minerios_SalvarDimensao(void);
+/* Se tem um chefao por perto (barra de vida na tela) */
+cc_bool Minerios_ChefePerto(void);
 
 CC_END_HEADER
 #endif

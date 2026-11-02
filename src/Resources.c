@@ -321,7 +321,8 @@ static void MusicAssets_CheckExistence(void) {
 		String_Format1(&path, "audio/%c", musicAssets[i].name);
 
 		Platform_EncodePath(&str, &path);
-		musicAssets[i].downloaded = File_Exists(&str);
+		/* com as musicas proprias (pacote de sons do 3DS) nao precisa baixar as do Minecraft */
+		musicAssets[i].downloaded = File_Exists(&str) || Audio_HasOwnSounds();
 	}
 }
 
@@ -603,6 +604,8 @@ static void SoundAssets_CheckExistence(void) {
 
 	/* >= in case somehow have say "gui.png", "GUI.png" */
 	allSoundsExist = soundEntriesFound >= Array_Elems(soundAssets);
+	/* o pacote de sons proprio ja traz passos e blocos */
+	if (Audio_HasOwnSounds()) allSoundsExist = true;
 }
 
 static void SoundAssets_CountMissing(void) {

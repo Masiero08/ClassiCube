@@ -50,6 +50,17 @@ void Audio_SetMusic(int volume);
 void Audio_SetSounds(int volume);
 void Audio_PlayDigSound(cc_uint8 type);
 void Audio_PlayStepSound(cc_uint8 type);
+/* Toca o efeito "name" de audio/efeitos.zip (fx_<name>1.wav, fx_<name>2.wav...) */
+/* volume: 0-100 (sobre o volume dos sons), rate: 100 = normal, mais alto = mais agudo */
+void Audio_PlayEffect(const char* name, int volume, int rate);
+/* Se o pacote de sons proprio (audio/efeitos.zip) esta instalado */
+cc_bool Audio_HasOwnSounds(void);
+extern const cc_string Sounds_ZipPathFX;
+
+/* Clima da musica: escolhe faixas dia_*, noite_*, nether_*, fim_*, batalha_*, chefao_* */
+enum MusicMood { MUSIC_MOOD_DAY, MUSIC_MOOD_NIGHT, MUSIC_MOOD_NETHER, MUSIC_MOOD_END,
+	MUSIC_MOOD_BATTLE, MUSIC_MOOD_BOSS, MUSIC_MOOD_COUNT };
+void Audio_SetMusicMood(int mood);
 #define AUDIO_MAX_BUFFERS 4
 
 cc_bool AudioBackend_Init(void);

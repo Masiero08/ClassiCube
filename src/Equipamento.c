@@ -1,4 +1,6 @@
+#include "LanGame.h"
 #include "Equipamento.h"
+#include "Sons.h"
 #include "Survival.h"
 #include "Minerios.h"
 #include "LateGame.h"
@@ -161,7 +163,7 @@ static void DefineBlocks(void) {
 	BlockID block;
 	int i;
 	/* Multiplayer servers decide which blocks exist */
-	if (!Server.IsSinglePlayer || !Game_AllowCustomBlocks) return;
+	if (!LanGame_LocalBlocks() || !Game_AllowCustomBlocks) return;
 
 	for (i = 0; i < Array_Elems(equip_defs); i++)
 	{
@@ -583,6 +585,7 @@ static void TickFornalha(struct EquipFornalha* f, float delta) {
 				out->block = Equip_SmeltResult(f->slots[FORNALHA_INPUT].block);
 				out->count++;
 				if (--f->slots[FORNALHA_INPUT].count == 0) f->slots[FORNALHA_INPUT].block = BLOCK_AIR;
+				{ Vec3 p; Vec3_Set(p, f->x + 0.5f, f->y + 0.5f, f->z + 0.5f); Sons_TocarEm("fogo", p); }
 			}
 		} else {
 			f->cook = 0;
@@ -628,7 +631,7 @@ cc_bool Equip_HandleUse(void) {
 
 	if (cur == EBLOCK_BAU) {
 		bau = GetBau(pos.x, pos.y, pos.z);
-		if (bau) BauScreen_Show(bau);
+		if (bau) { Sons_Tocar("bau_abrir"); BauScreen_Show(bau); }
 		else Chat_AddRaw("&cJa existem baus demais neste mundo.");
 		return true;
 	}

@@ -1,5 +1,6 @@
 #include "EntityRenderers.h"
 #include "Entity.h"
+#include "LanGame.h"
 #include "Bitmap.h"
 #include "Block.h"
 #include "Event.h"
@@ -394,7 +395,7 @@ void EntityNames_Render(void) {
 	int i;
 
 	if (Entities.NamesMode == NAME_MODE_NONE) return;
-	if (Server.IsSinglePlayer && Game_NumStates == 1) return;
+	if (Server.IsSinglePlayer && Game_NumStates == 1 && !LanGame_IsHosting()) return;
 
 	closestEntityId = Entities_GetClosest(&p->Base);
 	if (!p->Hacks.CanSeeAllNames || Entities.NamesMode != NAME_MODE_ALL) return;
@@ -421,7 +422,7 @@ void EntityNames_RenderHovered(void) {
 	int i;
 
 	if (Entities.NamesMode == NAME_MODE_NONE) return;
-	if (Server.IsSinglePlayer && Game_NumStates == 1) return;
+	if (Server.IsSinglePlayer && Game_NumStates == 1 && !LanGame_IsHosting()) return;
 
 	allNames = !(Entities.NamesMode == NAME_MODE_HOVERED || Entities.NamesMode == NAME_MODE_ALL) 
 		&& p->Hacks.CanSeeAllNames;

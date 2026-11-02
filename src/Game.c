@@ -3,6 +3,7 @@
 #include "ModernBlocks.h"
 #include "Survival.h"
 #include "DayNight.h"
+#include "Sons.h"
 #include "World.h"
 #include "Lighting.h"
 #include "MapRenderer.h"
@@ -50,6 +51,7 @@
 #include "SystemFonts.h"
 #include "Formats.h"
 #include "EntityRenderers.h"
+#include "LanGame.h"
 
 struct _GameData Game;
 static cc_uint64 frameStart;
@@ -236,6 +238,8 @@ void Game_UpdateBlock(int x, int y, int z, BlockID block) {
 	}
 	Lighting.OnBlockChanged(x, y, z, old, block);
 	MapRenderer_OnBlockChanged(x, y, z, block);
+	/* Jogar juntos: o anfitriao repassa a mudanca para os amigos */
+	if (old != block) LanGame_OnBlockChanged(x, y, z, block);
 }
 
 void Game_ChangeBlock(int x, int y, int z, BlockID block) {
@@ -429,6 +433,7 @@ static void Game_Load(void) {
 	Game_AddComponent(&Survival_Component);
 	Game_AddComponent(&DayNight_Component);
 	Game_AddComponent(&Conquistas_Component);
+	Game_AddComponent(&Sons_Component);
 	Game_AddComponent(&Drawer2D_Component);
 	Game_AddComponent(&SystemFonts_Component);
 
@@ -449,6 +454,7 @@ static void Game_Load(void) {
 	Game_AddComponent(&Protocol_Component);
 	Game_AddComponent(&Entities_Component);
 	Game_AddComponent(&Criaturas_Component);
+	Game_AddComponent(&LanGame_Component);
 
 	Game_AddComponent(&Gui_Component);
 	Game_AddComponent(&Selections_Component);

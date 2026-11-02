@@ -351,8 +351,12 @@ static bool CreateNativeTexture(C3D_Tex* tex, u32 width, u32 height, int vram) {
 	height   = Math_NextPowOf2(height);
 	u32 size = width * height * 4;
 
-	tex->data = vram ? vramAlloc(size) : NULL;
-	if (!tex->data) tex->data = linearAlloc(size);
+	// Textures are written by the CPU, so keep them in linear memory (like
+	//  citro3d's C3D_TexInit does) and flush the data cache after writing.
+	//  Writing straight into VRAM left some cache lines unwritten on hardware,
+	//  which showed up as blocks/mobs drawn in a flat lilac/purple colour.
+	tex->data = linearAlloc(size);
+	if (!tex->data && vram) tex->data = vramAlloc(size);
 	if (!tex->data) return false;
 
 	tex->width  = width;
@@ -425,12 +429,10 @@ static void ToMortonTexture(C3D_Tex* tex, int originX, int originY,
 	}
 }
 
-// Textures that didn't fit in VRAM live in linear memory, which the CPU writes
-//  through its data cache. Without a flush the GPU can read stale memory there,
-//  which showed up on hardware as blocks drawn in a flat colour (lilac)
+// The CPU writes textures through its data cache. Without a flush the GPU can
+//  read stale memory, which showed up on hardware as blocks drawn in a flat
+//  colour (lilac/purple), sometimes with only a few correct pixels
 static void FlushTexture(C3D_Tex* tex) {
-	u32 addr = (u32)tex->data;
-	if (addr >= 0x1F000000 && addr < 0x1F600000) return; // VRAM
 	CPU_FlushDataCache(tex->data, tex->size);
 }
 

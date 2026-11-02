@@ -19,6 +19,7 @@
 #include "Http.h"
 #include "Game.h"
 #include "main.h"
+#include "LanGame.h"
 
 #define LAYOUTS static const struct LLayout
 #define IsBackButton(btn) (btn == CCKEY_ESCAPE || btn == CCPAD_SELECT || btn == CCPAD_2)
@@ -177,6 +178,9 @@ static void SwitchToSettings(void* w)      { SettingsScreen_SetActive(); }
 static void SwitchToThemes(void* w)        { ThemesScreen_SetActive(); }
 static void SwitchToMods(void* w)          { ModsScreen_SetActive(); }
 static void SwitchToUpdates(void* w)       { UpdatesScreen_SetActive(); }
+#ifdef CC_BUILD_NETWORKING
+static void SwitchToLan(void* w);
+#endif
 
 
 /*########################################################################################################################*
@@ -716,7 +720,7 @@ static void SwitchToSplitScreen(void* w) { SplitScreen_SetActive(); }
 static struct MainScreen {
 	LScreen_Layout
 	struct LButton btnLogin, btnResume, btnDirect, btnSPlayer, btnSplit, btnMods;
-	struct LButton btnRegister, btnOptions, btnUpdates, btnOnline, btnBack;
+	struct LButton btnRegister, btnOptions, btnUpdates, btnOnline, btnBack, btnLan;
 	struct LInput iptUsername, iptPassword;
 	struct LLabel lblStatus, lblUpdate, lblMods;
 	cc_bool signingIn, online;
@@ -797,6 +801,8 @@ static void MainScreen_Singleplayer(void* w) {
 	const cc_string* user = &MainScreen.iptUsername.text;
 
 	if (!user->length) user = &defUser;
+	/* "Jogar" normal nao abre o mundo para amigos */
+	Options_SetBool(LAN_OPT_HOST, false);
 	Launcher_StartGame(user, &String_Empty, &String_Empty, &String_Empty, &String_Empty, 1);
 }
 
@@ -898,6 +904,9 @@ static void MainScreen_AddHome(struct MainScreen* s) {
 #ifdef CC_BUILD_SPLITSCREEN
 	LButton_Add(s, &s->btnSplit,   200, 35, "Tela dividida",
 				SwitchToSplitScreen,     home_btnSplit);
+#elif defined CC_BUILD_NETWORKING
+	LButton_Add(s, &s->btnLan,     200, 35, "Jogar juntos",
+				SwitchToLan,             home_btnSplit);
 #endif
 
 	if (Platform_Flags & PLAT_FLAG_APP_EXIT) {
@@ -1082,6 +1091,182 @@ void MainScreen_SetActive(void) {
 
 	Launcher_SetScreen((struct LScreen*)s);
 }
+
+/*########################################################################################################################*
+*---------------------------------------------------------LanScreen-------------------------------------------------------*
+*#########################################################################################################################*/
+#ifdef CC_BUILD_NETWORKING
+/* "Jogar juntos": multijogador local entre consoles no mesmo Wi-Fi */
+static struct LanScreen {
+	LScreen_Layout
+	struct LInput  iptName, iptIP;
+	struct LButton btnHost, btnFound[2], btnJoin, btnBack;
+	struct LLabel  lblInfo, lblFound, lblStatus;
+	int numFound;
+	char foundIP[2][20];
+	char foundText[2][48];
+	int  foundPort[2];
+} LanScreen CC_BIG_VAR;
+
+#define LAN_SCREEN_MAX_WIDGETS 10
+static struct LWidget* lan_widgets[LAN_SCREEN_MAX_WIDGETS];
+
+LAYOUTS lan_lblInfo[]   = { { ANCHOR_CENTRE,       0 }, { ANCHOR_CENTRE, -140 } };
+LAYOUTS lan_iptName[]   = { { ANCHOR_CENTRE_MIN, -140 }, { ANCHOR_CENTRE, -108 } };
+LAYOUTS lan_btnHost[]   = { { ANCHOR_CENTRE,       0 }, { ANCHOR_CENTRE,  -64 } };
+LAYOUTS lan_lblFound[]  = { { ANCHOR_CENTRE,       0 }, { ANCHOR_CENTRE,  -28 } };
+LAYOUTS lan_btnFound0[] = { { ANCHOR_CENTRE,       0 }, { ANCHOR_CENTRE,    5 } };
+LAYOUTS lan_btnFound1[] = { { ANCHOR_CENTRE,       0 }, { ANCHOR_CENTRE,   45 } };
+LAYOUTS lan_iptIP[]     = { { ANCHOR_CENTRE_MIN, -140 }, { ANCHOR_CENTRE,   90 } };
+LAYOUTS lan_btnJoin[]   = { { ANCHOR_CENTRE,      95 }, { ANCHOR_CENTRE,   90 } };
+LAYOUTS lan_lblStatus[] = { { ANCHOR_CENTRE,       0 }, { ANCHOR_CENTRE,  125 } };
+LAYOUTS lan_btnBack[]   = { { ANCHOR_CENTRE,       0 }, { ANCHOR_CENTRE,  160 } };
+
+static cc_bool LanScreen_GetName(cc_string* name) {
+	struct LanScreen* s = &LanScreen;
+	*name = s->iptName.text;
+	if (!name->length) {
+		LLabel_SetConst(&s->lblStatus, "&cDigite seu nome primeiro");
+		return false;
+	}
+	Options_Set(LAN_OPT_NAME, name);
+	return true;
+}
+
+static void LanScreen_Host(void* w) {
+	cc_string name;
+	if (!LanScreen_GetName(&name)) return;
+
+	/* abre o mundo para amigos assim que ele carregar */
+	Options_SetBool(LAN_OPT_HOST, true);
+	LanDiscovery_Stop();
+	Launcher_StartGame(&name, &String_Empty, &String_Empty, &String_Empty, &String_Empty, 1);
+}
+
+static void LanScreen_JoinAt(const cc_string* ip, int portNum) {
+	static const cc_string mppass = String_FromConst("(none)");
+	struct LanScreen* s = &LanScreen;
+	cc_string port; char portBuffer[16];
+	cc_sockaddr addrs[SOCKET_MAX_ADDRS];
+	cc_string name;
+	int numAddrs;
+
+	if (!LanScreen_GetName(&name)) return;
+	if (!ip->length || Socket_ParseAddress(ip, portNum, addrs, &numAddrs)) {
+		LLabel_SetConst(&s->lblStatus, "&cIP invalido (exemplo: 192.168.0.12)"); return;
+	}
+	String_InitArray(port, portBuffer);
+	String_AppendInt(&port, portNum);
+
+	Options_Set(LAN_OPT_IP, ip);
+	Options_SetBool(LAN_OPT_HOST, false);
+	LanDiscovery_Stop();
+	Launcher_StartGame(&name, &mppass, ip, &port, &String_Empty, 1);
+}
+
+static void LanScreen_Join(void* w) {
+	LanScreen_JoinAt(&LanScreen.iptIP.text, LAN_PORT);
+}
+
+static void LanScreen_JoinFound(int i) {
+	struct LanScreen* s = &LanScreen;
+	cc_string ip;
+	if (i >= s->numFound) {
+		LLabel_SetConst(&s->lblStatus, "&eAinda procurando... abra o mundo no outro 3DS");
+		return;
+	}
+	ip = String_FromReadonly(s->foundIP[i]);
+	LanScreen_JoinAt(&ip, s->foundPort[i]);
+}
+static void LanScreen_Found0(void* w) { LanScreen_JoinFound(0); }
+static void LanScreen_Found1(void* w) { LanScreen_JoinFound(1); }
+
+static void LanScreen_Tick(struct LScreen* s_) {
+	cc_string str;
+	struct LanScreen* s = (struct LanScreen*)s_;
+	struct LanFoundHost* hosts;
+	int i, count;
+	LScreen_Tick(s_);
+
+	count = LanDiscovery_Poll(&hosts);
+	if (count > 2) count = 2;
+	if (count == s->numFound) return;
+
+	for (i = s->numFound; i < count; i++) {
+		str = String_Init(s->foundText[i], 0, sizeof(s->foundText[i]) - 1);
+		String_Format1(&str, "Entrar no mundo de %c", hosts[i].name);
+		s->foundText[i][str.length] = '\0';
+		LButton_SetConst(&s->btnFound[i], s->foundText[i]);
+
+		Mem_Copy(s->foundIP[i], hosts[i].ip, sizeof(s->foundIP[i]));
+		s->foundPort[i] = hosts[i].port;
+	}
+	s->numFound = count;
+	LLabel_SetConst(&s->lblFound, "&aMundo encontrado! Toque para entrar:");
+	LBackend_Redraw();
+}
+
+static void LanScreen_Activated(struct LScreen* s_) {
+	struct LanScreen* s = (struct LanScreen*)s_;
+	cc_string name, ip; char nameBuffer[STRING_SIZE];
+	RNGState rnd;
+	int num;
+
+	LLabel_Add(s,  &s->lblInfo,  "&eOs consoles precisam estar no mesmo Wi-Fi", lan_lblInfo);
+	LInput_Add(s,  &s->iptName,  280, "Seu nome..", lan_iptName);
+	LButton_Add(s, &s->btnHost,  280, 38, "Criar mundo para amigos",
+				LanScreen_Host, lan_btnHost);
+	LLabel_Add(s,  &s->lblFound, "&7Procurando mundos de amigos...", lan_lblFound);
+	LButton_Add(s, &s->btnFound[0], 280, 34, "(procurando...)",
+				LanScreen_Found0, lan_btnFound0);
+	LButton_Add(s, &s->btnFound[1], 280, 34, "(procurando...)",
+				LanScreen_Found1, lan_btnFound1);
+	LInput_Add(s,  &s->iptIP,    180, "IP do amigo..", lan_iptIP);
+	LButton_Add(s, &s->btnJoin,   90, 34, "Entrar",
+				LanScreen_Join, lan_btnJoin);
+	LLabel_Add(s,  &s->lblStatus, "", lan_lblStatus);
+	LButton_Add(s, &s->btnBack,   80, 34, "Voltar",
+				SwitchToMain, lan_btnBack);
+
+	/* nome salvo, ou um nome diferente para cada console */
+	String_InitArray(name, nameBuffer);
+	Options_Get(LAN_OPT_NAME, &name, "");
+	if (!name.length) {
+		Random_SeedFromCurrentTime(&rnd);
+		num = Random_Range(&rnd, 10, 100);
+		String_Format1(&name, "Jogador%i", &num);
+	}
+	LInput_SetText(&s->iptName, &name);
+
+	Options_UNSAFE_Get(LAN_OPT_IP, &ip);
+	LInput_SetText(&s->iptIP, &ip);
+
+	s->numFound = 0;
+	LanDiscovery_Start();
+}
+
+static void LanScreen_Deactivated(struct LScreen* s) {
+	LanDiscovery_Stop();
+}
+
+void LanScreen_SetActive(void) {
+	struct LanScreen* s = &LanScreen;
+	LScreen_Reset((struct LScreen*)s);
+
+	s->widgets    = lan_widgets;
+	s->maxWidgets = Array_Elems(lan_widgets);
+
+	s->Activated      = LanScreen_Activated;
+	s->Deactivated    = LanScreen_Deactivated;
+	s->Tick           = LanScreen_Tick;
+	s->title          = "Jogar juntos";
+	s->onEnterWidget  = (struct LWidget*)&s->btnJoin;
+	s->onEscapeWidget = (struct LWidget*)&s->btnBack;
+
+	Launcher_SetScreen((struct LScreen*)s);
+}
+static void SwitchToLan(void* w) { LanScreen_SetActive(); }
+#endif
 
 
 #ifdef CC_BUILD_RESOURCES

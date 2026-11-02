@@ -1,3 +1,4 @@
+#include "LanGame.h"
 #include "Paisagem.h"
 #include "Block.h"
 #include "BlockID.h"
@@ -145,7 +146,7 @@ static void DefineBlocks(void) {
 	BlockID block;
 	int i;
 	/* Multiplayer servers decide which blocks exist */
-	if (!Server.IsSinglePlayer || !Game_AllowCustomBlocks) return;
+	if (!LanGame_LocalBlocks() || !Game_AllowCustomBlocks) return;
 
 	for (i = 0; i < Array_Elems(paisagem_blockDefs); i++)
 	{

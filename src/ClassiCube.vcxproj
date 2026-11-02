@@ -417,6 +417,7 @@
     <ClInclude Include="ModernBlocks.h" />
     <ClInclude Include="ModernBlocks_tex.h" />
     <ClInclude Include="Survival.h" />
+    <ClInclude Include="LanGame.h" />
     <ClInclude Include="LateGame.h" />
     <ClInclude Include="Equipamento.h" />
     <ClInclude Include="Equipamento_tex.h" />
@@ -631,6 +632,7 @@
     <ClCompile Include="ModernBlocks.c" />
     <ClCompile Include="CraftingScreen.c" />
     <ClCompile Include="Survival.c" />
+    <ClCompile Include="LanGame.c" />
     <ClCompile Include="LateGame.c" />
     <ClCompile Include="Equipamento.c" />
     <ClCompile Include="InventarioScreen.c" />

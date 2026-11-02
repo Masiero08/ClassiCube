@@ -1,3 +1,4 @@
+#include "LanGame.h"
 #include "Minerios.h"
 #include "Block.h"
 #include "BlockID.h"
@@ -2041,7 +2042,7 @@ static void OnNewMapLoaded(void) {
 	int i;
 	/* No multijogador o servidor decide quais blocos existem */
 	Minerios_Enabled = Options_GetBool(MINERIOS_OPTION, true);
-	if (!(Minerios_Enabled || Options_GetBool("survival-mode", true)) || !Server.IsSinglePlayer || !Game_AllowCustomBlocks) {
+	if (!(Minerios_Enabled || Options_GetBool("survival-mode", true)) || !LanGame_LocalBlocks() || !Game_AllowCustomBlocks) {
 		AplicarCeu(DIM_NORMAL, false);
 		viajando = false; return;
 	}

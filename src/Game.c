@@ -3,6 +3,7 @@
 #include "ModernBlocks.h"
 #include "Survival.h"
 #include "DayNight.h"
+#include "Sons.h"
 #include "World.h"
 #include "Lighting.h"
 #include "MapRenderer.h"
@@ -428,7 +429,11 @@ static void Game_Load(void) {
 	Game_AddComponent(&Equipamento_Component);
 	Game_AddComponent(&Survival_Component);
 	Game_AddComponent(&DayNight_Component);
+<<<<<<< HEAD
 	Game_AddComponent(&Conquistas_Component);
+=======
+	Game_AddComponent(&Sons_Component);
+>>>>>>> origin/claude/project-thread-ovxco9
 	Game_AddComponent(&Drawer2D_Component);
 	Game_AddComponent(&SystemFonts_Component);
 

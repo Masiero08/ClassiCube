@@ -47,11 +47,16 @@ int Minerios_DimensaoGerando(void);
 /* Chamado quando o jogador aperta colocar (place = true) ou quebrar bloco. */
 /* Retorna true se o clique foi usado pelo mod (bater num monstro, usar um item). */
 cc_bool Minerios_HandleClick(cc_bool place);
+<<<<<<< HEAD
 /* Em qual dimensao o jogador esta agora (o mundo normal, se as dimensoes estao desligadas) */
 enum MineriosDimensao { MINERIOS_DIM_NORMAL, MINERIOS_DIM_UTOPIA, MINERIOS_DIM_CRISTAL, MINERIOS_DIM_NETHER, MINERIOS_DIM_FIM };
 int Minerios_DimensaoAtual(void);
 /* Salva a dimensao atual (fora do mundo normal) no arquivo dela. Retorna 0 se deu certo. */
 cc_result Minerios_SalvarDimensao(void);
+=======
+/* Se tem um chefao por perto (barra de vida na tela) */
+cc_bool Minerios_ChefePerto(void);
+>>>>>>> origin/claude/project-thread-ovxco9
 
 CC_END_HEADER
 #endif

@@ -34,6 +34,8 @@ const cc_string Sounds_ZipPathMC = String_FromConst("audio/default2.zip");
 const cc_string Sounds_ZipPathMC = String_FromConst("audio/default.zip");
 #endif
 const cc_string Sounds_ZipPathCC = String_FromConst("audio/classicube.zip");
+/* sons proprios do ClassiCube 3DS (criaturas, monstros, jogo): fx_<nome><N>.wav */
+const cc_string Sounds_ZipPathFX = String_FromConst("audio/efeitos.zip");
 static const cc_string audio_dir = String_FromConst("audio");
 
 
@@ -52,6 +54,8 @@ static void Sounds_Start(void) {
 
 void Audio_PlayDigSound(cc_uint8 type)  { }
 void Audio_PlayStepSound(cc_uint8 type) { }
+void Audio_PlayEffect(const char* name, int volume, int rate) { }
+cc_bool Audio_HasOwnSounds(void) { return false; }
 
 void Sounds_LoadDefault(void) { }
 #else
@@ -215,10 +219,97 @@ static void Audio_PlayBlockSound(void* obj, IVec3 coords, BlockID old, BlockID n
 	}
 }
 
+/*########################################################################################################################*
+*------------------------------------------------------Sound effects------------------------------------------------------*
+*#########################################################################################################################*/
+/* Efeitos com nome (criaturas, monstros, interface), lidos de audio/efeitos.zip */
+#define FX_MAX_GROUPS   80
+#define FX_MAX_VARIANTS 4
+struct FxGroup {
+	char name[16];
+	int count;
+	struct Sound sounds[FX_MAX_VARIANTS];
+};
+static struct FxGroup fxGroups[FX_MAX_GROUPS];
+static int fxGroupsCount;
+
+static struct FxGroup* Fx_Find(const cc_string* name) {
+	int i;
+	for (i = 0; i < fxGroupsCount; i++)
+	{
+		if (String_CaselessEqualsConst(name, fxGroups[i].name)) return &fxGroups[i];
+	}
+	return NULL;
+}
+
+static void Fx_Load(const cc_string* file, struct Stream* stream) {
+	static const cc_string fx = String_FromConst("fx_");
+	struct FxGroup* group;
+	struct Sound* snd;
+	cc_string name = *file;
+	cc_result res;
+	int dotIndex;
+	Utils_UNSAFE_TrimFirstDirectory(&name);
+
+	/* fx_zumbi2.wav -> zumbi */
+	dotIndex = String_LastIndexOf(&name, '.');
+	if (dotIndex >= 0) name.length = dotIndex;
+	if (!String_CaselessStarts(&name, &fx)) return;
+	name = String_UNSAFE_SubstringAt(&name, fx.length);
+	while (name.length && name.buffer[name.length - 1] >= '0' && name.buffer[name.length - 1] <= '9') name.length--;
+	if (!name.length || name.length >= (int)sizeof(fxGroups[0].name)) return;
+
+	group = Fx_Find(&name);
+	if (!group) {
+		if (fxGroupsCount == FX_MAX_GROUPS) return;
+		group = &fxGroups[fxGroupsCount++];
+		Mem_Copy(group->name, name.buffer, name.length);
+		group->name[name.length] = '\0';
+		group->count = 0;
+	}
+	if (group->count == FX_MAX_VARIANTS) return;
+
+	snd = &group->sounds[group->count];
+	res = Sound_ReadWaveData(stream, snd);
+	if (res) {
+		Logger_SysWarn2(res, "decoding", file);
+		Audio_FreeChunks(&snd->chunk, 1);
+		snd->chunk.data = NULL;
+		snd->chunk.size = 0;
+	} else { group->count++; }
+}
+
+void Audio_PlayEffect(const char* name, int volume, int rate) {
+	struct FxGroup* group;
+	struct Sound* snd;
+	struct AudioData data;
+	cc_string str;
+	cc_result res;
+
+	if (!Audio_SoundsVolume || volume <= 0) return;
+	str   = String_FromReadonly(name);
+	group = Fx_Find(&str);
+	if (!group || !group->count) return;
+
+	snd = &group->sounds[Random_Next(&sounds_rnd, group->count)];
+	data.chunk      = snd->chunk;
+	data.channels   = snd->channels;
+	data.sampleRate = snd->sampleRate;
+	data.rate       = rate < 25 ? 25 : (rate > 400 ? 400 : rate);
+	data.volume     = Audio_SoundsVolume * (volume > 100 ? 100 : volume) / 100;
+
+	res = AudioPool_Play(&data);
+	if (res) Sounds_Fail(res);
+}
+
 static cc_bool SelectZipEntry(const cc_string* path) { return true; }
 static cc_result ProcessZipEntry(const cc_string* path, struct Stream* stream, struct ZipEntry* source) {
 	static const cc_string dig  = String_FromConst("dig_");
 	static const cc_string step = String_FromConst("step_");
+	static const cc_string fx   = String_FromConst("fx_");
+	cc_string name = *path;
+	Utils_UNSAFE_TrimFirstDirectory(&name);
+	if (String_CaselessStarts(&name, &fx)) { Fx_Load(path, stream); return 0; }
 	
 	Soundboard_Load(&digBoard,  &dig,  path, stream);
 	Soundboard_Load(&stepBoard, &step, path, stream);
@@ -226,7 +317,7 @@ static cc_result ProcessZipEntry(const cc_string* path, struct Stream* stream, s
 }
 
 static cc_result Sounds_ExtractZip(const cc_string* path) {
-	struct ZipEntry entries[128];
+	struct ZipEntry entries[160];
 	struct Stream stream;
 	cc_filepath raw_path;
 	cc_result res;
@@ -244,8 +335,23 @@ static cc_result Sounds_ExtractZip(const cc_string* path) {
 	return res;
 }
 
+cc_bool Audio_HasOwnSounds(void) {
+	cc_filepath raw_path;
+	Platform_EncodePath(&raw_path, &Sounds_ZipPathFX);
+	return File_Exists(&raw_path);
+}
+
 void Sounds_LoadDefault(void) {
-	cc_result res = Sounds_ExtractZip(&Sounds_ZipPathMC);
+	cc_result res;
+	/* com o pacote de sons proprio, os passos/blocos dele tem preferencia */
+	if (Audio_HasOwnSounds()) {
+		res = Sounds_ExtractZip(&Sounds_ZipPathCC);
+		if (res == ReturnCode_FileNotFound) Sounds_ExtractZip(&Sounds_ZipPathMC);
+		Sounds_ExtractZip(&Sounds_ZipPathFX);
+		return;
+	}
+
+	res = Sounds_ExtractZip(&Sounds_ZipPathMC);
 	if (res == ReturnCode_FileNotFound)
 		Sounds_ExtractZip(&Sounds_ZipPathCC);
 }
@@ -289,11 +395,35 @@ static void Music_Start(void) {
 	Chat_AddRaw("&cMusic is not supported currently");
 	Audio_MusicVolume = 0;
 }
+void Audio_SetMusicMood(int mood) { }
 #else
 static void* music_thread;
 static void* music_waitable;
 static volatile cc_bool music_stopping, music_joining;
 static int music_minDelay, music_maxDelay;
+/* clima da musica pedido pelo jogo e o da faixa que esta tocando */
+static volatile int music_mood, music_playingMood;
+
+/* nomes das faixas: dia_1.ogg, noite_2.ogg, batalha_1.ogg... (ver MusicMood) */
+static const char* const music_moodNames[MUSIC_MOOD_COUNT] = {
+	"dia_", "noite_", "nether_", "fim_", "batalha_", "chefao_"
+};
+#define Music_IsIntense(mood) ((mood) == MUSIC_MOOD_BATTLE || (mood) == MUSIC_MOOD_BOSS)
+
+/* Troca de clima que corta a faixa atual (dia <-> noite deixa a faixa terminar) */
+static cc_bool Music_ShouldInterrupt(void) {
+	int now = music_mood, cur = music_playingMood;
+	if (now == cur) return false;
+	if (now <= MUSIC_MOOD_NIGHT && cur <= MUSIC_MOOD_NIGHT) return false;
+	return true;
+}
+
+void Audio_SetMusicMood(int mood) {
+	if (mood < 0 || mood >= MUSIC_MOOD_COUNT || mood == music_mood) return;
+	music_mood = mood;
+	/* acorda a espera entre faixas para comecar logo a musica nova */
+	if (music_waitable && (Music_IsIntense(mood) || Music_ShouldInterrupt())) Waitable_Signal(music_waitable);
+}
 
 static cc_result Music_Buffer(struct AudioChunk* chunk, int maxSamples, struct VorbisState* ctx) {
 	int samples = 0;
@@ -377,6 +507,17 @@ static cc_result Music_PlayOgg(struct Stream* source) {
             volume = Audio_MusicVolume;
             Audio_SetVolume(&music_ctx, volume);
         }
+		if (Music_ShouldInterrupt()) {
+			/* abaixa o volume rapidinho e para a faixa */
+			for (i = 9; i >= 0 && !music_stopping; i--) {
+				Audio_SetVolume(&music_ctx, volume * i / 10);
+				Thread_Sleep(40);
+			}
+			Audio_Close(&music_ctx);
+			/* o contexto fechado precisa ser recriado para a proxima faixa */
+			res = Audio_Init(&music_ctx, AUDIO_MAX_BUFFERS);
+			goto cleanup;
+		}
 
 		res = StreamContext_Update(&music_ctx, &inUse);
 		if (res) { music_stopping = true; break; }
@@ -426,6 +567,39 @@ static void Music_AddFile(const cc_string* path, void* obj, int isDirectory) {
 	}
 }
 
+/* Escolhe uma faixa do clima atual (dia_*.ogg, batalha_*.ogg...). */
+/* Faixas sem prefixo conhecido valem como musica de dia/noite. */
+static int Music_PickFile(struct StringsBuffer* files, RNGState* rnd, int mood) {
+	int matches[64], count = 0, generic[64], genericCount = 0;
+	int i, j, known;
+	cc_string path, name, prefix;
+
+	for (i = 0; i < files->count && count < 64; i++)
+	{
+		path = StringsBuffer_UNSAFE_Get(files, i);
+		j    = String_LastIndexOf(&path, '/');
+		name = j >= 0 ? String_UNSAFE_SubstringAt(&path, j + 1) : path;
+
+		prefix = String_FromReadonly(music_moodNames[mood]);
+		if (String_CaselessStarts(&name, &prefix)) {
+			matches[count++] = i; continue;
+		}
+		for (known = false, j = 0; j < MUSIC_MOOD_COUNT; j++)
+		{
+			prefix = String_FromReadonly(music_moodNames[j]);
+			if (String_CaselessStarts(&name, &prefix)) known = true;
+		}
+		if (!known && genericCount < 64) generic[genericCount++] = i;
+	}
+
+	if (count) return matches[Random_Next(rnd, count)];
+	/* sem faixa desse clima: usa as gerais, ou as de dia */
+	if (genericCount && mood <= MUSIC_MOOD_NIGHT) return generic[Random_Next(rnd, genericCount)];
+	if (mood != MUSIC_MOOD_DAY) return Music_PickFile(files, rnd, mood == MUSIC_MOOD_BOSS ? MUSIC_MOOD_BATTLE : MUSIC_MOOD_DAY);
+	if (genericCount) return generic[Random_Next(rnd, genericCount)];
+	return Random_Next(rnd, files->count);
+}
+
 static void Music_RunLoop(void) {
 	struct StringsBuffer files;
 	cc_string path;
@@ -444,7 +618,8 @@ static void Music_RunLoop(void) {
 	if (res) music_stopping = true;
 
 	while (!music_stopping && files.count) {
-		idx  = Random_Next(&rnd, files.count);
+		music_playingMood = music_mood;
+		idx  = Music_PickFile(&files, &rnd, music_playingMood);
 		path = StringsBuffer_UNSAFE_Get(&files, idx);
 		Platform_Log1("playing music file: %s", &path);
 
@@ -459,6 +634,12 @@ static void Music_RunLoop(void) {
 		(void)stream.Close(&stream);
 
 		if (music_stopping) break;
+		/* batalha e chefao tocam sem parar; trocou de clima: a proxima ja vem */
+		if (Music_IsIntense(music_mood) || music_mood != music_playingMood) {
+			if (Music_IsIntense(music_mood)) continue;
+			Waitable_WaitFor(music_waitable, 1500);
+			continue;
+		}
 		delay = Random_Range(&rnd, music_minDelay, music_maxDelay);
 		Waitable_WaitFor(music_waitable, delay);
 	}
@@ -500,9 +681,9 @@ static void Music_Stop(void) {
 
 static void Music_Init(void) {
 	int volume;
-	/* music is delayed between 2 - 7 minutes by default */
-	music_minDelay = Options_GetInt(OPT_MIN_MUSIC_DELAY, 0, 3600, 120) * MILLIS_PER_SEC;
-	music_maxDelay = Options_GetInt(OPT_MAX_MUSIC_DELAY, 0, 3600, 420) * MILLIS_PER_SEC;
+	/* com as musicas proprias, a pausa entre faixas e de 20 s a 1,5 min */
+	music_minDelay = Options_GetInt(OPT_MIN_MUSIC_DELAY, 0, 3600, 20) * MILLIS_PER_SEC;
+	music_maxDelay = Options_GetInt(OPT_MAX_MUSIC_DELAY, 0, 3600, 90) * MILLIS_PER_SEC;
 	music_waitable = Waitable_Create("Music sleep");
 
 	volume = Options_GetInt(OPT_MUSIC_VOLUME, 0, 100, DEFAULT_MUSIC_VOLUME);

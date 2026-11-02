@@ -1,4 +1,5 @@
 #include "LateGame.h"
+#include "Sons.h"
 #include "Block.h"
 #include "BlockID.h"
 #include "Bitmap.h"
@@ -626,7 +627,7 @@ static void Dragon_Tick(struct Entity* e, float delta) {
 
 		if (dragon.swoopTimer <= 0) {
 			dragon.swoopTimer = 9.0f + Random_Float(&dragon_rnd) * 5.0f;
-			if (dist < 60.0f) dragon.swooping = true;
+			if (dist < 60.0f) { dragon.swooping = true; Audio_PlayEffect("chefao", 90, 70); }
 		}
 	}
 }
@@ -685,6 +686,7 @@ static void Dragon_Spawn(void) {
 	Entities.List[DRAGON_ID] = e;
 	Dragon_ShowHealth();
 	Chat_AddOf(&(cc_string)String_FromConst("&5O Ender Dragon acordou!"), MSG_TYPE_ANNOUNCEMENT);
+	Audio_PlayEffect("chefao", 100, 65);
 }
 
 cc_bool LateGame_HandleAttack(void) {
@@ -707,6 +709,8 @@ cc_bool LateGame_HandleAttack(void) {
 
 	dragon.health   -= Survival_AttackDamage();
 	dragon.hurtTimer = 0.3f;
+	Sons_TocarEm("golpe", center);
+	if (dragon.health > 0 && Random_Next(&dragon_rnd, 3) == 0) Audio_PlayEffect("dragao", 80, 70);
 	Dragon_ShowHealth();
 	if (dragon.health > 0) return true;
 
@@ -714,10 +718,17 @@ cc_bool LateGame_HandleAttack(void) {
 	Dragon_Remove();
 	Dragon_BuildExit();
 	Chat_AddOf(&(cc_string)String_FromConst("&5O Ender Dragon foi derrotado!"), MSG_TYPE_ANNOUNCEMENT);
+<<<<<<< HEAD
 	Conquistas_Evento(CONQ_EV_ENDER);
+=======
+	Audio_PlayEffect("chefao", 100, 55);
+	Sons_Tocar("insignia");
+>>>>>>> origin/claude/project-thread-ovxco9
 	Chat_AddRaw("&dUm portal de volta apareceu no centro da ilha.");
 	return true;
 }
+
+cc_bool LateGame_DragaoVivo(void) { return dragon.used; }
 
 static cc_bool Dragon_TaskTick(struct ScheduledTask2* task) {
 	cc_bool inEnd = World.Loaded && Survival_IsActive() && DayNight_GetMode() == DAYNIGHT_END;

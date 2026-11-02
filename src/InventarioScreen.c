@@ -1,4 +1,5 @@
 #include "Equipamento.h"
+#include "Sons.h"
 #include "Menus.h"
 #include "Gui.h"
 #include "Graphics.h"
@@ -157,7 +158,10 @@ static int IS_MoveAmount(struct InventarioScreen* s) { return s->moveOne ? 1 : B
 /*########################################################################################################################*
 *--------------------------------------------------------Actions----------------------------------------------------------*
 *#########################################################################################################################*/
-static void InventarioScreen_Close(struct InventarioScreen* s) { Gui_Remove((struct Screen*)s); }
+static void InventarioScreen_Close(struct InventarioScreen* s) {
+	if (s->mode == MODE_BAU) Sons_Tocar("bau_fechar");
+	Gui_Remove((struct Screen*)s);
+}
 
 static void IS_SayMoved(struct InventarioScreen* s, int count, BlockID block, const char* where) {
 	cc_string name = Survival_BlockName(block);

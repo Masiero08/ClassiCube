@@ -30,6 +30,7 @@
 #include "Widgets.h"
 #include "Drawer2D.h"
 #include "CriaturasDados.h"
+#include "Sons.h"
 
 /* Criaturas do Bioma: criaturas capturaveis para o modo um jogador.
    Os modelos, texturas e especies ficam em CriaturasDados.h, gerado por
@@ -613,12 +614,14 @@ static void Criatura_GanharXp(struct Criatura* c, int xp) {
 		String_InitArray(msg, msgBuffer);
 		String_Format3(&msg, "%c%c &esubiu para o nivel %i!", def->cor, def->nome, &c->nivel);
 		Chat_Add(&msg);
+		Sons_Tocar("nivel");
 
 		if (def->evolui >= 0 && c->nivel >= def->nivelEvolui) {
 			String_InitArray(msg, msgBuffer);
 			String_Format4(&msg, "&dQue isso?! %c%c &devoluiu para %c%c&d!",
 				def->cor, def->nome, especies_def[def->evolui].cor, especies_def[def->evolui].nome);
 			Chat_Add(&msg);
+			Sons_Tocar("evolucao");
 			Criatura_DefinirEspecie(c, def->evolui);
 			c->vida = VidaMax(c->especie, c->nivel);
 			Diario_Marcar(c->especie, true);
@@ -658,6 +661,7 @@ static void Criatura_Dano(struct Criatura* c, int dano, Vec3 origem) {
 	c->vida -= max(1, dano);
 	c->hurtTimer = 0.4f;
 	c->nomeSujo  = true;
+	Sons_Voz(&c->base, 125); /* "ai!" */
 
 	/* empurraozinho para tras */
 	dir.x = c->base.next.pos.x - origem.x; dir.z = c->base.next.pos.z - origem.z;
@@ -714,6 +718,11 @@ static const char* const efeitoTexto[TIPO_COUNT] = {
 	"&cqueimou o alvo!", "&bo alvo ficou encharcado e lento!", "&aroubou vida!", "&eparalisou o alvo!",
 	"&3ganhou velocidade!", "&7endureceu a pele!", "&2envenenou o alvo!", "&5assustou e roubou vida!", "&bcongelou o alvo!"
 };
+/* som do especial de cada tipo (audio/efeitos.zip) */
+static const char* const golpeSons[TIPO_COUNT] = {
+	"esp_fogo", "esp_agua", "esp_planta", "esp_eletrico", "esp_vento",
+	"esp_pedra", "esp_inseto", "esp_fantasma", "esp_gelo"
+};
 static const char* Golpe_Nome(const struct Criatura* c) {
 	int tipo = especies_def[c->especie].tipo;
 	return c->nivel >= SUPER_NIVEL ? superNomes[tipo] : golpeNomes[tipo];
@@ -748,8 +757,10 @@ static void Criatura_Golpear(struct Criatura* atk, struct Criatura* alvo) {
 	atk->atkTimer = atk->selvagem ? 1.4f : 1.0f;
 	Criatura_Olhar(atk, alvo->base.next.pos);
 	Efeito_Golpe(alvo, da->tipo);
+	if (!especial) Sons_TocarEm("golpe", alvo->base.next.pos);
 
 	if (especial) {
+		Sons_TocarEm(atk->nivel >= SUPER_NIVEL ? "super" : golpeSons[da->tipo], alvo->base.next.pos);
 		dano = (int)(dano * (atk->nivel >= SUPER_NIVEL ? 3.0f : 2.2f)) + 1;
 		atk->especialTimer = ESPECIAL_RECARGA;
 		atk->querEspecial  = false;
@@ -996,6 +1007,7 @@ static void Spawner_Tick(float delta) {
 			Vec3_Set(pos, x + 0.5f, y, z + 0.5f);
 			if (Criatura_Criar(especie, 35, pos, true)) {
 				Anunciar("&dUma presenca lendaria...");
+				Sons_Tocar("lendaria");
 				Chat_Add2("&dA lendaria %c%c &dapareceu por perto! Use um Casulo Mestre.", especies_def[especie].cor, especies_def[especie].nome);
 			}
 			return;
@@ -1023,7 +1035,7 @@ static void SoltarMembro(int idx) {
 
 	pos = jogador->Position; pos.x += 1.0f;
 	c = Criatura_Criar(equipe[idx].especie, equipe[idx].nivel, pos, false);
-	if (c) { c->vida = equipe[idx].vida; c->nomeSujo = true; }
+	if (c) { c->vida = equipe[idx].vida; c->nomeSujo = true; Sons_Voz(&c->base, 100); }
 	Equipe_Salvar();
 }
 
@@ -1042,6 +1054,7 @@ static void Criatura_Desmaiou(struct Criatura* c) {
 	const struct EspecieDef* def = &especies_def[c->especie];
 	int prox = ProximoSaudavel(membroAtivo);
 	Chat_Add2("%c%c &cdesmaiou e voltou para o casulo!", def->cor, def->nome);
+	Sons_Tocar("desmaio");
 
 	SoltarMembro(prox);
 	if (prox >= 0) {
@@ -1310,6 +1323,7 @@ static void Mestre_Desafiar(void) {
 	Mestre_Falar(msgBuffer);
 
 	luta.ativa = true; luta.etapa = 0; luta.criatura = -1; luta.timer = 1.5f;
+	Sons_Tocar("desafio");
 }
 
 static void Mestre_CriaturaCaiu(void) {
@@ -1334,6 +1348,7 @@ static void Mestre_Vencido(void) {
 	for (i = 0; i < MESTRES_COUNT; i++) { if (insignias & (1 << i)) total++; }
 
 	Mestre_Falar("Que batalha! Voce mereceu. Procure o proximo Mestre.");
+	Sons_Tocar("insignia");
 	String_InitArray(msg, msgBuffer);
 	String_Format2(&msg, "%cInsignia %c!", m->cor, m->insignia);
 	Chat_AddOf(&msg, MSG_TYPE_ANNOUNCEMENT);
@@ -1644,7 +1659,11 @@ static void Captura_Concluir(struct Criatura* c) {
 		Caixa_Salvar();
 		Diario_Marcar(c->especie, true);
 		Chat_Add2("&aPegou! %c%c &afoi para a Caixa das Criaturas (sua equipe esta cheia).", def->cor, def->nome);
+<<<<<<< HEAD
 		Conquistas_Evento(def->lendaria ? CONQ_EV_LENDARIA : CONQ_EV_CAPTURA);
+=======
+		Sons_Tocar("captura");
+>>>>>>> origin/claude/project-thread-ovxco9
 		Chat_AddRaw("&7Abra em Criaturas > Diario > Caixa para trocar com a equipe.");
 		Lancamento_Efeito(pos, BLOCK_GOLD);
 		Criatura_Remover(c);
@@ -1657,13 +1676,19 @@ static void Captura_Concluir(struct Criatura* c) {
 		Diario_Marcar(c->especie, true);
 
 		Chat_Add2("&aPegou! Voce capturou %c%c&a!", def->cor, def->nome);
+<<<<<<< HEAD
 		Conquistas_Evento(def->lendaria ? CONQ_EV_LENDARIA : CONQ_EV_CAPTURA);
+=======
+		Sons_Tocar("captura");
+>>>>>>> origin/claude/project-thread-ovxco9
 		Lancamento_Efeito(pos, BLOCK_GOLD);
 		Criatura_Remover(c);
 		if (!Criatura_DoJogador()) SoltarMembro(equipeCount - 1);
 		else Equipe_Salvar();
 	} else {
 		Chat_Add2("%c%c &eescapou do casulo! Enfraqueca ele antes.", def->cor, def->nome);
+		Sons_TocarEm("escapou", pos);
+		Sons_Voz(&c->base, 110);
 		Lancamento_Efeito(pos, casuloBloco[lanc.tipo]);
 		c->fugaTimer = 2.0f;
 	}
@@ -1671,6 +1696,7 @@ static void Captura_Concluir(struct Criatura* c) {
 	Lancamento_Remover();
 }
 
+static int balancoSom = -1; /* ultimo balanco que ja fez barulho */
 static void Lancamento_Tick(struct Entity* e, float delta) {
 	struct Criatura* c = &criaturas[lanc.alvo];
 	float s, local;
@@ -1698,12 +1724,15 @@ static void Lancamento_Tick(struct Entity* e, float delta) {
 		e->prev.pos   = lanc.para;
 		e->next.rotX  = 0; e->prev.rotX = 0;
 		Lancamento_Efeito(lanc.para, casuloBloco[lanc.tipo]);
+		Sons_TocarEm("balanca", lanc.para);
+		balancoSom = -1;
 	}
 
 	/* balanca uma vez para cada "quase"; quando escapa, para antes do terceiro */
 	local = lanc.t - VOO_TEMPO;
 	k     = (int)(local / BALANCO_TEMPO);
 	if (k < lanc.balancos) {
+		if (k != balancoSom) { balancoSom = k; Sons_TocarTom("balanca", lanc.para, 90 + k * 10); }
 		local -= k * BALANCO_TEMPO;
 		e->next.rotZ = local < 0.35f ? Math_SinF(local / 0.35f * 2 * MATH_PI) * 25.0f : 0.0f;
 		return;
@@ -1753,6 +1782,7 @@ static void TentarCapturar(struct Criatura* c) {
 	if (especies_def[c->especie].lendaria && tipo != CASULO_MESTRE) chance *= 0.3f; /* lendarias resistem */
 	if (tipo != CASULO_COMUM) { casulos[tipo]--; Casulos_Salvar(); }
 	Chat_Add2("&7Voce jogou um Casulo %c%c&7...", casuloCores[tipo], casuloNomes[tipo]);
+	Sons_Tocar("casulo");
 
 	Mem_Set(&lanc, 0, sizeof(lanc));
 	Entity_Init(e);
@@ -2331,6 +2361,37 @@ static int menuIniciais[ESPECIES_COUNT], menuIniciaisCount;
 
 cc_bool Criaturas_Ativo(void) { return Ativo(); }
 
+int Criaturas_TipoDoModelo(const char* modelo) {
+	cc_string str = String_FromReadonly(modelo);
+	int i;
+	for (i = 0; i < ESPECIES_COUNT; i++)
+	{
+		if (String_CaselessEqualsConst(&str, especies_def[i].nome)) return especies_def[i].tipo;
+	}
+	return -1;
+}
+
+int Criaturas_Batalha(void) {
+	struct Criatura* minha;
+	int i, alvo, resultado = 0;
+	if (!Ativo()) return 0;
+	if (luta.ativa) return 1;
+	minha = Criatura_DoJogador();
+	if (!minha) return 0;
+
+	for (i = 0; i < CRIATURAS_MAX; i++)
+	{
+		struct Criatura* c = &criaturas[i];
+		if (!c->usada || !c->selvagem) continue;
+		alvo = c->alvo;
+		/* a selvagem esta brigando com a minha, ou a minha com ela */
+		if (alvo != Criatura_Index(minha) && minha->alvo != i) continue;
+		if (especies_def[c->especie].lendaria) return 2;
+		resultado = 1;
+	}
+	return resultado;
+}
+
 static void Menu_Fechar(void) {
 	struct Screen* tela = Gui_GetInputGrab();
 	if (tela) Gui_Remove(tela);
@@ -2547,6 +2608,8 @@ static void Bau_Abrir(void) {
 	Particles_BreakBlockEffect(coords, BLOCK_GOLD, BLOCK_AIR);
 
 	Chat_AddRaw("&6Voce abriu o Bau das Criaturas!");
+	Sons_Tocar("bau_abrir");
+	Sons_Tocar("sorte");
 	Casulos_Ganhar(CASULO_REFORCADO, 10);
 	Casulos_Ganhar(CASULO_MARE,       5);
 	Casulos_Ganhar(CASULO_MESTRE,     1);

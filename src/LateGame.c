@@ -1,3 +1,4 @@
+#include "LanGame.h"
 #include "LateGame.h"
 #include "Sons.h"
 #include "Block.h"
@@ -154,7 +155,7 @@ static void DefineBlocks(void) {
 	BlockID block;
 	int i;
 	/* Multiplayer servers decide which blocks exist */
-	if (!Server.IsSinglePlayer || !Game_AllowCustomBlocks) return;
+	if (!LanGame_LocalBlocks() || !Game_AllowCustomBlocks) return;
 
 	for (i = 0; i < Array_Elems(late_blockDefs); i++)
 	{

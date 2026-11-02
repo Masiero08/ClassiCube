@@ -22,6 +22,7 @@
 #include "Chat.h"
 #include "Camera.h"
 #include "Survival.h"
+#include "Conquistas.h"
 #include "DayNight.h"
 #include "LateGame_tex.h"
 
@@ -713,6 +714,7 @@ cc_bool LateGame_HandleAttack(void) {
 	Dragon_Remove();
 	Dragon_BuildExit();
 	Chat_AddOf(&(cc_string)String_FromConst("&5O Ender Dragon foi derrotado!"), MSG_TYPE_ANNOUNCEMENT);
+	Conquistas_Evento(CONQ_EV_ENDER);
 	Chat_AddRaw("&dUm portal de volta apareceu no centro da ilha.");
 	return true;
 }

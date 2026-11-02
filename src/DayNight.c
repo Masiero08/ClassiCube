@@ -1,5 +1,6 @@
 #include "DayNight.h"
 #include "Survival.h"
+#include "Conquistas.h"
 #include "Block.h"
 #include "BlockID.h"
 #include "Camera.h"
@@ -507,6 +508,7 @@ cc_bool DayNight_HandleAttack(void) {
 	if (best->health <= 0) {
 		const struct MonsterDef* def = &monster_defs[best->type];
 		Survival_AddBlocks(def->drop, def->dropCount);
+		if (!IsAnimal(best->type)) Conquistas_Evento(CONQ_EV_MONSTRO);
 		if (best->type == MONSTER_SHEEP) Survival_AddBlocks(LITEM_RAW_MEAT, 1);
 		/* Skeletons in the Nether sometimes carry ender pearls (needed for the End) */
 		if (dayNightMode == DAYNIGHT_NETHER && best->type == MONSTER_SKELETON && Random_Next(&daynight_rnd, 2) == 0)

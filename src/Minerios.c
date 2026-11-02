@@ -30,6 +30,7 @@
 #include "Deflate.h"
 #include "Stream.h"
 #include "Survival.h"
+#include "Conquistas.h"
 #include "Particle.h"
 #include "DayNight.h"
 #include "Errors.h"
@@ -1209,6 +1210,7 @@ static void Monstro_Derrotado(struct Monstro* m) {
 	const struct MonstroDef* def = &monstro_defs[m->tipo];
 	int i;
 	Chat_Add1("&e%c &efoi derrotado(a)!", def->nome);
+	Conquistas_Evento(def->chefe ? CONQ_EV_CHEFAO : CONQ_EV_MONSTRO);
 	if (def->chefe == CHEFOES) {
 		Chat_AddRaw("&6Voce venceu todos os chefoes! &eJunte o Coracao de uranio com a Big Bertha");
 		Chat_AddRaw("&epara fazer a &6Espada Devastadora&e.");
@@ -1386,6 +1388,7 @@ static void DragaoClique(struct Monstro* m, BlockID held) {
 	m->domado = true;
 	Monstro_AtualizarNome(m);
 	Options_SetInt(OPT_DRAGAO, m->tipo - M_DRAGAO + 1); /* lembra qual dragao e o seu */
+	Conquistas_Evento(CONQ_EV_DOMAR);
 	Chat_AddRaw("&aO dragao agora e seu! &eEle te segue e briga com os monstros. Aperte colocar nele para montar.");
 }
 
@@ -2027,6 +2030,8 @@ static void Minerios_Tick(struct ScheduledTask* task) {
 	/* as vezes a rainha vem junto (mais na Utopia) */
 	if (!ContarTipo(M_RAINHA) && Random_Next(&rnd, dimAtual == DIM_UTOPIA ? 8 : 16) == 0) SoltarRainha();
 }
+
+int Minerios_DimensaoAtual(void) { return dimAtual; }
 
 static void OnNewMap(void) {
 	if (montado) Desmontar();

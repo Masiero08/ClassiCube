@@ -25,6 +25,7 @@
 #include "Input.h"
 #include "Errors.h"
 #include "Options.h"
+#include "Conquistas.h"
 
 static char nameBuffer[STRING_SIZE];
 static char motdBuffer[STRING_SIZE];
@@ -130,6 +131,8 @@ static void SPConnection_BeginConnect(void) {
 	if (SP_AutoloadMap.length) {
 		Map_LoadFrom(&SP_AutoloadMap); return;
 	}
+	/* "Continuar" na tela inicial: abre o mundo salvo (Conquistas.c) */
+	if (Salvar_IniciarMundo()) return;
 
 #if defined CC_BUILD_NDS || defined CC_BUILD_PS1 || defined CC_BUILD_SATURN || defined CC_BUILD_MACCLASSIC || defined CC_BUILD_TINYMEM
 	horSize = 16;

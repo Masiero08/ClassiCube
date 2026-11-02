@@ -19,6 +19,7 @@
 #include "Http.h"
 #include "Game.h"
 #include "main.h"
+#include "Conquistas.h"
 
 #define LAYOUTS static const struct LLayout
 #define IsBackButton(btn) (btn == CCKEY_ESCAPE || btn == CCPAD_SELECT || btn == CCPAD_2)
@@ -715,7 +716,7 @@ static void SwitchToSplitScreen(void* w) { SplitScreen_SetActive(); }
 /* e a parte Online (login, servidores e conexao direta), aberta pelo botao Online. */
 static struct MainScreen {
 	LScreen_Layout
-	struct LButton btnLogin, btnResume, btnDirect, btnSPlayer, btnSplit, btnMods;
+	struct LButton btnLogin, btnResume, btnDirect, btnSPlayer, btnSplit, btnMods, btnNovo;
 	struct LButton btnRegister, btnOptions, btnUpdates, btnOnline, btnBack;
 	struct LInput iptUsername, iptPassword;
 	struct LLabel lblStatus, lblUpdate, lblMods;
@@ -740,6 +741,9 @@ LAYOUTS main_lblUpdate_H[] = { { ANCHOR_MAX,   10 }, { ANCHOR_MAX, 6 } };
 LAYOUTS main_btnBack[]     = { { ANCHOR_CENTRE, 0 }, { ANCHOR_MAX,  6 } };
 
 LAYOUTS home_btnJogar[]   = { { ANCHOR_CENTRE,   0 }, { ANCHOR_CENTRE,  -95 } };
+/* com um mundo salvo, "Jogar" vira "Continuar" + "Novo mundo" lado a lado */
+LAYOUTS home_btnContinuar[] = { { ANCHOR_CENTRE, -72 }, { ANCHOR_CENTRE,  -95 } };
+LAYOUTS home_btnNovo[]      = { { ANCHOR_CENTRE,  72 }, { ANCHOR_CENTRE,  -95 } };
 LAYOUTS home_btnMods[]    = { { ANCHOR_CENTRE, -72 }, { ANCHOR_CENTRE,  -25 } };
 LAYOUTS home_btnAjustes[] = { { ANCHOR_CENTRE,  72 }, { ANCHOR_CENTRE,  -25 } };
 LAYOUTS home_btnOnline[]  = { { ANCHOR_CENTRE, -72 }, { ANCHOR_CENTRE,   30 } };
@@ -798,6 +802,18 @@ static void MainScreen_Singleplayer(void* w) {
 
 	if (!user->length) user = &defUser;
 	Launcher_StartGame(user, &String_Empty, &String_Empty, &String_Empty, &String_Empty, 1);
+}
+
+/* Mundo novo (o salvo antes vira maps/meu-mundo-anterior.cw) */
+static void MainScreen_NovoMundo(void* w) {
+	Options_SetBool(SALVAR_OPT_CONTINUAR, false);
+	MainScreen_Singleplayer(w);
+}
+
+/* Abre o mundo salvo pelo botao "Salvar mundo" (ou pelo salvamento automatico) */
+static void MainScreen_Continuar(void* w) {
+	Options_SetBool(SALVAR_OPT_CONTINUAR, Salvar_ExisteMundo());
+	MainScreen_Singleplayer(w);
 }
 
 static void MainScreen_ResumeHover(void* w) {
@@ -885,8 +901,15 @@ static void MainScreen_UpdateModsLabel(struct MainScreen* s) {
 
 /* Inicio: botoes grandes e simples para quem so quer jogar */
 static void MainScreen_AddHome(struct MainScreen* s) {
-	LButton_Add(s, &s->btnSPlayer, 270, 50, "Jogar",
-				MainScreen_Singleplayer, home_btnJogar);
+	if (Salvar_ExisteMundo()) {
+		LButton_Add(s, &s->btnSPlayer, 134, 50, "Continuar",
+					MainScreen_Continuar,  home_btnContinuar);
+		LButton_Add(s, &s->btnNovo,    134, 50, "Novo mundo",
+					MainScreen_NovoMundo,  home_btnNovo);
+	} else {
+		LButton_Add(s, &s->btnSPlayer, 270, 50, "Jogar",
+					MainScreen_NovoMundo,  home_btnJogar);
+	}
 	LButton_Add(s, &s->btnMods,    134, 40, "Mods",
 				SwitchToMods,            home_btnMods);
 	LButton_Add(s, &s->btnOptions, 134, 40, "Ajustes",
@@ -1653,7 +1676,7 @@ static void ModsScreen_Activated(struct LScreen* s_) {
 	LButton_Add(s, &s->btnTodos,  150, 35, "Ligar todos",
 				ModsScreen_Todos,        mods_btnTodos);
 	LButton_Add(s, &s->btnJogar,  200, 35, "Jogar",
-				MainScreen_Singleplayer, mods_btnJogar);
+				MainScreen_Continuar,    mods_btnJogar);
 	LButton_Add(s, &s->btnBack,    80, 35, "Voltar",
 				SwitchToMain,            mods_btnBack);
 

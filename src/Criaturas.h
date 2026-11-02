@@ -18,6 +18,8 @@ cc_bool Criaturas_HandleClick(cc_bool place);
 cc_bool Criaturas_Ativo(void);
 /* Abre o menu das criaturas (Diario, equipe, casulos, Mestres) */
 void Criaturas_AbrirMenu(void);
+/* Quantas especies ja foram capturadas e as insignias ganhas (um bit por Mestre) */
+void Criaturas_Progresso(int* especies, int* insignias);
 
 CC_END_HEADER
 #endif

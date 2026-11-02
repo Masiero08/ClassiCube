@@ -436,6 +436,7 @@ static void Toast_Mostrar(int conquista) {
 *----------------------------------------------------------Salvar---------------------------------------------------------*
 *#########################################################################################################################*/
 static float autoTimer;
+#define SALVAR_TEMP "maps/meu-mundo-salvando.cw"
 
 static cc_bool ArquivoExiste(const char* arquivo) {
 	cc_string path = String_FromReadonly(arquivo);
@@ -473,17 +474,17 @@ static cc_result Gravar(const char* arquivo) {
 	return res;
 }
 
-/* Copia o mundo salvo para o arquivo "anterior" antes de um mundo novo ocupar o lugar */
-static void GuardarAnterior(void) {
-	cc_string origem  = String_FromConst(SALVAR_ARQUIVO);
-	cc_string destino = String_FromConst(SALVAR_ANTERIOR);
+/* Copia um arquivo inteiro (nao existe "renomear arquivo" em todas as plataformas) */
+static cc_result Copiar(const char* de, const char* para) {
+	cc_string origem  = String_FromReadonly(de);
+	cc_string destino = String_FromReadonly(para);
 	struct Stream in, out;
 	cc_uint8 buffer[4096];
 	cc_uint32 lidos;
 	cc_result res;
 
-	if (Stream_OpenFile(&in, &origem)) return;
-	if (Stream_CreateFile(&out, &destino)) { in.Close(&in); return; }
+	if ((res = Stream_OpenFile(&in, &origem))) return res;
+	if ((res = Stream_CreateFile(&out, &destino))) { in.Close(&in); return res; }
 
 	for (;;)
 	{
@@ -491,8 +492,9 @@ static void GuardarAnterior(void) {
 		if (res || !lidos) break;
 		if ((res = Stream_Write(&out, buffer, lidos))) break;
 	}
-	out.Close(&out);
+	if (!res) res = out.Close(&out); else out.Close(&out);
 	in.Close(&in);
+	return res;
 }
 
 cc_bool Salvar_IniciarMundo(void) {
@@ -506,7 +508,8 @@ cc_bool Salvar_IniciarMundo(void) {
 		Map_LoadFrom(&path);
 		return true;
 	}
-	if (Salvar_ExisteMundo()) GuardarAnterior();
+	/* o mundo salvo antes vira o "anterior" */
+	if (Salvar_ExisteMundo()) Copiar(SALVAR_ARQUIVO, SALVAR_ANTERIOR);
 	return false;
 }
 
@@ -524,8 +527,11 @@ cc_bool Salvar_Agora(cc_bool automatico) {
 		return false;
 	}
 
-	if (Gravar(SALVAR_ARQUIVO)) {
+	/* grava primeiro num arquivo temporario: se o cartao encher ou o 3DS desligar no meio, */
+	/*  o ultimo mundo salvo continua inteiro. So depois copia por cima dele. */
+	if (Gravar(SALVAR_TEMP) || Copiar(SALVAR_TEMP, SALVAR_ARQUIVO)) {
 		Chat_AddRaw("&cNao foi possivel salvar o mundo (o cartao SD esta cheio?)");
+		Chat_AddRaw("&7O ultimo mundo salvo continua como estava.");
 		return false;
 	}
 	World.LastSave = Game.Time;

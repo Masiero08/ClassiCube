@@ -69,6 +69,23 @@ static const struct EquipBlockDef equip_defs[EBLOCK_FIM - EBLOCK_BAU] = {
 { "Capacete de titanio",   T(CAPACETE_TITANIO), T(CAPACETE_TITANIO), T(CAPACETE_TITANIO), DRAW_SPRITE, COLLIDE_NONE,  SOUND_METAL, 0 },
 { "Calca de titanio",      T(CALCA_TITANIO),    T(CALCA_TITANIO),    T(CALCA_TITANIO),    DRAW_SPRITE, COLLIDE_NONE,  SOUND_METAL, 0 },
 { "Botas de titanio",      T(BOTAS_TITANIO),    T(BOTAS_TITANIO),    T(BOTAS_TITANIO),    DRAW_SPRITE, COLLIDE_NONE,  SOUND_METAL, 0 },
+/* Tools */
+{ "Picareta de madeira", T(PICARETA_MADEIRA),   T(PICARETA_MADEIRA),   T(PICARETA_MADEIRA),   DRAW_SPRITE, COLLIDE_NONE,  SOUND_WOOD, 0 },
+{ "Machado de madeira",  T(MACHADO_MADEIRA),    T(MACHADO_MADEIRA),    T(MACHADO_MADEIRA),    DRAW_SPRITE, COLLIDE_NONE,  SOUND_WOOD, 0 },
+{ "Pa de madeira",       T(PA_MADEIRA),         T(PA_MADEIRA),         T(PA_MADEIRA),         DRAW_SPRITE, COLLIDE_NONE,  SOUND_WOOD, 0 },
+{ "Espada de madeira",   T(ESPADA_MADEIRA),     T(ESPADA_MADEIRA),     T(ESPADA_MADEIRA),     DRAW_SPRITE, COLLIDE_NONE,  SOUND_WOOD, 0 },
+{ "Picareta de pedra",   T(PICARETA_PEDRA),     T(PICARETA_PEDRA),     T(PICARETA_PEDRA),     DRAW_SPRITE, COLLIDE_NONE,  SOUND_STONE, 0 },
+{ "Machado de pedra",    T(MACHADO_PEDRA),      T(MACHADO_PEDRA),      T(MACHADO_PEDRA),      DRAW_SPRITE, COLLIDE_NONE,  SOUND_STONE, 0 },
+{ "Pa de pedra",         T(PA_PEDRA),           T(PA_PEDRA),           T(PA_PEDRA),           DRAW_SPRITE, COLLIDE_NONE,  SOUND_STONE, 0 },
+{ "Espada de pedra",     T(ESPADA_PEDRA),       T(ESPADA_PEDRA),       T(ESPADA_PEDRA),       DRAW_SPRITE, COLLIDE_NONE,  SOUND_STONE, 0 },
+{ "Picareta de ferro",   T(PICARETA_FERRO),     T(PICARETA_FERRO),     T(PICARETA_FERRO),     DRAW_SPRITE, COLLIDE_NONE,  SOUND_METAL, 0 },
+{ "Machado de ferro",    T(MACHADO_FERRO),      T(MACHADO_FERRO),      T(MACHADO_FERRO),      DRAW_SPRITE, COLLIDE_NONE,  SOUND_METAL, 0 },
+{ "Pa de ferro",         T(PA_FERRO),           T(PA_FERRO),           T(PA_FERRO),           DRAW_SPRITE, COLLIDE_NONE,  SOUND_METAL, 0 },
+{ "Espada de ferro",     T(ESPADA_FERRO),       T(ESPADA_FERRO),       T(ESPADA_FERRO),       DRAW_SPRITE, COLLIDE_NONE,  SOUND_METAL, 0 },
+{ "Picareta de diamante", T(PICARETA_DIAMANTE),  T(PICARETA_DIAMANTE),  T(PICARETA_DIAMANTE),  DRAW_SPRITE, COLLIDE_NONE,  SOUND_GLASS, 0 },
+{ "Machado de diamante", T(MACHADO_DIAMANTE),   T(MACHADO_DIAMANTE),   T(MACHADO_DIAMANTE),   DRAW_SPRITE, COLLIDE_NONE,  SOUND_GLASS, 0 },
+{ "Pa de diamante",      T(PA_DIAMANTE),        T(PA_DIAMANTE),        T(PA_DIAMANTE),        DRAW_SPRITE, COLLIDE_NONE,  SOUND_GLASS, 0 },
+{ "Espada de diamante",  T(ESPADA_DIAMANTE),    T(ESPADA_DIAMANTE),    T(ESPADA_DIAMANTE),    DRAW_SPRITE, COLLIDE_NONE,  SOUND_GLASS, 0 },
 };
 
 
@@ -123,7 +140,8 @@ void Equip_PatchAtlas(struct Bitmap* bmp) {
 		y   *= size;
 
 		/* Don't overwrite textures that a texture pack provides */
-		if (!IsTileBlank(bmp, x, y, size)) continue;
+		/* (tiles 240-241 hold the default pack's "goodly" credit, not a texture) */
+		if (tile != 240 && tile != 241 && !IsTileBlank(bmp, x, y, size)) continue;
 		DrawTile(bmp, x, y, size, equip_texData[i]);
 	}
 }

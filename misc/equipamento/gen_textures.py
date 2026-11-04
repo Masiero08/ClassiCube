@@ -194,6 +194,116 @@ for tier in ("la", "ouro", "ferro", "diamante", "titanio"):
         if tier == "titanio" and piece == "peitoral": continue   # Minerios already has this item
         T("%s_%s" % (piece, tier), armour(piece, tier))
 
+# ---------------------------------------------------------------- Tools
+# 'h' head, 's' stick (drawn diagonally, like Minecraft tools held in the hand)
+TOOL_SHAPES = {
+    "picareta": [
+        "................",
+        "....hhhhhhh.....",
+        "...hhhhhhhhh....",
+        "..hh....s..hh...",
+        "..h....s....h...",
+        "......s.........",
+        ".....s..........",
+        "....s...........",
+        "...s............",
+        "..s.............",
+        ".s..............",
+        "s...............",
+        "................",
+        "................",
+        "................",
+        "................",
+    ],
+    "machado": [
+        "................",
+        "......hhh.......",
+        ".....hhhhh......",
+        "....hhhhhh......",
+        "....hhhhs.......",
+        ".....hhs........",
+        "......s.........",
+        ".....s..........",
+        "....s...........",
+        "...s............",
+        "..s.............",
+        ".s..............",
+        "s...............",
+        "................",
+        "................",
+        "................",
+    ],
+    "pa": [
+        "...........hhh..",
+        "..........hhhhh.",
+        "..........hhhhh.",
+        "...........hhh..",
+        "..........s.....",
+        ".........s......",
+        "........s.......",
+        ".......s........",
+        "......s.........",
+        ".....s..........",
+        "....s...........",
+        "...s............",
+        "..s.............",
+        ".s..............",
+        "................",
+        "................",
+    ],
+    "espada": [
+        ".............hh.",
+        "............hhh.",
+        "...........hhh..",
+        "..........hhh...",
+        ".........hhh....",
+        "........hhh.....",
+        ".......hhh......",
+        "..x...hhh.......",
+        "...x.hhh........",
+        "....xhh.........",
+        ".....xx.........",
+        "....s..x........",
+        "...s............",
+        "..s.............",
+        ".ss.............",
+        "................",
+    ],
+}
+TOOL_TIERS = {
+    "madeira":  (176, 132, 80),
+    "pedra":    (130, 130, 130),
+    "ferro":    (225, 225, 230),
+    "diamante": (80, 225, 220),
+}
+
+def tool(kind, tier):
+    head = TOOL_TIERS[tier]
+    stick = (115, 78, 40)
+    guard = (90, 70, 50)
+    im = new(); p = im.load()
+    rows = TOOL_SHAPES[kind]
+    for y, row in enumerate(rows):
+        for x, c in enumerate(row):
+            if c == "h": p[x, y] = shade(head, 1.15 if (x + y) % 3 == 0 else 1.0)
+            if c == "s": p[x, y] = stick
+            if c == "x": p[x, y] = guard
+    # dark outline around everything, so the tool reads on any background
+    out = new(); q = out.load()
+    for y in range(S):
+        for x in range(S):
+            if p[x, y][3]: continue
+            for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                nx, ny = x + dx, y + dy
+                if 0 <= nx < S and 0 <= ny < S and p[nx, ny][3]:
+                    q[x, y] = (35, 28, 22, 255); break
+    out.alpha_composite(im)
+    return out
+
+for tier in ("madeira", "pedra", "ferro", "diamante"):
+    for kind in ("picareta", "machado", "pa", "espada"):
+        T("%s_%s" % (kind, tier), tool(kind, tier))
+
 # Shapes are also exported so the inventory screen can draw the worn armour on the player figure
 def write_header(path):
     with open(path, "w", newline="\r\n") as f:

@@ -9,7 +9,7 @@ struct Bitmap;
 struct IGameComponent;
 extern struct IGameComponent Equipamento_Component;
 
-/* Block IDs 192-223 and atlas tiles 208-239 are reserved for these blocks */
+/* Block IDs 192-231 and atlas tiles 208-248 are reserved for these blocks */
 enum EquipamentoBlock {
 	EBLOCK_BAU = 192, EBLOCK_FORNALHA_ACESA,
 	EITEM_BARRA_FERRO, EITEM_BARRA_OURO, EITEM_BARRA_TITANIO,
@@ -19,11 +19,21 @@ enum EquipamentoBlock {
 	EITEM_CAPACETE_DIAMANTE, EITEM_PEITORAL_DIAMANTE, EITEM_CALCA_DIAMANTE, EITEM_BOTAS_DIAMANTE,
 	/* The titanium chestplate is Minerios' MITEM_ARMADURA_TITANIO */
 	EITEM_CAPACETE_TITANIO,  EITEM_CALCA_TITANIO,     EITEM_BOTAS_TITANIO,
-	EBLOCK_FIM
+	/* Tools: kind (picareta, machado, pa, espada) + 4 * (tier - 1), tiers madeira, pedra, ferro, diamante */
+	EITEM_FERRAMENTAS,
+	EITEM_FERRAMENTAS_FIM = EITEM_FERRAMENTAS + 16,
+	EBLOCK_FIM = EITEM_FERRAMENTAS_FIM
 };
 
 enum ArmorPiece { ARMOR_HELMET, ARMOR_CHEST, ARMOR_LEGS, ARMOR_BOOTS, ARMOR_PIECES };
 enum ArmorTier  { ARMOR_TIER_NONE, ARMOR_TIER_LA, ARMOR_TIER_OURO, ARMOR_TIER_FERRO, ARMOR_TIER_DIAMANTE, ARMOR_TIER_TITANIO, ARMOR_TIERS };
+
+/* The tool item of the given kind (0 = pickaxe .. 3 = sword) and tier (1 = wood .. 4 = diamond) */
+#define Equip_ToolItem(kind, tier) ((BlockID)(EITEM_FERRAMENTAS + (kind) + ((tier) - 1) * 4))
+/* Whether the given block is a tool item, and its kind and tier */
+#define Equip_IsTool(block)   ((block) >= EITEM_FERRAMENTAS && (block) < EITEM_FERRAMENTAS_FIM)
+#define Equip_ToolKind(block) (((block) - EITEM_FERRAMENTAS) % 4)
+#define Equip_ToolTier(block) (((block) - EITEM_FERRAMENTAS) / 4 + 1)
 
 /* Draws the textures for these blocks into unused tiles of the given terrain atlas */
 void Equip_PatchAtlas(struct Bitmap* bmp);

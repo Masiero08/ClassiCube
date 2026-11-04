@@ -695,7 +695,7 @@ static void Cw_Callback_2(struct NbtTag* tag) {
 		if (IsTag(tag, "Food"))   { Survival_LoadFood(NbtTag_U8(tag));   return; }
 		if (IsTag(tag, "Time"))   { DayNight_SetTime(NbtTag_I32(tag));  return; }
 		if (IsTag(tag, "Tools")) {
-			arr = NbtTag_U8_Array(tag, SURVIVAL_TOOLS_SIZE);
+			arr = NbtTag_U8_Array(tag, SURVIVAL_TOOLS_OLD_SIZE);
 			if (arr) Survival_LoadTools(arr, tag->dataSize);
 			return;
 		}

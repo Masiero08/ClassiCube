@@ -65,8 +65,11 @@ enum ToolKind { TOOL_PICKAXE, TOOL_AXE, TOOL_SHOVEL, TOOL_SWORD, TOOL_KINDS };
 static const char* const toolNames[TOOL_KINDS]     = { "Picareta", "Machado", "Pa", "Espada" };
 static const char* const tierNames[MAX_TOOL_TIER + 1] = { "", "madeira", "pedra", "ferro", "diamante" };
 static const int tierUses[MAX_TOOL_TIER + 1]       = { 0, 60, 132, 251, 1000 };
-static cc_uint8 toolTier[TOOL_KINDS];
-static int toolUses[TOOL_KINDS];
+/* Tools are items (Equipamento.c) that must be held to be used. The uses left of the */
+/*  tool of each kind and tier that is being used; when it breaks, the next one starts new */
+#define TOOL_ITEMS (TOOL_KINDS * MAX_TOOL_TIER)
+static int toolItemUses[TOOL_ITEMS];
+#define ToolIndex(item) ((item) - EITEM_FERRAMENTAS)
 static BlockID lastHeld;
 
 
@@ -108,17 +111,30 @@ static void UpdateHealthText(void) {
 	Chat_AddOf(&str, MSG_TYPE_BOTTOMRIGHT_2);
 }
 
+static int ToolUsesLeft(BlockID item);
+static int ToolMaxUses(BlockID item);
+
 static void UpdateHeldText(void) {
 	cc_string str; char strBuffer[STRING_SIZE];
 	cc_string name;
 	BlockID held = Inventory_SelectedBlock;
 	int count    = blockCounts[held];
+	int uses, maxUses;
 
+	/* For tools, also show how worn the one in the hand is */
+	if (Equip_IsTool(held) && count) count = count * 10000 + ToolUsesLeft(held);
 	if (held == lastHeld && count == lastHeldCount) return;
 	lastHeld = held; lastHeldCount = count;
 	String_InitArray(str, strBuffer);
 
-	if (held != BLOCK_AIR) {
+	if (Equip_IsTool(held) && blockCounts[held]) {
+		name    = Block_UNSAFE_GetName(held);
+		uses    = ToolUsesLeft(held);
+		maxUses = ToolMaxUses(held);
+		count   = blockCounts[held];
+		String_Format3(&str, "&f%s &7(%i/%i)", &name, &uses, &maxUses);
+		if (count > 1) String_Format1(&str, " &ex%i", &count);
+	} else if (held != BLOCK_AIR) {
 		name = Block_UNSAFE_GetName(held);
 		String_Format2(&str, count ? "&f%s: &e%i" : "&7%s: &c%i", &name, &count);
 	}
@@ -171,8 +187,7 @@ static void ResetPlayerState(void) {
 }
 
 static void ResetTools(void) {
-	Mem_Set(toolTier, 0, sizeof(toolTier));
-	Mem_Set(toolUses, 0, sizeof(toolUses));
+	Mem_Set(toolItemUses, 0, sizeof(toolItemUses));
 }
 
 static void ClearHotbar(void) {
@@ -407,10 +422,14 @@ static int GetRequiredTier(BlockID block) {
 	return GetToolKind(block) == TOOL_PICKAXE ? 1 : 0;
 }
 
-static int GetToolTier(BlockID block) {
-	int kind = GetToolKind(block);
-	return kind >= 0 ? toolTier[kind] : 0;
+/* Tier of the tool the player is holding, if it is the given kind of tool */
+static int HeldToolTier(int kind) {
+	BlockID held = Inventory_SelectedBlock;
+	if (kind < 0 || !Equip_IsTool(held) || !blockCounts[held]) return 0;
+	return Equip_ToolKind(held) == kind ? Equip_ToolTier(held) : 0;
 }
+
+static int GetToolTier(BlockID block) { return HeldToolTier(GetToolKind(block)); }
 
 /* Number of hits needed to break the given block with the player's current tools */
 static int GetBreakHits(BlockID block) {
@@ -462,16 +481,28 @@ static void AddToHotbar(BlockID block) {
 	}
 }
 
-static void WearToolKind(int kind) {
-	cc_string name, tier;
-	if (kind < 0 || !toolTier[kind]) return;
-	if (--toolUses[kind] > 0) return;
+static int ToolMaxUses(BlockID item) { return tierUses[Equip_ToolTier(item)]; }
 
-	name = String_FromReadonly(toolNames[kind]);
-	tier = String_FromReadonly(tierNames[toolTier[kind]]);
-	Chat_Add2("&cSua %s de %s quebrou!", &name, &tier);
+/* Uses left of the tool item being used (a fresh one starts with all its uses) */
+static int ToolUsesLeft(BlockID item) {
+	int* uses = &toolItemUses[ToolIndex(item)];
+	if (*uses <= 0) *uses = ToolMaxUses(item);
+	return *uses;
+}
+
+/* Wears out the held tool, if it is the given kind of tool */
+static void WearToolKind(int kind) {
+	BlockID held = Inventory_SelectedBlock;
+	cc_string name;
+	if (!HeldToolTier(kind)) return;
+
+	toolItemUses[ToolIndex(held)] = ToolUsesLeft(held) - 1;
+	if (toolItemUses[ToolIndex(held)] > 0) return;
+
+	name = Block_UNSAFE_GetName(held);
+	Chat_Add1("&cSua %s quebrou!", &name);
 	Sons_Tocar("quebrou");
-	toolTier[kind] = 0;
+	blockCounts[held]--;
 }
 
 static void WearTool(BlockID block) { WearToolKind(GetToolKind(block)); }
@@ -479,7 +510,7 @@ static void WearTool(BlockID block) { WearToolKind(GetToolKind(block)); }
 int Survival_AttackDamage(void) {
 	int tier;
 	if (!survival_active) return 1;
-	tier = toolTier[TOOL_SWORD];
+	tier = HeldToolTier(TOOL_SWORD);
 	if (!tier) return 1;
 
 	WearToolKind(TOOL_SWORD);
@@ -748,16 +779,9 @@ static void DescribeFood(const struct FoodRecipe* f, cc_string* str) {
 }
 
 static void DescribeTool(const struct ToolRecipe* t, cc_string* str) {
-	cc_bool owned = toolTier[t->kind] >= t->tier;
-	cc_bool can   = !owned && HasInputs(t->count1, t->input1, t->count2, t->input2);
-	String_Format3(str, "%c%c %c", can ? "&f" : "&7", toolNames[t->kind], tierNames[t->tier]);
-
-	if (owned) {
-		String_AppendConst(str, " &a(tem)");
-	} else {
-		String_AppendConst(str, "&7: ");
-		AppendIngredients(str, t->count1, t->input1, t->count2, t->input2);
-	}
+	cc_bool can = HasInputs(t->count1, t->input1, t->count2, t->input2);
+	String_Format3(str, "%c%c %c&7: ", can ? "&f" : "&7", toolNames[t->kind], tierNames[t->tier]);
+	AppendIngredients(str, t->count1, t->input1, t->count2, t->input2);
 }
 
 void Survival_DescribeRecipe(int i, cc_string* str) {
@@ -796,11 +820,12 @@ static cc_bool Eat(const struct FoodRecipe* f) {
 
 static cc_bool MakeTool(const struct ToolRecipe* t) {
 	cc_string name, tier;
-	if (toolTier[t->kind] >= t->tier || !HasInputs(t->count1, t->input1, t->count2, t->input2)) return false;
+	BlockID item = Equip_ToolItem(t->kind, t->tier);
+	if (!HasInputs(t->count1, t->input1, t->count2, t->input2) || blockCounts[item] >= MAX_BLOCK_COUNT) return false;
 
 	UseInputs(t->count1, t->input1, t->count2, t->input2);
-	toolTier[t->kind] = t->tier;
-	toolUses[t->kind] = tierUses[t->tier];
+	blockCounts[item]++;
+	AddToHotbar(item);
 
 	name = String_FromReadonly(toolNames[t->kind]);
 	tier = String_FromReadonly(tierNames[t->tier]);
@@ -1004,7 +1029,7 @@ BlockID Survival_RecipeIcon(int i, int* count) {
 	*count = 0;
 	if (i < FOODS_COUNT) return foods[i].input1;
 	i -= FOODS_COUNT;
-	if (i < TOOLS_COUNT) return tools[i].input1;
+	if (i < TOOLS_COUNT) { *count = 1; return Equip_ToolItem(tools[i].kind, tools[i].tier); }
 	i -= TOOLS_COUNT;
 	if (i >= RECIPES_COUNT) { *count = 1; return ArmorOutput(i - RECIPES_COUNT); }
 
@@ -1012,10 +1037,8 @@ BlockID Survival_RecipeIcon(int i, int* count) {
 	return recipes[i].output;
 }
 
-int Survival_RecipeTool(int i) {
-	i -= FOODS_COUNT;
-	return i >= 0 && i < TOOLS_COUNT ? tools[i].kind : -1;
-}
+/* Tools are items with their own icons now, so no recipe needs a drawn tool picture */
+int Survival_RecipeTool(int i) { return -1; }
 
 int Survival_RecipeKind(int i) {
 	if (i < FOODS_COUNT) return RECIPE_KIND_FOOD;
@@ -1059,7 +1082,7 @@ const char* Survival_RecipeProblem(int i) {
 	i -= FOODS_COUNT;
 	if (i < TOOLS_COUNT) {
 		t = &tools[i];
-		if (toolTier[t->kind] >= t->tier) return "Voce ja tem essa ferramenta";
+		if (blockCounts[Equip_ToolItem(t->kind, t->tier)] >= MAX_BLOCK_COUNT) return "Voce ja tem muitos";
 		return HasInputs(t->count1, t->input1, t->count2, t->input2) ? NULL : "Falta material";
 	}
 	i -= TOOLS_COUNT;
@@ -1078,9 +1101,18 @@ const char* Survival_RecipeProblem(int i) {
 int Survival_GetCount(BlockID block) { return blockCounts[block]; }
 
 void Survival_ToolInfo(int kind, int* tier, int* uses, int* maxUses) {
-	*tier    = toolTier[kind];
-	*uses    = toolTier[kind] ? toolUses[kind] : 0;
-	*maxUses = tierUses[toolTier[kind]];
+	BlockID item;
+	int t;
+	*tier = 0; *uses = 0; *maxUses = 0;
+
+	/* The best tool of this kind the player has */
+	for (t = MAX_TOOL_TIER; t > 0; t--)
+	{
+		item = Equip_ToolItem(kind, t);
+		if (!blockCounts[item]) continue;
+		*tier = t; *uses = ToolUsesLeft(item); *maxUses = ToolMaxUses(item);
+		return;
+	}
 }
 cc_string Survival_BlockName(BlockID block) { return GetShortName(block); }
 
@@ -1204,13 +1236,15 @@ static cc_uint16 loadedCounts[BLOCK_COUNT];
 int Survival_GetHealth(void) { return health; }
 int Survival_GetFood(void)   { return food; }
 
+/* The first 12 bytes are how tools were saved before they became items (tier and uses */
+/*  of each kind), now always 0. After that, the uses left of each tool item. */
 void Survival_GetTools(cc_uint8* data) {
 	int i;
-	for (i = 0; i < TOOL_KINDS; i++)
+	Mem_Set(data, 0, SURVIVAL_TOOLS_OLD_SIZE);
+	for (i = 0; i < TOOL_ITEMS; i++)
 	{
-		data[i * 3 + 0] = toolTier[i];
-		data[i * 3 + 1] = (cc_uint8)(toolUses[i] >> 8);
-		data[i * 3 + 2] = (cc_uint8)(toolUses[i]);
+		data[SURVIVAL_TOOLS_OLD_SIZE + i * 2 + 0] = (cc_uint8)(toolItemUses[i] >> 8);
+		data[SURVIVAL_TOOLS_OLD_SIZE + i * 2 + 1] = (cc_uint8)(toolItemUses[i]);
 	}
 }
 
@@ -1220,8 +1254,9 @@ void Survival_LoadFood(int value) {
 }
 
 void Survival_LoadTools(const cc_uint8* data, int len) {
-	if (len < SURVIVAL_TOOLS_SIZE) return;
-	Mem_Copy(loadedTools, data, SURVIVAL_TOOLS_SIZE);
+	if (len < SURVIVAL_TOOLS_OLD_SIZE) return;
+	Mem_Set(loadedTools, 0, SURVIVAL_TOOLS_SIZE);
+	Mem_Copy(loadedTools, data, min(len, SURVIVAL_TOOLS_SIZE));
 	loadedHasTools = true;
 	loadedPending  = true;
 }
@@ -1260,14 +1295,22 @@ static void ApplyLoadedState(void) {
 	/* Worlds saved before hunger existed have no food value */
 	if (loadedFood  >= 0) food   = min(loadedFood,   MAX_FOOD);
 
-	for (i = 0; loadedHasTools && i < TOOL_KINDS; i++)
-	{
-		toolTier[i] = min(loadedTools[i * 3], MAX_TOOL_TIER);
-		toolUses[i] = (loadedTools[i * 3 + 1] << 8) | loadedTools[i * 3 + 2];
-		if (!toolUses[i]) toolTier[i] = 0;
-	}
 	Mem_Copy(blockCounts, loadedCounts, sizeof(blockCounts));
 	blockCounts[BLOCK_AIR] = 0;
+
+	for (i = 0; loadedHasTools && i < TOOL_ITEMS; i++)
+	{
+		toolItemUses[i] = (loadedTools[SURVIVAL_TOOLS_OLD_SIZE + i * 2] << 8) | loadedTools[SURVIVAL_TOOLS_OLD_SIZE + i * 2 + 1];
+	}
+	/* Worlds saved before tools were items: the tools the player had become items */
+	for (i = 0; loadedHasTools && i < TOOL_KINDS; i++)
+	{
+		int tier = min(loadedTools[i * 3], MAX_TOOL_TIER);
+		int uses = (loadedTools[i * 3 + 1] << 8) | loadedTools[i * 3 + 2];
+		if (!tier || !uses) continue;
+		blockCounts[Equip_ToolItem(i, tier)]++;
+		toolItemUses[ToolIndex(Equip_ToolItem(i, tier))] = uses;
+	}
 
 	for (i = BLOCK_AIR + 1; i < BLOCK_COUNT; i++)
 	{

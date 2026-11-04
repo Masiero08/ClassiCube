@@ -85,6 +85,7 @@ static struct InventarioScreen {
 	struct EquipBau* bau;
 	struct EquipFornalha* fornalha;
 	BlockID held;
+	int heldSlot; /* hotbar slot the held item was picked up from, or -1 */
 	BlockID items[BLOCK_COUNT];
 	int itemsCount, invPage;
 	cc_bool moveOne;
@@ -145,7 +146,8 @@ static void InventarioScreen_Refresh(struct InventarioScreen* s) {
 	{
 		if (Survival_GetCount((BlockID)i) > 0) s->items[s->itemsCount++] = (BlockID)i;
 	}
-	if (s->held != BLOCK_AIR && !Survival_GetCount(s->held)) s->held = BLOCK_AIR;
+	if (s->held != BLOCK_AIR && !Survival_GetCount(s->held) && s->heldSlot < 0) s->held = BLOCK_AIR;
+	if (s->held == BLOCK_AIR) s->heldSlot = -1;
 
 	s->invPage = min(s->invPage, IS_Pages(s) - 1);
 	if (!s->msg.length) InventarioScreen_SetDefaultMessage(s);
@@ -173,8 +175,22 @@ static void InventarioScreen_TapHotbar(struct InventarioScreen* s, int slot) {
 	BlockID old = Inventory_Get(slot);
 	int i;
 
+	/* Tapping a slot of the bar picks up what is in it, to move it elsewhere */
 	if (s->held == BLOCK_AIR) {
 		Inventory_SetSelectedIndex(slot);
+		if (old == BLOCK_AIR) return;
+		s->held     = old;
+		s->heldSlot = slot;
+		String_AppendConst(&s->msg, "&8Toque noutro espaco ou nos itens p/ tirar");
+		return;
+	}
+	/* Moving something along the bar swaps the two slots */
+	if (s->heldSlot >= 0) {
+		Inventory_Set(s->heldSlot, old);
+		Inventory_Set(slot, s->held);
+		Inventory_SetSelectedIndex(slot);
+		Event_RaiseVoid(&UserEvents.HeldBlockChanged);
+		s->held = BLOCK_AIR; s->heldSlot = -1;
 		return;
 	}
 	for (i = 0; i < INVENTORY_BLOCKS_PER_HOTBAR; i++)
@@ -257,6 +273,14 @@ static void InventarioScreen_PutFurnace(struct InventarioScreen* s, int which, B
 static void InventarioScreen_TapItem(struct InventarioScreen* s, int index) {
 	BlockID block;
 	cc_bool smelts, burns;
+	/* Something picked up from the bar is taken off it (it stays in the items) */
+	if (s->mode == MODE_INV && s->heldSlot >= 0) {
+		Inventory_Set(s->heldSlot, BLOCK_AIR);
+		Event_RaiseVoid(&UserEvents.HeldBlockChanged);
+		String_AppendConst(&s->msg, "&2Tirou da barra");
+		s->held = BLOCK_AIR; s->heldSlot = -1;
+		return;
+	}
 	if (index >= s->itemsCount) { s->held = BLOCK_AIR; return; }
 	block = s->items[index];
 
@@ -609,6 +633,7 @@ static void IS_DrawInventoryBack(struct InventarioScreen* s, struct Context2D* c
 	{
 		x = IS_HOTBAR_X + i * IS_SLOT;
 		fill = i == Inventory.SelectedIndex ? BitmapColor_RGB(175, 175, 150) : IS_SLOT_BACK;
+		if (i == s->heldSlot) fill = IS_HELD_BACK;
 		IS_Box(s, ctx, x, IS_HOTBAR_Y, IS_SLOT, IS_SLOT, fill, true);
 	}
 	IS_TextConst(s, ctx, "&8Barra", IS_HOTBAR_X - 4, IS_HOTBAR_Y + 6, 2, false);
@@ -962,6 +987,7 @@ static void InventarioScreen_Init(void* screen) {
 	s->numWidgets  = 0;
 	s->releasedKey = false;
 	s->held        = BLOCK_AIR;
+	s->heldSlot    = -1;
 	s->invPage     = 0;
 	s->redrawTimer = 0;
 

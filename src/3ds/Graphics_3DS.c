@@ -356,7 +356,14 @@ static bool CreateNativeTexture(C3D_Tex* tex, u32 width, u32 height, int vram) {
 	//  caused by the fog table (see UpdateFog), not by where textures live.
 	tex->data = vram ? vramAlloc(size) : NULL;
 	if (!tex->data) tex->data = linearAlloc(size);
-	if (!tex->data) return false;
+	// Textures updated often (e.g. the terrain atlases, which have animated water and
+	//  lava) normally stay out of VRAM, but use it rather than having no texture at all
+	//  when the linear memory is full (the atlases with mod tiles 128+ are made last)
+	if (!tex->data && !vram) tex->data = vramAlloc(size);
+	if (!tex->data) {
+		Platform_Log2("Sem memoria para textura %ix%i", &width, &height);
+		return false;
+	}
 
 	tex->width  = width;
 	tex->height = height;

@@ -43,8 +43,17 @@ extern cc_string Game_Mppass;
 	#define DEFAULT_VIEWDIST 64
 #elif defined CC_BUILD_NDS
     #define DEFAULT_VIEWDIST 192
+#elif defined CC_BUILD_3DS
+    /* 512 filled the 3DS memory with chunk meshes, which then crashed */
+    #define DEFAULT_VIEWDIST 64
 #else
     #define DEFAULT_VIEWDIST 512
+#endif
+
+#ifdef CC_BUILD_3DS
+    #define MAX_USER_VIEWDIST 128
+#else
+    #define MAX_USER_VIEWDIST 4096
 #endif
 #define DEFAULT_MAX_VIEWDIST 32768
 

@@ -777,7 +777,7 @@ static void GraphicsOptionsScreen_InitWidgets(struct MenuOptionsScreen* s) {
 			"&eNoLimit: &fRenders as many frames as possible each second.\n" \
 			"&cNoLimit is pointless - it wastefully renders frames that you don't even see!");
 		MenuOptionsScreen_AddInt(s, "View distance",
-			8, 4096, 512,
+			8, MAX_USER_VIEWDIST, DEFAULT_VIEWDIST,
 			GrO_GetViewDist,   GrO_SetViewDist, NULL);
 		MenuOptionsScreen_AddBool(s, "Smooth lighting",
 			GrO_GetSmooth,     GrO_SetSmooth,

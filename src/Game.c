@@ -209,6 +209,7 @@ void Game_SetViewDistance(int distance) {
 }
 
 void Game_UserSetViewDistance(int distance) {
+	distance = min(distance, MAX_USER_VIEWDIST);
 	Game_UserViewDistance = distance;
 	Options_SetInt(OPT_VIEW_DISTANCE, distance);
 	Game_SetViewDistance(distance);
@@ -387,7 +388,7 @@ static void LoadOptions(void) {
 	Game_BreakableLiquids    = !Game_ClassicMode && Options_GetBool(OPT_MODIFIABLE_LIQUIDS, false);
 	Game_AllowServerTextures = !Game_ClassicMode && Options_GetBool(OPT_SERVER_TEXTURES,    true);
 
-	Game_ViewDistance     = Options_GetInt(OPT_VIEW_DISTANCE, 8, 4096, DEFAULT_VIEWDIST);
+	Game_ViewDistance     = Options_GetInt(OPT_VIEW_DISTANCE, 8, MAX_USER_VIEWDIST, DEFAULT_VIEWDIST);
 	Game_UserViewDistance = Game_ViewDistance;
 	/* TODO: Do we need to support option to skip SSL */
 	/*cc_bool skipSsl = Options_GetBool("skip-ssl-check", false);

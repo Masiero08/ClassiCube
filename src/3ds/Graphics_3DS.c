@@ -351,12 +351,11 @@ static bool CreateNativeTexture(C3D_Tex* tex, u32 width, u32 height, int vram) {
 	height   = Math_NextPowOf2(height);
 	u32 size = width * height * 4;
 
-	// Textures are written by the CPU, so keep them in linear memory (like
-	//  citro3d's C3D_TexInit does) and flush the data cache after writing.
-	//  Writing straight into VRAM left some cache lines unwritten on hardware,
-	//  which showed up as blocks/mobs drawn in a flat lilac/purple colour.
-	tex->data = linearAlloc(size);
-	if (!tex->data && vram) tex->data = vramAlloc(size);
+	// Textures go in VRAM when they fit (like upstream ClassiCube), which leaves
+	//  the linear memory free for the world's chunk meshes. The purple blocks were
+	//  caused by the fog table (see UpdateFog), not by where textures live.
+	tex->data = vram ? vramAlloc(size) : NULL;
+	if (!tex->data) tex->data = linearAlloc(size);
 	if (!tex->data) return false;
 
 	tex->width  = width;
@@ -433,6 +432,8 @@ static void ToMortonTexture(C3D_Tex* tex, int originX, int originY,
 //  read stale memory, which showed up on hardware as blocks drawn in a flat
 //  colour (lilac/purple), sometimes with only a few correct pixels
 static void FlushTexture(C3D_Tex* tex) {
+	u32 addr = (u32)tex->data;
+	if (addr >= 0x1F000000 && addr < 0x1F600000) return; // VRAM
 	CPU_FlushDataCache(tex->data, tex->size);
 }
 
@@ -637,8 +638,16 @@ struct GPUBuffer {
 static struct GPUBuffer* del_buffers_head;
 static struct GPUBuffer* del_buffers_tail;
 
+static void GPUBuffers_FreeAllUnreferenced(void);
+
 static struct GPUBuffer* GPUBuffer_Alloc(int count, int elemSize) {
 	void* ptr = linearAlloc(16 + count * elemSize);
+	// Out of linear memory: buffers that were deleted (e.g. after the view distance
+	//  was lowered) are normally only freed 4 frames later, so free them right now
+	if (!ptr && del_buffers_head) {
+		GPUBuffers_FreeAllUnreferenced();
+		ptr = linearAlloc(16 + count * elemSize);
+	}
 	return (struct GPUBuffer*)ptr;
 }
 
@@ -653,6 +662,21 @@ static void GPUBuffer_Unref(GfxResourceID* resource) {
 
 static void GPUBuffer_Free(struct GPUBuffer* buf) {
 	linearFree(buf);
+}
+
+static void GPUBuffers_FreeAllUnreferenced(void) {
+	struct GPUBuffer* buf;
+	struct GPUBuffer* next;
+
+	// The GPU may still read a few of these this frame: at worst that draws a
+	//  frame of wrong triangles, which is much better than running out of memory
+	for (buf = del_buffers_head; buf != NULL; buf = next)
+	{
+		next = buf->next;
+		linearFree(buf);
+	}
+	del_buffers_head = NULL;
+	del_buffers_tail = NULL;
 }
 
 static void GPUBuffers_DeleteUnreferenced(void) {
@@ -721,6 +745,9 @@ static GfxResourceID Gfx_AllocStaticVb(VertexFormat fmt, int count) {
 
 void Gfx_BindVb(GfxResourceID vb) {
 	struct GPUBuffer* buffer = (struct GPUBuffer*)vb;
+	// A chunk whose buffer could not be allocated (out of memory) has no
+	//  buffer: skip drawing it instead of crashing (Luma "data abort")
+	if (!buffer) { gfx_vertices = NULL; return; }
 	buffer->lastFrame = frameCounter1;
 	gfx_vertices = buffer->data;
 }
@@ -734,16 +761,23 @@ void* Gfx_LockVb(GfxResourceID vb, VertexFormat fmt, int count) {
 }
 
 void Gfx_UnlockVb(GfxResourceID vb) {
-	CPU_FlushDataCache(vb, vb_size);
+	CPU_FlushDataCache(vb, 16 + vb_size); // header + data
 }
 
 
 /*########################################################################################################################*
 *-----------------------------------------------------State management----------------------------------------------------*
 *#########################################################################################################################*/
+// Only the dense fog used inside water/lava (exponential) is drawn on the 3DS.
+//  The normal distance fog (linear) is left off: on the small screen it just
+//  looked like a thick white mist over everything.
+static void ApplyFogMode(void) {
+	pica_update_fog_mode(gfx_fogEnabled && gfx_fogMode != FOG_LINEAR, false);
+}
+
 void Gfx_SetFog(cc_bool enabled) {
-	pica_update_fog_mode(enabled, false);
 	gfx_fogEnabled = enabled;
+	ApplyFogMode();
 }
 
 static void SetFogColor(PackedCol color) {
@@ -764,13 +798,22 @@ static float GetFogValue(float c) {
 static void UpdateFog(void) {
 	float near = 0.01f;
 	float far  = Game_ViewDistance;
-	float values[129];
+	// FogLut_FromArray reads 256 floats: 128 values, then the 128 differences
+	//  between each value and the next. Only passing the 129 values made it read
+	//  random stack memory as the differences, so the fog amount went far outside
+	//  0..1 and blocks came out in wrong flat colours (purple/lilac)
+	float values[256];
+	float next = GetFogValue(FogLut_CalcZ(0.0f, near, far));
 
-	// TODO: Exp calculation isn't right for lava ???
-	for (int i = 0; i <= 128; i ++)
+	for (int i = 0; i < 128; i ++)
 	{
-		float c = FogLut_CalcZ(i / 128.0f, near, far);
-		values[i] = GetFogValue(c);
+		float cur = next;
+		next = GetFogValue(FogLut_CalcZ((i + 1) / 128.0f, near, far));
+		if (next < 0.0f) next = 0.0f; else if (next > 1.0f) next = 1.0f;
+		if (cur  < 0.0f) cur  = 0.0f; else if (cur  > 1.0f) cur  = 1.0f;
+
+		values[i]       = cur;
+		values[i + 128] = next - cur;
 	}
 
 	C3D_FogLut fog_lut;
@@ -782,7 +825,7 @@ static void SetFogDensity(float value) { UpdateFog(); }
 
 static void SetFogEnd(float value)     { UpdateFog(); }
 
-static void SetFogMode(FogFunc func)   { UpdateFog(); }
+static void SetFogMode(FogFunc func)   { UpdateFog(); ApplyFogMode(); }
 
 
 /*########################################################################################################################*
@@ -954,16 +997,19 @@ static void SetVertexSource(int startVertex) {
 }
 
 void Gfx_DrawVb_IndexedTris_Range(int verticesCount, int startVertex, DrawHints hints) {
+	if (!gfx_vertices) return;
 	SetVertexSource(startVertex);
 	C3D_DrawElements(GPU_TRIANGLES, ICOUNT(verticesCount));
 }
 
 void Gfx_DrawVb_IndexedTris(int verticesCount) {
+	if (!gfx_vertices) return;
 	SetVertexSource(0);
 	C3D_DrawElements(GPU_TRIANGLES, ICOUNT(verticesCount));
 }
 
 void Gfx_DrawIndexedTris_T2fC4b(int verticesCount, int startVertex, DrawHints hints) {
+	if (!gfx_vertices) return;
 	SetVertexSource(startVertex);
 	C3D_DrawElements(GPU_TRIANGLES, ICOUNT(verticesCount));
 }

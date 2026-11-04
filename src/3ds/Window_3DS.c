@@ -190,6 +190,10 @@ static float cpp_timer, cpp_lastPacket, cpp_lastRequest;
 static cc_bool cpp_hasInput, cpp_centred, cpp_announced;
 static int cpp_rawX, cpp_rawY, cpp_centreX = 0x800, cpp_centreY = 0x800;
 static u32 cpp_buttons;
+// Diagnostics shown in chat, so a test on the console tells us how far the connection got
+static Result cpp_initError;
+static const char* cpp_initStep;
+static cc_bool cpp_toldInit, cpp_toldLink;
 
 static Result CPP_Simple(u32 header, int argc, u32 arg) {
 	u32* cmd = getThreadCommandBuffer();
@@ -242,13 +246,16 @@ static void CPP_Init(void) {
 	Mem_Set(cpp_mem, 0, CPP_SHAREDMEM_SIZE);
 
 	if ((res = srvGetServiceHandle(&cpp_handle, "ir:USER"))) {
+		cpp_initError = res; cpp_initStep = "servico";
 		Platform_Log1("ir:USER unavailable: %e", &res); return;
 	}
 	if ((res = svcCreateMemoryBlock(&cpp_memHandle, (u32)cpp_mem, CPP_SHAREDMEM_SIZE,
 									MEMPERM_READ, MEMPERM_READWRITE))) {
+		cpp_initError = res; cpp_initStep = "memoria";
 		Platform_Log1("ir:USER memblock failed: %e", &res); return;
 	}
 	if ((res = CPP_InitShared())) {
+		cpp_initError = res; cpp_initStep = "iniciar";
 		Platform_Log1("ir:USER init failed: %e", &res); return;
 	}
 	cpp_state = CPP_IDLE;
@@ -349,6 +356,15 @@ static void CPP_Reset(void) {
 
 static void CPP_Update(float delta) {
 	u8 status;
+	if (!cpp_toldInit && Gui.ScreensCount) {
+		cpp_toldInit = true;
+		if (cpp_initStep) {
+			cc_string msg; char buf[96];
+			String_InitArray(msg, buf);
+			String_Format2(&msg, "&cCircle Pad Pro: erro no infravermelho (%c %h)", cpp_initStep, &cpp_initError);
+			Chat_AddOf(&msg, MSG_TYPE_SMALLANNOUNCEMENT);
+		}
+	}
 	if (cpp_state == CPP_NONE) return;
 	status = *(volatile u8*)(cpp_mem + 0x08); // 0 = disconnected, 1 = connecting, 2 = connected
 	cpp_timer += delta;
@@ -364,12 +380,15 @@ static void CPP_Update(float delta) {
 
 	case CPP_CONNECTING:
 		if (status == 2) {
+			if (!cpp_toldLink) CPP_Announce("&eCircle Pad Pro encontrado, lendo os botoes...");
+			cpp_toldLink = true;
 			cpp_state      = CPP_CONNECTED;
 			cpp_timer      = 0;
 			cpp_lastPacket = 0;
 			cpp_centred    = false;
 			CPP_RequestInputs();
-		} else if (cpp_timer > 0.5f) {
+		} else if (cpp_timer > 3.0f) {
+			// the connection handshake can take a while on real hardware
 			CPP_Reset(); // nothing answered, try again later
 		}
 		break;
@@ -474,6 +493,21 @@ static void ProcessCameraStick(int port, circlePosition* pos, float delta) {
 // Set once the C-Stick (New 3DS) has been used or the Circle Pad Pro (Old 3DS) is connected
 static cc_bool rightStickSeen;
 
+// Without a right stick, the D-Pad turns the camera instead (the Circle Pad always walks)
+static void DPadToCamera(int port, u32* mods, float delta) {
+	circlePosition pos = { 0, 0 };
+	u32 keys = *mods;
+	// B + Up/Down still flies up/down
+	if (keys & KEY_B) return;
+
+	if (keys & KEY_DLEFT)  pos.dx -= 110;
+	if (keys & KEY_DRIGHT) pos.dx += 110;
+	if (keys & KEY_DUP)    pos.dy += 110;
+	if (keys & KEY_DDOWN)  pos.dy -= 110;
+	*mods &= ~(KEY_DLEFT | KEY_DRIGHT | KEY_DUP | KEY_DDOWN);
+	ProcessCameraStick(port, &pos, delta);
+}
+
 void Gamepads_Process(float delta) {
 	u32 mods = hidKeysDown() | hidKeysHeld();
 	circlePosition hid_pos, stk_pos = { 0 };
@@ -492,17 +526,18 @@ void Gamepads_Process(float delta) {
 		}
 		rightStickSeen = cpp_announced;
 	}
-	HandleButtons(port, mods);
 	hidCircleRead(&hid_pos);
 
+	// Circle Pad (left) always walks, like Resident Evil Revelations / Monster Hunter
+	ProcessCircleInput(port, PAD_AXIS_LEFT, &hid_pos, delta);
+
 	if (rightStickSeen) {
-		// Resident Evil Revelations style: Circle Pad walks, right stick turns the camera
-		ProcessCircleInput(port, PAD_AXIS_LEFT, &hid_pos, delta);
+		// Right stick (C-Stick or Circle Pad Pro) turns the camera, D-Pad works as normal
 		ProcessCameraStick(port, &stk_pos, delta);
 	} else {
-		// Without a right stick: Circle Pad turns the camera (D-Pad walks)
-		ProcessCameraStick(port, &hid_pos, delta);
+		DPadToCamera(port, &mods, delta);
 	}
+	HandleButtons(port, mods);
 }
 
 

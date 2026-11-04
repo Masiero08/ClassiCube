@@ -169,194 +169,349 @@ static cc_bool isNew3DS;
 /*########################################################################################################################*
 *---------------------------------------------Circle Pad Pro (Old 3DS, ir:USER)-------------------------------------------*
 *#########################################################################################################################*/
-// On the Old 3DS the Circle Pad Pro is an infrared accessory. Games such as Resident Evil Revelations
-//  talk to it through the ir:USER service: connect to device 1, ask it to send its inputs every few ms,
-//  then read the 6 byte input packets it sends back from shared memory.
-// ir:USER and ir:rst cannot be used at the same time, so ir:rst is only used on the New 3DS (C-Stick).
+// On the Old 3DS the Circle Pad Pro is an infrared accessory, talked to through the ir:USER service.
+// The protocol (as used by official games, and by Red Viper / tristangnl's homebrew example):
+//  1) InitializeIrNopShared, then RequireConnection(1) and wait on the connection status event
+//  2) ask for the calibration data (request 0x02 -> response 0x11)
+//  3) then, over and over: send an input request (0x01) and wait for ONE input response (0x10).
+//     The accessory answers each request once; it does not stream on its own.
+// Everything runs on a background thread with blocking waits, so the game loop never stalls.
 // Protocol details: https://www.3dbrew.org/wiki/Circle_Pad_Pro and https://www.3dbrew.org/wiki/IR_Services
-#define CPP_RECV_PACKETS  16
-#define CPP_PACKET_SIZE   32
-#define CPP_RECV_SIZE     (CPP_RECV_PACKETS * (8 + CPP_PACKET_SIZE))
-#define CPP_SEND_PACKETS  4
-#define CPP_SEND_SIZE     (CPP_SEND_PACKETS * (8 + CPP_PACKET_SIZE))
+#define CPP_MS 1000000LL
 #define CPP_SHAREDMEM_SIZE 0x1000
-#define CPP_RECV_OFFSET   0x20
+#define CPP_RECV_DATA      2000
+#define CPP_RECV_PACKETS   0xA0
+#define CPP_RECV_SIZE      (CPP_RECV_DATA + CPP_RECV_PACKETS * 8)
+#define CPP_SEND_PACKETS   0x20
+#define CPP_SEND_SIZE      (0x200 + CPP_SEND_PACKETS * 8)
+#define CPP_RECV_TABLE     0x20 // packet info table (offset, size) in shared memory
 
-enum CPP_STATE { CPP_NONE, CPP_IDLE, CPP_CONNECTING, CPP_CONNECTED };
-static Handle cpp_handle, cpp_memHandle;
+static Handle cpp_handle, cpp_memHandle, cpp_exitEvent;
 static u8* cpp_mem;
-static int cpp_state;
-static float cpp_timer, cpp_lastPacket, cpp_lastRequest;
-static cc_bool cpp_hasInput, cpp_centred, cpp_announced;
-static int cpp_rawX, cpp_rawY, cpp_centreX = 0x800, cpp_centreY = 0x800;
-static u32 cpp_buttons;
+static Thread cpp_thread;
+static int cpp_packetId;
+
+static volatile cc_bool cpp_connected; // calibrated and answering
+static volatile u32 cpp_buttons;
+static volatile s16 cpp_dx, cpp_dy;
+static volatile int cpp_stage; // for the chat messages
+enum { CPP_STAGE_NONE, CPP_STAGE_SEARCHING, CPP_STAGE_FOUND, CPP_STAGE_CONNECTED, CPP_STAGE_LOST };
+
+static int cpp_xOffset = 0x800, cpp_yOffset = 0x800;
+static float cpp_xScale = 1.0f, cpp_yScale = 1.0f;
+
 // Diagnostics shown in chat, so a test on the console tells us how far the connection got
 static Result cpp_initError;
 static const char* cpp_initStep;
-static cc_bool cpp_toldInit, cpp_toldLink;
+static cc_bool cpp_toldInit, cpp_announced;
+static int cpp_toldStage;
+
+static const u8 crc8_table[256] = {
+	0x00,0x07,0x0E,0x09,0x1C,0x1B,0x12,0x15,0x38,0x3F,0x36,0x31,0x24,0x23,0x2A,0x2D,
+	0x70,0x77,0x7E,0x79,0x6C,0x6B,0x62,0x65,0x48,0x4F,0x46,0x41,0x54,0x53,0x5A,0x5D,
+	0xE0,0xE7,0xEE,0xE9,0xFC,0xFB,0xF2,0xF5,0xD8,0xDF,0xD6,0xD1,0xC4,0xC3,0xCA,0xCD,
+	0x90,0x97,0x9E,0x99,0x8C,0x8B,0x82,0x85,0xA8,0xAF,0xA6,0xA1,0xB4,0xB3,0xBA,0xBD,
+	0xC7,0xC0,0xC9,0xCE,0xDB,0xDC,0xD5,0xD2,0xFF,0xF8,0xF1,0xF6,0xE3,0xE4,0xED,0xEA,
+	0xB7,0xB0,0xB9,0xBE,0xAB,0xAC,0xA5,0xA2,0x8F,0x88,0x81,0x86,0x93,0x94,0x9D,0x9A,
+	0x27,0x20,0x29,0x2E,0x3B,0x3C,0x35,0x32,0x1F,0x18,0x11,0x16,0x03,0x04,0x0D,0x0A,
+	0x57,0x50,0x59,0x5E,0x4B,0x4C,0x45,0x42,0x6F,0x68,0x61,0x66,0x73,0x74,0x7D,0x7A,
+	0x89,0x8E,0x87,0x80,0x95,0x92,0x9B,0x9C,0xB1,0xB6,0xBF,0xB8,0xAD,0xAA,0xA3,0xA4,
+	0xF9,0xFE,0xF7,0xF0,0xE5,0xE2,0xEB,0xEC,0xC1,0xC6,0xCF,0xC8,0xDD,0xDA,0xD3,0xD4,
+	0x69,0x6E,0x67,0x60,0x75,0x72,0x7B,0x7C,0x51,0x56,0x5F,0x58,0x4D,0x4A,0x43,0x44,
+	0x19,0x1E,0x17,0x10,0x05,0x02,0x0B,0x0C,0x21,0x26,0x2F,0x28,0x3D,0x3A,0x33,0x34,
+	0x4E,0x49,0x40,0x47,0x52,0x55,0x5C,0x5B,0x76,0x71,0x78,0x7F,0x6A,0x6D,0x64,0x63,
+	0x3E,0x39,0x30,0x37,0x22,0x25,0x2C,0x2B,0x06,0x01,0x08,0x0F,0x1A,0x1D,0x14,0x13,
+	0xAE,0xA9,0xA0,0xA7,0xB2,0xB5,0xBC,0xBB,0x96,0x91,0x98,0x9F,0x8A,0x8D,0x84,0x83,
+	0xDE,0xD9,0xD0,0xD7,0xC2,0xC5,0xCC,0xCB,0xE6,0xE1,0xE8,0xEF,0xFA,0xFD,0xF4,0xF3,
+};
+
+static Result CPP_Call(int argc) {
+	Result res;
+	if ((res = svcSendSyncRequest(cpp_handle))) return res;
+	return (Result)getThreadCommandBuffer()[1];
+}
 
 static Result CPP_Simple(u32 header, int argc, u32 arg) {
 	u32* cmd = getThreadCommandBuffer();
-	Result res;
 	cmd[0] = header;
 	if (argc) cmd[1] = arg;
+	return CPP_Call(argc);
+}
 
+#define CPP_Finalize()          CPP_Simple(IPC_MakeHeader(0x02, 0, 0), 0, 0)
+#define CPP_ClearRecv()         CPP_Simple(IPC_MakeHeader(0x03, 0, 0), 0, 0)
+#define CPP_ClearSend()         CPP_Simple(IPC_MakeHeader(0x04, 0, 0), 0, 0)
+#define CPP_RequireConnection() CPP_Simple(IPC_MakeHeader(0x06, 1, 0), 1, 1) // device 1 = Circle Pad Pro
+#define CPP_Disconnect()        CPP_Simple(IPC_MakeHeader(0x09, 0, 0), 0, 0)
+#define CPP_Release(count)      CPP_Simple(IPC_MakeHeader(0x19, 1, 0), 1, count)
+
+static Result CPP_GetEvent(int cmdId, Handle* out) {
+	u32* cmd = getThreadCommandBuffer();
+	Result res;
+	cmd[0] = IPC_MakeHeader(cmdId, 0, 0); // 0x0A = receive event, 0x0C = connection status event
+	*out   = 0;
 	if ((res = svcSendSyncRequest(cpp_handle))) return res;
+	*out = (Handle)cmd[3];
 	return (Result)cmd[1];
 }
 
 static Result CPP_InitShared(void) {
 	u32* cmd = getThreadCommandBuffer();
-	Result res;
 	cmd[0] = IPC_MakeHeader(0x18, 6, 2); // InitializeIrNopShared
 	cmd[1] = CPP_SHAREDMEM_SIZE;
 	cmd[2] = CPP_RECV_SIZE;
 	cmd[3] = CPP_RECV_PACKETS;
 	cmd[4] = CPP_SEND_SIZE;
 	cmd[5] = CPP_SEND_PACKETS;
-	cmd[6] = 4; // 96000 bps, what the Circle Pad Pro uses
+	cmd[6] = 4; // baud rate used by the Circle Pad Pro
 	cmd[7] = IPC_Desc_SharedHandles(1);
 	cmd[8] = cpp_memHandle;
-
-	if ((res = svcSendSyncRequest(cpp_handle))) return res;
-	return (Result)cmd[1];
+	return CPP_Call(6);
 }
 
-static Result CPP_Send(const u8* data, u32 size) {
+static Result CPP_Send(const void* data, u32 size) {
 	u32* cmd = getThreadCommandBuffer();
-	Result res;
 	cmd[0] = IPC_MakeHeader(0x0D, 1, 2); // SendIrNop
 	cmd[1] = size;
 	cmd[2] = IPC_Desc_StaticBuffer(size, 0);
 	cmd[3] = (u32)data;
-
-	if ((res = svcSendSyncRequest(cpp_handle))) return res;
-	return (Result)cmd[1];
+	return CPP_Call(1);
 }
 
-#define CPP_RequireConnection() CPP_Simple(IPC_MakeHeader(0x06, 1, 0), 1, 1) // device 1 = Circle Pad Pro
-#define CPP_Disconnect()        CPP_Simple(IPC_MakeHeader(0x09, 0, 0), 0, 0)
-#define CPP_Finalize()          CPP_Simple(IPC_MakeHeader(0x02, 0, 0), 0, 0)
-#define CPP_Release(count)      CPP_Simple(IPC_MakeHeader(0x19, 1, 0), 1, count)
+static void CPP_NextPacket(void) {
+	CPP_Release(1);
+	cpp_packetId = (cpp_packetId + 1) % CPP_RECV_PACKETS;
+}
+
+// Reads the payload of the next received packet into 'out'. Returns payload length, 0 if none/bad
+static int CPP_ReadPacket(u8* out, int maxLen) {
+	u8* table = cpp_mem + CPP_RECV_TABLE;
+	u8* data  = table + CPP_RECV_PACKETS * 8;
+	int dataSize = CPP_RECV_SIZE - CPP_RECV_PACKETS * 8;
+	u32 count = *(volatile u32*)(cpp_mem + 0x18);
+	u32 offset, size, i, pos;
+	u8 crc = 0, hdr[4];
+	int len, beg;
+
+	if (!count) return 0;
+	offset = *(volatile u32*)(table + cpp_packetId * 8 + 0);
+	size   = *(volatile u32*)(table + cpp_packetId * 8 + 4);
+
+	// the last byte is a CRC8 of everything before it, so the CRC of the whole packet is 0
+	for (i = 0; i < size; i++) crc = crc8_table[crc ^ data[(offset + i) % dataSize]];
+	if (crc || size < 4) { CPP_NextPacket(); return 0; }
+
+	for (i = 0; i < 4; i++) hdr[i] = data[(offset + i) % dataSize];
+	if (hdr[2] & 0x40) {
+		len = ((hdr[2] & 0x3F) << 8) | hdr[3]; beg = 4;
+	} else {
+		len = hdr[2] & 0x3F; beg = 3;
+	}
+	if (len > maxLen) len = maxLen;
+
+	for (i = 0; i < (u32)len; i++) 
+	{
+		pos    = offset + beg + i;
+		out[i] = data[pos % dataSize];
+	}
+	// release it only after copying, so the buffer never fills up
+	CPP_NextPacket();
+	return len;
+}
+
+// Sends a request and waits for the reply that starts with 'head'. 0 = ok, 1 = exit, -1 = no answer
+static int CPP_Exchange(const void* req, int reqLen, u8* resp, int respLen, Handle recvEvent, u8 head) {
+	Handle events[2] = { recvEvent, cpp_exitEvent };
+	s32 which;
+	Result res;
+	int i, tries;
+
+	for (tries = 0; tries < 4; tries++)
+	{
+		CPP_Send(req, reqLen);
+		res = svcWaitSynchronizationN(&which, events, 2, false, 20 * CPP_MS);
+		if (R_DESCRIPTION(res) == RD_TIMEOUT) continue;
+		if (which == 1) return 1;
+
+		// several packets may be waiting (e.g. late answers): use the one we asked for
+		for (i = 0; i < 8; i++) 
+		{
+			int n = CPP_ReadPacket(resp, respLen);
+			if (n == respLen && resp[0] == head) return 0;
+			if (!n && !*(volatile u32*)(cpp_mem + 0x18)) break;
+		}
+	}
+	return -1;
+}
+
+// Calibration candidates are 16 bytes: pad, 12 bit x offset, 12 bit y offset, float x scale,
+//  float y scale, 3 pad bytes, CRC8 of the first 15 bytes
+static cc_bool CPP_TryCalibration(const u8* c) {
+	u8 crc = 0;
+	int i;
+	for (i = 0; i < 15; i++) crc = crc8_table[crc ^ c[i]];
+	if (crc != c[15]) return false;
+
+	cpp_xOffset = c[1] | ((c[2] & 0x0F) << 8);
+	cpp_yOffset = (c[2] >> 4) | (c[3] << 4);
+	Mem_Copy((void*)&cpp_xScale, c + 4, 4);
+	Mem_Copy((void*)&cpp_yScale, c + 8, 4);
+	// guard against odd values, the stick must keep working
+	if (!(cpp_xScale > 0.2f && cpp_xScale < 5.0f)) cpp_xScale = 1.0f;
+	if (!(cpp_yScale > 0.2f && cpp_yScale < 5.0f)) cpp_yScale = 1.0f;
+	return true;
+}
+
+static void CPP_ResetState(void) {
+	cpp_connected = false;
+	cpp_buttons   = 0;
+	cpp_dx = 0; cpp_dy = 0;
+}
+
+static void CPP_ThreadFunc(void* arg) {
+	Handle connEvent = 0, recvEvent = 0, events[2];
+	s32 which;
+	Result res;
+	int i, ret;
+
+	for (;;)
+	{
+		// ---- 1) look for the accessory ----
+		cpp_stage = CPP_STAGE_SEARCHING;
+		for (;;)
+		{
+			cpp_packetId = 0;
+			CPP_InitShared();
+			CPP_GetEvent(0x0C, &connEvent);
+			CPP_GetEvent(0x0A, &recvEvent);
+			events[0] = connEvent; events[1] = cpp_exitEvent;
+
+			// a few quick tries, then wait a second
+			for (i = 0; i < 4; i++)
+			{
+				CPP_RequireConnection();
+				res = svcWaitSynchronizationN(&which, events, 2, false, 14 * CPP_MS);
+				if (R_DESCRIPTION(res) != RD_TIMEOUT) {
+					if (which == 0) goto connected;
+					goto exit;
+				}
+				CPP_Disconnect();
+			}
+			svcCloseHandle(connEvent); svcCloseHandle(recvEvent);
+			connEvent = recvEvent = 0;
+			CPP_Disconnect(); CPP_ClearRecv(); CPP_ClearSend(); CPP_Finalize();
+
+			if (svcWaitSynchronization(cpp_exitEvent, 1000 * CPP_MS) == 0) goto exit;
+		}
+
+	connected:
+		cpp_stage = CPP_STAGE_FOUND;
+		{
+			// ---- 2) calibration ----
+			u8 calReq[6] = { 0x02, 100, 0x00, 0x00, 0x40, 0x00 }; // head, response time, offset (LE), size (LE)
+			u8 calResp[5 + 4 * 16];
+			cc_bool calibrated = false;
+
+			ret = CPP_Exchange(calReq, 6, calResp, sizeof(calResp), recvEvent, 0x11);
+			if (ret == 1) goto exit;
+			if (ret == 0) {
+				for (i = 0; i < 4 && !calibrated; i++) calibrated = CPP_TryCalibration(calResp + 5 + i * 16);
+			}
+			// without calibration the stick still works, using the resting position as the centre
+			if (!calibrated) { cpp_xOffset = -1; cpp_xScale = cpp_yScale = 1.0f; }
+		}
+
+		// ---- 3) read the inputs ----
+		{
+			u8 inReq[3] = { 0x01, 0x20, 0x87 }; // head, response time, unknown (same as official games)
+			u8 in[6];
+			int x, y, fails = 0;
+
+			while (*(volatile u8*)(cpp_mem + 0x08) == 2) // connection status: 2 = connected
+			{
+				ret = CPP_Exchange(inReq, 3, in, 6, recvEvent, 0x10);
+				if (ret == 1) goto exit;
+				if (ret < 0) { if (++fails >= 3) break; continue; }
+				fails = 0;
+
+				x = in[1] | ((in[2] & 0x0F) << 8);
+				y = (in[2] >> 4) | (in[3] << 4);
+				if (cpp_xOffset < 0) { cpp_xOffset = x; cpp_yOffset = y; } // first reading = centre
+
+				{
+					int dx = (int)((x - cpp_xOffset) * cpp_xScale) / 8;
+					int dy = (int)((y - cpp_yOffset) * cpp_yScale) / 8;
+					u32 keys = 0;
+					if (!(in[4] & 0x20)) keys |= KEY_ZL; // bits are 1 when NOT pressed
+					if (!(in[4] & 0x40)) keys |= KEY_ZR;
+					if (!(in[4] & 0x80)) keys |= KEY_R;
+					cpp_dx = (s16)dx; cpp_dy = (s16)dy;
+					cpp_buttons   = keys;
+					cpp_connected = true;
+					cpp_stage     = CPP_STAGE_CONNECTED;
+				}
+			}
+		}
+
+		// lost it: tidy up and start searching again
+		CPP_ResetState();
+		cpp_stage = CPP_STAGE_LOST;
+		svcCloseHandle(connEvent); svcCloseHandle(recvEvent);
+		connEvent = recvEvent = 0;
+		CPP_Disconnect(); CPP_ClearRecv(); CPP_ClearSend(); CPP_Finalize();
+		if (svcWaitSynchronization(cpp_exitEvent, 500 * CPP_MS) == 0) goto exit;
+	}
+
+exit:
+	CPP_ResetState();
+	if (connEvent) svcCloseHandle(connEvent);
+	if (recvEvent) svcCloseHandle(recvEvent);
+	CPP_Disconnect(); CPP_ClearRecv(); CPP_ClearSend(); CPP_Finalize();
+}
 
 static void CPP_Init(void) {
 	Result res;
 	cpp_mem = (u8*)memalign(0x1000, CPP_SHAREDMEM_SIZE);
-	if (!cpp_mem) return;
+	if (!cpp_mem) { cpp_initStep = "memoria"; return; }
 	Mem_Set(cpp_mem, 0, CPP_SHAREDMEM_SIZE);
 
 	if ((res = srvGetServiceHandle(&cpp_handle, "ir:USER"))) {
-		cpp_initError = res; cpp_initStep = "servico";
-		Platform_Log1("ir:USER unavailable: %e", &res); return;
+		cpp_initError = res; cpp_initStep = "servico"; return;
 	}
 	if ((res = svcCreateMemoryBlock(&cpp_memHandle, (u32)cpp_mem, CPP_SHAREDMEM_SIZE,
 									MEMPERM_READ, MEMPERM_READWRITE))) {
-		cpp_initError = res; cpp_initStep = "memoria";
-		Platform_Log1("ir:USER memblock failed: %e", &res); return;
+		cpp_initError = res; cpp_initStep = "bloco"; return;
 	}
-	if ((res = CPP_InitShared())) {
-		cpp_initError = res; cpp_initStep = "iniciar";
-		Platform_Log1("ir:USER init failed: %e", &res); return;
+	if ((res = svcCreateEvent(&cpp_exitEvent, RESET_ONESHOT))) {
+		cpp_initError = res; cpp_initStep = "evento"; return;
 	}
-	cpp_state = CPP_IDLE;
+	// higher priority than the game (0x30) so the stick is read on time; it sleeps while waiting
+	cpp_thread = threadCreate(CPP_ThreadFunc, NULL, 0x2000, 0x28, -2, false);
+	if (!cpp_thread) { cpp_initStep = "thread"; return; }
 }
 
 static void CPP_Free(void) {
-	if (cpp_state == CPP_NONE) return;
-	CPP_Disconnect();
-	CPP_Finalize();
+	if (!cpp_thread) return;
+	svcSignalEvent(cpp_exitEvent);
+	threadJoin(cpp_thread, 200 * CPP_MS);
+	threadFree(cpp_thread);
+	cpp_thread = NULL;
+	svcCloseHandle(cpp_exitEvent);
 	svcCloseHandle(cpp_memHandle);
 	svcCloseHandle(cpp_handle);
-	cpp_state = CPP_NONE;
-}
-
-static void CPP_RequestInputs(void) {
-	// Request 1 = read inputs: [1, period in ms, unknown (what official games send)]
-	static u8 request[3] = { 1, 8, (8 + 2) << 2 };
-	CPP_Send(request, 3);
-	cpp_lastRequest = 0;
 }
 
 static void CPP_Announce(const char* msg) {
 	cc_string str = String_FromReadonly(msg);
-	if (!Gui.ScreensCount) return; // still in the launcher
 	Chat_AddOf(&str, MSG_TYPE_SMALLANNOUNCEMENT);
 }
 
-// Parses the payload of an IR packet that starts at 'offset' in the data area
-static void CPP_ParsePacket(u8* data, u32 dataSize, u32 offset, u32 length) {
-	u8 hdr[4], p[6];
-	u32 i, payloadBeg, payloadLen;
-	if (length < 4) return;
+// Shows in chat how far the connection got (called from the game thread)
+static void CPP_Update(void) {
+	int stage = cpp_stage;
+	if (!Gui.ScreensCount) return; // still in the launcher
 
-	for (i = 0; i < 4; i++) hdr[i] = data[(offset + i) % dataSize];
-	if (hdr[0] != 0xA5) return;
-
-	if (hdr[2] & 0x40) {
-		payloadBeg = 4;
-		payloadLen = ((hdr[2] & 0x3F) << 8) | hdr[3];
-	} else {
-		payloadBeg = 3;
-		payloadLen = hdr[2];
-	}
-	if (payloadLen != 6 || length < payloadBeg + payloadLen) return;
-
-	for (i = 0; i < 6; i++) p[i] = data[(offset + payloadBeg + i) % dataSize];
-	if (p[0] != 0x10) return; // not an input response
-
-	cpp_rawX    = p[1] | ((p[2] & 0x0F) << 8);
-	cpp_rawY    = (p[2] >> 4) | (p[3] << 4);
-	cpp_buttons = 0;
-	// Button bits are 1 when NOT pressed
-	if (!(p[4] & 0x20)) cpp_buttons |= KEY_ZL;
-	if (!(p[4] & 0x40)) cpp_buttons |= KEY_ZR;
-	if (!(p[4] & 0x80)) cpp_buttons |= KEY_R;
-
-	// The stick rests near 0x800, but every unit is slightly off, so
-	//  use the first reading as the centre when the stick is not being held
-	if (!cpp_centred) {
-		if (Math_AbsI(cpp_rawX - 0x800) < 0x180 && Math_AbsI(cpp_rawY - 0x800) < 0x180) {
-			cpp_centreX = cpp_rawX; cpp_centreY = cpp_rawY;
-		}
-		cpp_centred = true;
-	}
-	cpp_hasInput   = true;
-	cpp_lastPacket = 0;
-}
-
-static void CPP_ReadPackets(void) {
-	u8* recv  = cpp_mem + CPP_RECV_OFFSET;
-	u8* data  = recv + CPP_RECV_PACKETS * 8;
-	u32 dataSize = CPP_RECV_SIZE - CPP_RECV_PACKETS * 8;
-	u32 start = *(volatile u32*)(cpp_mem + 0x10);
-	u32 count = *(volatile u32*)(cpp_mem + 0x18);
-	u32 i, idx, offset, length;
-
-	if (!count) return;
-	if (count > CPP_RECV_PACKETS) count = CPP_RECV_PACKETS;
-
-	for (i = 0; i < count; i++)
-	{
-		idx    = (start + i) % CPP_RECV_PACKETS;
-		offset = *(u32*)(recv + idx * 8 + 0);
-		length = *(u32*)(recv + idx * 8 + 4);
-		CPP_ParsePacket(data, dataSize, offset % dataSize, length);
-	}
-	// Free up the receive buffer, otherwise new packets stop arriving
-	CPP_Release(count);
-}
-
-static void CPP_Reset(void) {
-	CPP_Disconnect();
-	cpp_state    = CPP_IDLE;
-	cpp_timer    = 0;
-	cpp_hasInput = false;
-	cpp_buttons  = 0;
-}
-
-static void CPP_Update(float delta) {
-	u8 status;
-	if (!cpp_toldInit && Gui.ScreensCount) {
+	if (!cpp_toldInit) {
 		cpp_toldInit = true;
 		if (cpp_initStep) {
 			cc_string msg; char buf[96];
@@ -365,65 +520,27 @@ static void CPP_Update(float delta) {
 			Chat_AddOf(&msg, MSG_TYPE_SMALLANNOUNCEMENT);
 		}
 	}
-	if (cpp_state == CPP_NONE) return;
-	status = *(volatile u8*)(cpp_mem + 0x08); // 0 = disconnected, 1 = connecting, 2 = connected
-	cpp_timer += delta;
+	if (stage == cpp_toldStage) return;
+	cpp_toldStage = stage;
 
-	switch (cpp_state)
-	{
-	case CPP_IDLE:
-		// Look for the accessory every 1.5 seconds
-		if (cpp_timer < 1.5f) break;
-		cpp_timer = 0;
-		if (!CPP_RequireConnection()) cpp_state = CPP_CONNECTING;
-		break;
-
-	case CPP_CONNECTING:
-		if (status == 2) {
-			if (!cpp_toldLink) CPP_Announce("&eCircle Pad Pro encontrado, lendo os botoes...");
-			cpp_toldLink = true;
-			cpp_state      = CPP_CONNECTED;
-			cpp_timer      = 0;
-			cpp_lastPacket = 0;
-			cpp_centred    = false;
-			CPP_RequestInputs();
-		} else if (cpp_timer > 3.0f) {
-			// the connection handshake can take a while on real hardware
-			CPP_Reset(); // nothing answered, try again later
-		}
-		break;
-
-	case CPP_CONNECTED:
-		cpp_lastPacket  += delta;
-		cpp_lastRequest += delta;
-		CPP_ReadPackets();
-
-		if (status != 2 || cpp_lastPacket > 2.0f) {
-			if (cpp_announced) CPP_Announce("&eCircle Pad Pro desconectado");
-			cpp_announced = false;
-			CPP_Reset();
-			break;
-		}
-		if (cpp_hasInput && !cpp_announced) {
-			CPP_Announce("&aCircle Pad Pro conectado: analogico direito gira a camera, ZL coloca, ZR quebra, L/R trocam o item");
-			cpp_announced = true;
-		}
-		// Keep reminding it that we are listening (also retries the first request)
-		if (cpp_lastRequest > (cpp_hasInput ? 0.5f : 0.1f)) CPP_RequestInputs();
-		break;
+	if (stage == CPP_STAGE_FOUND) {
+		CPP_Announce("&eCircle Pad Pro encontrado, calibrando...");
+	} else if (stage == CPP_STAGE_CONNECTED) {
+		CPP_Announce("&aCircle Pad Pro conectado: analogico direito gira a camera, ZL coloca, ZR quebra, L/R trocam o item");
+		cpp_announced = true;
+	} else if (stage == CPP_STAGE_LOST && cpp_announced) {
+		CPP_Announce("&eCircle Pad Pro desconectado, procurando de novo...");
 	}
 }
 
 // Fills in the Circle Pad Pro stick, in the same units as the normal Circle Pad (about -156 to 156)
 static void CPP_GetStick(circlePosition* pos) {
-	int dx = (cpp_rawX - cpp_centreX) / 8;
-	int dy = (cpp_rawY - cpp_centreY) / 8;
+	int dx = cpp_dx, dy = cpp_dy;
 	Math_Clamp(dx, -156, 156);
 	Math_Clamp(dy, -156, 156);
 	pos->dx = (s16)dx;
 	pos->dy = (s16)dy;
 }
-
 
 /*########################################################################################################################*
 *-------------------------------------------------------Gamepads----------------------------------------------------------*
@@ -519,12 +636,12 @@ void Gamepads_Process(float delta) {
 		irrstCstickRead(&stk_pos);
 		if (Math_AbsI(stk_pos.dx) > 24 || Math_AbsI(stk_pos.dy) > 24) rightStickSeen = true;
 	} else if (!isNew3DS) {
-		CPP_Update(delta);
-		if (cpp_state == CPP_CONNECTED && cpp_hasInput) {
+		CPP_Update();
+		if (cpp_connected) {
 			mods |= cpp_buttons;
 			CPP_GetStick(&stk_pos);
 		}
-		rightStickSeen = cpp_announced;
+		rightStickSeen = cpp_connected;
 	}
 	hidCircleRead(&hid_pos);
 

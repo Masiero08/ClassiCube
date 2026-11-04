@@ -405,7 +405,7 @@ static void CPP_Update(float delta) {
 			break;
 		}
 		if (cpp_hasInput && !cpp_announced) {
-			CPP_Announce("&aCircle Pad Pro conectado: Circle Pad anda, direcional da direita gira a camera");
+			CPP_Announce("&aCircle Pad Pro conectado: analogico direito gira a camera, ZL coloca, ZR quebra, L/R trocam o item");
 			cpp_announced = true;
 		}
 		// Keep reminding it that we are listening (also retries the first request)
@@ -536,6 +536,18 @@ void Gamepads_Process(float delta) {
 		ProcessCameraStick(port, &stk_pos, delta);
 	} else {
 		DPadToCamera(port, &mods, delta);
+	}
+
+	// With a right stick (Circle Pad Pro / New 3DS) ZL and ZR exist: then, like
+	//  console shooters, ZL places/uses, ZR breaks/attacks and L/R change the hotbar slot.
+	//  Without one, L/R keep placing/breaking (otherwise nothing could be broken)
+	if (rightStickSeen) {
+		u32 shoulders = mods & (KEY_L | KEY_R | KEY_ZL | KEY_ZR);
+		mods &= ~(KEY_L | KEY_R | KEY_ZL | KEY_ZR);
+		if (shoulders & KEY_ZL) mods |= KEY_L;  // place / use / eat
+		if (shoulders & KEY_ZR) mods |= KEY_R;  // break / attack
+		if (shoulders & KEY_L)  mods |= KEY_ZL; // hotbar left
+		if (shoulders & KEY_R)  mods |= KEY_ZR; // hotbar right
 	}
 	HandleButtons(port, mods);
 }

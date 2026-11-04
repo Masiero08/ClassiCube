@@ -70,7 +70,9 @@ int  Survival_GetCount(BlockID block);
 cc_string Survival_BlockName(BlockID block);
 
 /* Size of the data written by Survival_GetTools */
-#define SURVIVAL_TOOLS_SIZE 12
+/* Size of the tools data saved before tools became items */
+#define SURVIVAL_TOOLS_OLD_SIZE 12
+#define SURVIVAL_TOOLS_SIZE (SURVIVAL_TOOLS_OLD_SIZE + 16 * 2)
 
 /* Current health (0 to 20), for saving the world */
 int  Survival_GetHealth(void);

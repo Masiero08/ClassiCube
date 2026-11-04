@@ -464,6 +464,15 @@ void Gfx_UpdateTexture(GfxResourceID texId, int x, int y, struct Bitmap* part, i
 	FlushTexture(&tex->texture);
 }
 
+// For the diagnostics line in chat: where a texture lives (V = VRAM, L = linear, - = none)
+char Gfx_3DS_TexKind(GfxResourceID texId) {
+	struct GPUTexture* tex = (struct GPUTexture*)texId;
+	u32 addr;
+	if (!tex || !tex->texture.data) return '-';
+	addr = (u32)tex->texture.data;
+	return (addr >= 0x1F000000 && addr < 0x1F600000) ? 'V' : 'L';
+}
+
 void Gfx_DeleteTexture(GfxResourceID* texId) {
 	GPUTexture_Unref(texId);
 }

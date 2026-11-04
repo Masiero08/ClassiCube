@@ -10,6 +10,8 @@
 #include "../ExtMath.h"
 #include "../Gui.h"
 #include "../Chat.h"
+#include "../World.h"
+#include "../TexturePack.h"
 #include <malloc.h>
 
 #include <3ds.h>
@@ -607,6 +609,27 @@ static void ProcessCameraStick(int port, circlePosition* pos, float delta) {
 	Gamepad_SetAxis(port, PAD_AXIS_RIGHT, CameraCurve(pos->dx), -CameraCurve(pos->dy), delta);
 }
 
+// One line in chat with how the textures were loaded, to help find the purple textures
+char Gfx_3DS_TexKind(GfxResourceID texId);
+static cc_bool diagTold;
+static void ShowDiagnostics(void) {
+	cc_string msg; char buf[192];
+	int i, count = min(Atlas1D.Count, 8);
+	int linFree = (int)(linearSpaceFree() / 1024), vramFree = (int)(vramSpaceFree() / 1024);
+
+	if (diagTold || !World.Loaded || !Gui.ScreensCount) return;
+	diagTold = true;
+	String_InitArray(msg, buf);
+	String_Format3(&msg, "&7[diag] %s | atlas %ix%i |", &TexturePack_Path, &Atlas1D.Count, &Atlas1D.TilesPerAtlas);
+	for (i = 0; i < count; i++)
+	{
+		String_Format1(&msg, " %i:", &i);
+		String_Append(&msg, Gfx_3DS_TexKind(Atlas1D.TexIds[i]));
+	}
+	String_Format2(&msg, " | livre L%iK V%iK", &linFree, &vramFree);
+	Chat_Add(&msg);
+}
+
 // Set once the C-Stick (New 3DS) has been used or the Circle Pad Pro (Old 3DS) is connected
 static cc_bool rightStickSeen;
 
@@ -644,6 +667,7 @@ void Gamepads_Process(float delta) {
 		rightStickSeen = cpp_connected;
 	}
 	hidCircleRead(&hid_pos);
+	ShowDiagnostics();
 
 	// Circle Pad (left) always walks, like Resident Evil Revelations / Monster Hunter
 	ProcessCircleInput(port, PAD_AXIS_LEFT, &hid_pos, delta);

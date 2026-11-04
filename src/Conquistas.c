@@ -347,9 +347,10 @@ static void ToastScreen_BuildMesh(void* screen) {
 	struct ToastScreen* s = (struct ToastScreen*)screen;
 	struct VertexTextured* data;
 	int pad = Display_ScaleY(5), icone = s->height - pad * 2;
-	Screen_BuildMesh(screen);
 
 	s->iconCount = 0;
+	if (!s->vb) return; /* tela ja removida */
+	Screen_BuildMesh(screen);
 	if (!s->iconVb || toastAtual < 0) return;
 	data = (struct VertexTextured*)Gfx_LockDynamicVb(s->iconVb, VERTEX_FORMAT_TEXTURED, ISOMETRICDRAWER_MAXVERTICES);
 	IsometricDrawer_BeginBatch(data, s->iconState);

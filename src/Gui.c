@@ -369,6 +369,9 @@ void Gui_RenderGui(float delta) {
 	{
 		s = Gui_Screens[i];
 		s->VTABLE->Update(s, delta);
+		/* A screen may remove itself in Update (e.g. the achievement toast when */
+		/*  its time is up). Its buffers are gone then, so don't build or draw it */
+		if (i >= Gui.ScreensCount || Gui_Screens[i] != s) continue;
 
 		if (s->dirty) { s->VTABLE->BuildMesh(s); s->dirty = false; }
 		s->VTABLE->Render(s, delta);

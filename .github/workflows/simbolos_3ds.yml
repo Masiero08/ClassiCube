@@ -1,0 +1,49 @@
+name: Simbolos 3DS (debug)
+on:
+  push:
+    branches:
+      - claude/project-thread-8z6m4b
+      - debug-simbolos-src
+  workflow_dispatch:
+jobs:
+  build:
+    timeout-minutes: 10
+    runs-on: ubuntu-latest
+    container:
+      image: devkitpro/devkitarm:latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Compile
+        shell: bash
+        run: |
+          LATEST_FLAG=-DCC_COMMIT_SHA=\\\"${GITHUB_SHA::9}\\\"
+          make 3ds EXTRA_CFLAGS="$LATEST_FLAG"
+          mkdir -p dbg
+          $DEVKITARM/bin/arm-none-eabi-nm -n -S ClassiCube-3ds.elf > dbg/simbolos.txt
+          $DEVKITARM/bin/arm-none-eabi-objdump -d ClassiCube-3ds.elf > dbg/disasm.txt
+          gzip -9 dbg/disasm.txt
+          cp ClassiCube-3ds.elf dbg/ ; gzip -9 dbg/ClassiCube-3ds.elf
+          echo "${GITHUB_SHA}" > dbg/versao.txt
+      - uses: actions/upload-artifact@v7
+        with:
+          name: dbg
+          path: dbg
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v5
+        with:
+          name: dbg
+          path: dbg
+      - shell: bash
+        run: |
+          cd dbg
+          git init -q -b debug-simbolos
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          git add -A
+          git commit -q -m "Simbolos (${GITHUB_SHA::9})"
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" debug-simbolos

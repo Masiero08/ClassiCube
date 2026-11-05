@@ -289,6 +289,23 @@ static void UpdateHunger(struct Entity* e, float delta) {
 	}
 }
 
+/* Items the player has run out of (placed, eaten, used up, broken, stored away) leave the hotbar */
+void Survival_RemoveEmptyFromHotbar(void) {
+	cc_bool changed = false;
+	BlockID block;
+	int i;
+	if (!survival_active) return;
+
+	for (i = 0; i < INVENTORY_BLOCKS_PER_HOTBAR; i++)
+	{
+		block = Inventory_Get(i);
+		if (block == BLOCK_AIR || blockCounts[block] > 0) continue;
+		Inventory_Set(i, BLOCK_AIR);
+		changed = true;
+	}
+	if (changed) Event_RaiseVoid(&UserEvents.HeldBlockChanged);
+}
+
 static cc_bool Survival_Tick(struct ScheduledTask2* task) {
 	struct LocalPlayer* p = (struct LocalPlayer*)Entities.CurPlayer;
 	struct Entity* e;
@@ -296,6 +313,7 @@ static cc_bool Survival_Tick(struct ScheduledTask2* task) {
 
 	if (!survival_active || !World.Loaded || !p) return true;
 	e = &p->Base;
+	Survival_RemoveEmptyFromHotbar();
 	/* Stopped hitting the block being broken */
 	if (breakHits && Game.Time - lastHitTime > 0.5) { breakHits = 0; UpdateBreakText(0, 0); }
 	if (hurtCooldown > 0) hurtCooldown -= delta;

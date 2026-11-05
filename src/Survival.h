@@ -29,6 +29,8 @@ int  Survival_AttackDamage(void);
 /* Most of one item the player can carry */
 #define SURVIVAL_MAX_COUNT 999
 /* Takes some of the given block away from the player (e.g. put in a chest) */
+/* Clears hotbar slots holding items the player has none of */
+void Survival_RemoveEmptyFromHotbar(void);
 void Survival_TakeBlocks(BlockID block, int count);
 /* Whether the given item can be eaten on its own */
 cc_bool Survival_IsFood(BlockID block);

@@ -141,6 +141,7 @@ static void InventarioScreen_SetDefaultMessage(struct InventarioScreen* s) {
 
 static void InventarioScreen_Refresh(struct InventarioScreen* s) {
 	int i;
+	Survival_RemoveEmptyFromHotbar();
 	s->itemsCount = 0;
 	for (i = 1; i < BLOCK_COUNT; i++)
 	{

@@ -321,25 +321,31 @@ static int CPP_ReadPacket(u8* out, int maxLen) {
 	return len;
 }
 
-// Sends a request and waits for the reply that starts with 'head'. 0 = ok, 1 = exit, -1 = no answer
-static int CPP_Exchange(const void* req, int reqLen, u8* resp, int respLen, Handle recvEvent, u8 head) {
+// Counters shown in the diagnostics line, to see on the console how far the Circle Pad Pro got
+static volatile int cpp_dbgTimeouts, cpp_dbgBad, cpp_dbgOk, cpp_dbgHead = -1, cpp_dbgLen, cpp_dbgCal;
+
+// Sends a request and waits for the reply that starts with 'head' and has at least 'minLen' bytes.
+//  Returns the reply length (> 0), 0 = exit, -1 = no answer
+static int CPP_Exchange(const void* req, int reqLen, u8* resp, int respLen, int minLen, Handle recvEvent, u8 head) {
 	Handle events[2] = { recvEvent, cpp_exitEvent };
 	s32 which;
 	Result res;
-	int i, tries;
+	int i, n, tries;
 
 	for (tries = 0; tries < 4; tries++)
 	{
 		CPP_Send(req, reqLen);
 		res = svcWaitSynchronizationN(&which, events, 2, false, 20 * CPP_MS);
-		if (R_DESCRIPTION(res) == RD_TIMEOUT) continue;
-		if (which == 1) return 1;
+		if (R_DESCRIPTION(res) == RD_TIMEOUT) { cpp_dbgTimeouts++; continue; }
+		if (which == 1) return 0;
 
 		// several packets may be waiting (e.g. late answers): use the one we asked for
 		for (i = 0; i < 8; i++) 
 		{
-			int n = CPP_ReadPacket(resp, respLen);
-			if (n == respLen && resp[0] == head) return 0;
+			n = CPP_ReadPacket(resp, respLen);
+			if (n > 0) { cpp_dbgHead = resp[0]; cpp_dbgLen = n; }
+			if (n >= minLen && resp[0] == head) { cpp_dbgOk++; return n; }
+			if (n > 0) cpp_dbgBad++;
 			if (!n && !*(volatile u32*)(cpp_mem + 0x18)) break;
 		}
 	}
@@ -374,7 +380,7 @@ static void CPP_ThreadFunc(void* arg) {
 	Handle connEvent = 0, recvEvent = 0, events[2];
 	s32 which;
 	Result res;
-	int i, ret;
+	int i, j, ret;
 
 	for (;;)
 	{
@@ -414,11 +420,22 @@ static void CPP_ThreadFunc(void* arg) {
 			u8 calResp[5 + 4 * 16];
 			cc_bool calibrated = false;
 
-			ret = CPP_Exchange(calReq, 6, calResp, sizeof(calResp), recvEvent, 0x11);
-			if (ret == 1) goto exit;
-			if (ret == 0) {
-				for (i = 0; i < 4 && !calibrated; i++) calibrated = CPP_TryCalibration(calResp + 5 + i * 16);
+			ret = CPP_Exchange(calReq, 6, calResp, sizeof(calResp), 5 + 16, recvEvent, 0x11);
+			if (ret == 0) goto exit;
+			if (ret > 0) {
+				for (i = 0; i < 4 && 5 + i * 16 + 16 <= ret && !calibrated; i++) 
+					calibrated = CPP_TryCalibration(calResp + 5 + i * 16);
 			}
+			// like Red Viper: the calibration may also be stored at 0x400 + i
+			for (j = 0; ret > 0 && !calibrated && j < 0x40; j++)
+			{
+				calReq[2] = (u8)(0x400 + j); calReq[3] = (u8)((0x400 + j) >> 8);
+				ret = CPP_Exchange(calReq, 6, calResp, sizeof(calResp), 5 + 16, recvEvent, 0x11);
+				if (ret == 0) goto exit;
+				for (i = 0; i < 4 && 5 + i * 16 + 16 <= ret && !calibrated; i++) 
+					calibrated = CPP_TryCalibration(calResp + 5 + i * 16);
+			}
+			cpp_dbgCal = calibrated ? 1 : (ret > 0 ? 2 : 3);
 			// without calibration the stick still works, using the resting position as the centre
 			if (!calibrated) { cpp_xOffset = -1; cpp_xScale = cpp_yScale = 1.0f; }
 		}
@@ -431,8 +448,8 @@ static void CPP_ThreadFunc(void* arg) {
 
 			while (*(volatile u8*)(cpp_mem + 0x08) == 2) // connection status: 2 = connected
 			{
-				ret = CPP_Exchange(inReq, 3, in, 6, recvEvent, 0x10);
-				if (ret == 1) goto exit;
+				ret = CPP_Exchange(inReq, 3, in, 6, 5, recvEvent, 0x10);
+				if (ret == 0) goto exit;
 				if (ret < 0) { if (++fails >= 3) break; continue; }
 				fails = 0;
 
@@ -609,25 +626,42 @@ static void ProcessCameraStick(int port, circlePosition* pos, float delta) {
 	Gamepad_SetAxis(port, PAD_AXIS_RIGHT, CameraCurve(pos->dx), -CameraCurve(pos->dy), delta);
 }
 
-// One line in chat with how the textures were loaded, to help find the purple textures
+// Diagnostics shown on the top line of the HUD (next to the FPS), so any photo of
+//  the console shows how the terrain atlases were loaded and how far the Circle Pad Pro got
 char Gfx_3DS_TexKind(GfxResourceID texId);
-static cc_bool diagTold;
-static void ShowDiagnostics(void) {
-	cc_string msg; char buf[192];
-	int i, count = min(Atlas1D.Count, 8);
-	int linFree = (int)(linearSpaceFree() / 1024), vramFree = (int)(vramSpaceFree() / 1024);
+cc_uint32 Gfx_3DS_TexPhysKB(GfxResourceID texId);
+cc_uint32 Gfx_3DS_ReadTexel(GfxResourceID texId, int x, int y);
 
-	if (diagTold || !World.Loaded || !Gui.ScreensCount) return;
-	diagTold = true;
-	String_InitArray(msg, buf);
-	String_Format3(&msg, "&7[diag] %s | atlas %ix%i |", &TexturePack_Path, &Atlas1D.Count, &Atlas1D.TilesPerAtlas);
+void Window_3DS_DiagText(cc_string* str) {
+	int i, count = min(Atlas1D.Count, 4);
+	int linFree  = (int)(linearSpaceFree() / 1024), vramFree = (int)(vramSpaceFree() / 1024);
+	int size     = Atlas2D.TileSize, per = Atlas1D.TilesPerAtlas;
+	int stage = cpp_stage, cal = cpp_dbgCal, ok = cpp_dbgOk, to = cpp_dbgTimeouts;
+	int bad = cpp_dbgBad, head = cpp_dbgHead, len = cpp_dbgLen;
+
+	String_Format2(str, "%ix%i", &Atlas1D.Count, &per);
 	for (i = 0; i < count; i++)
 	{
-		String_Format1(&msg, " %i:", &i);
-		String_Append(&msg, Gfx_3DS_TexKind(Atlas1D.TexIds[i]));
+		GfxResourceID id = Atlas1D.TexIds[i];
+		int row  = per * 3 / 4; /* e.g. tile 176 (tall grass) in atlas 2 */
+		int tile = i * per + row;
+		int mb   = (int)(Gfx_3DS_TexPhysKB(id) >> 10);
+		cc_uint32 want = 0, got;
+
+		if (Atlas2D.Bmp.scan0 && Atlas2D_TileY(tile) < Atlas2D.RowsCount) {
+			want = Bitmap_GetPixel(&Atlas2D.Bmp, Atlas2D_TileX(tile) * size + size / 2,
+									Atlas2D_TileY(tile) * size + size / 2);
+		}
+		got = Gfx_3DS_ReadTexel(id, size / 2, row * size + size / 2);
+		String_Append(str, i ? ',' : ' ');
+		String_Append(str, Gfx_3DS_TexKind(id));
+		String_Format1(str, "%i", &mb);
+		String_Append(str, got == want ? '+' : 'x');
 	}
-	String_Format2(&msg, " | livre L%iK V%iK", &linFree, &vramFree);
-	Chat_Add(&msg);
+	String_Format2(str, " L%iK V%iK", &linFree, &vramFree);
+	String_Format4(str, " P%i c%i o%i t%i", &stage, &cal, &ok, &to);
+	String_Format3(str, " b%i h%i/%i", &bad, &head, &len);
+	if (cpp_mem) { int conn = cpp_mem[0x08]; String_Format1(str, " s%i", &conn); }
 }
 
 // Set once the C-Stick (New 3DS) has been used or the Circle Pad Pro (Old 3DS) is connected
@@ -667,7 +701,6 @@ void Gamepads_Process(float delta) {
 		rightStickSeen = cpp_connected;
 	}
 	hidCircleRead(&hid_pos);
-	ShowDiagnostics();
 
 	// Circle Pad (left) always walks, like Resident Evil Revelations / Monster Hunter
 	ProcessCircleInput(port, PAD_AXIS_LEFT, &hid_pos, delta);

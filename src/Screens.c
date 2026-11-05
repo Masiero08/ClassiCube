@@ -110,6 +110,13 @@ static void HUDScreen_RemakeLine1(struct HUDScreen* s) {
 		String_Format1(&status, "%i fps, ", &fps);
 	}
 
+#ifdef CC_BUILD_3DS
+	/* 3DS test builds: show texture/Circle Pad Pro diagnostics instead of the vertex count */
+	{
+		extern void Window_3DS_DiagText(cc_string* str);
+		Window_3DS_DiagText(&status);
+	}
+#else
 	if (Game_ClassicMode) {
 		String_Format1(&status, "%i chunk updates", &Game.ChunkUpdates);
 	} else {
@@ -123,6 +130,7 @@ static void HUDScreen_RemakeLine1(struct HUDScreen* s) {
 		ping = Ping_AveragePingMS();
 		if (ping) String_Format1(&status, ", ping %i ms", &ping);
 	}
+#endif
 	TextWidget_Set(&s->line1, &status, &s->font);
 	s->dirty = true;
 }

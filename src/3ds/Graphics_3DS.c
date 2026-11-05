@@ -473,6 +473,27 @@ char Gfx_3DS_TexKind(GfxResourceID texId) {
 	return (addr >= 0x1F000000 && addr < 0x1F600000) ? 'V' : 'L';
 }
 
+// For the diagnostics line: physical address of a texture in KB (0 = none)
+cc_uint32 Gfx_3DS_TexPhysKB(GfxResourceID texId) {
+	struct GPUTexture* tex = (struct GPUTexture*)texId;
+	if (!tex || !tex->texture.data) return 0;
+	return osConvertVirtToPhys(tex->texture.data) >> 10;
+}
+
+// For the diagnostics line: reads back one pixel the way the GPU addresses it
+cc_uint32 Gfx_3DS_ReadTexel(GfxResourceID texId, int x, int y) {
+	struct GPUTexture* tex = (struct GPUTexture*)texId;
+	unsigned maskX, maskY, X = 0, Y = 0;
+	int i;
+	if (!tex || !tex->texture.data) return 0;
+	if (x >= tex->texture.width || y >= tex->texture.height) return 0;
+
+	TwiddleCalcFactors(tex->texture.width, tex->texture.height, &maskX, &maskY);
+	for (i = 0; i < x; i++) X = (X - maskX) & maskX;
+	for (i = 0; i < y; i++) Y = (Y - maskY) & maskY;
+	return ((cc_uint32*)tex->texture.data)[X | (maskY - Y)];
+}
+
 void Gfx_DeleteTexture(GfxResourceID* texId) {
 	GPUTexture_Unref(texId);
 }

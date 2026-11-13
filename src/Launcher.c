@@ -288,6 +288,15 @@ cc_bool Launcher_Tick(void) {
 
 	Launcher_Active->Tick(Launcher_Active);
 	LBackend_Tick();
+#ifdef CC_AUTOTEST
+	/* Emulator test builds (CI): skip the menus and go straight into a new world */
+	{
+		static int autotestTicks;
+		static const cc_string autotestUser = String_FromConst("Teste");
+		if (++autotestTicks == 150)
+			Launcher_StartGame(&autotestUser, &String_Empty, &String_Empty, &String_Empty, &String_Empty, 1);
+	}
+#endif
 	return true;
 }
 

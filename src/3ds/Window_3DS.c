@@ -175,8 +175,8 @@ static cc_bool isNew3DS;
 // The protocol (as used by official games, and by Red Viper / tristangnl's homebrew example):
 //  1) InitializeIrNopShared, then RequireConnection(1) and wait on the connection status event
 //  2) ask for the calibration data (request 0x02 -> response 0x11)
-//  3) then, over and over: send an input request (0x01) and wait for ONE input response (0x10).
-//     The accessory answers each request once; it does not stream on its own.
+//  3) send the input request (0x01, sets the polling period) and read the input reports (0x10)
+//     as they arrive; the request is only sent again when the reports stop coming.
 // Everything runs on a background thread with blocking waits, so the game loop never stalls.
 // Protocol details: https://www.3dbrew.org/wiki/Circle_Pad_Pro and https://www.3dbrew.org/wiki/IR_Services
 #define CPP_MS 1000000LL
@@ -296,6 +296,10 @@ static int CPP_ReadPacket(u8* out, int maxLen) {
 	int len, beg;
 
 	if (!count) return 0;
+	// ir:USER keeps the index of the oldest packet at 0x10: a local counter could drift
+	//  (e.g. when packets were dropped because the buffer was full) and then every read
+	//  would hit a stale entry, fail its CRC and the accessory looked silent
+	cpp_packetId = *(volatile u32*)(cpp_mem + 0x10) % CPP_RECV_PACKETS;
 	offset = *(volatile u32*)(table + cpp_packetId * 8 + 0);
 	size   = *(volatile u32*)(table + cpp_packetId * 8 + 4);
 
@@ -324,30 +328,52 @@ static int CPP_ReadPacket(u8* out, int maxLen) {
 // Counters shown in the diagnostics line, to see on the console how far the Circle Pad Pro got
 static volatile int cpp_dbgTimeouts, cpp_dbgBad, cpp_dbgOk, cpp_dbgHead = -1, cpp_dbgLen, cpp_dbgCal;
 
-// Sends a request and waits for the reply that starts with 'head' and has at least 'minLen' bytes.
-//  Returns the reply length (> 0), 0 = exit, -1 = no answer
-static int CPP_Exchange(const void* req, int reqLen, u8* resp, int respLen, int minLen, Handle recvEvent, u8 head) {
+#define CPP_TICKS_PER_MS 268111ULL // SYSCLOCK_ARM11 / 1000
+
+// Waits up to 'ms' for a received packet that starts with 'head' and has at least 'minLen' bytes.
+//  Other packets that arrive meanwhile are read and dropped.
+//  Returns the reply length (> 0), 0 = exit requested, -1 = nothing in time
+static int CPP_WaitFor(u8* resp, int respLen, int minLen, Handle recvEvent, u8 head, int ms) {
 	Handle events[2] = { recvEvent, cpp_exitEvent };
+	u64 end = svcGetSystemTick() + (u64)ms * CPP_TICKS_PER_MS;
 	s32 which;
 	Result res;
-	int i, n, tries;
+	int i, n;
 
-	for (tries = 0; tries < 4; tries++)
+	for (;;)
 	{
-		CPP_Send(req, reqLen);
-		res = svcWaitSynchronizationN(&which, events, 2, false, 20 * CPP_MS);
-		if (R_DESCRIPTION(res) == RD_TIMEOUT) { cpp_dbgTimeouts++; continue; }
-		if (which == 1) return 0;
-
-		// several packets may be waiting (e.g. late answers): use the one we asked for
-		for (i = 0; i < 8; i++) 
+		// several packets may be waiting (e.g. a late answer to an earlier request)
+		for (i = 0; i < 16 && *(volatile u32*)(cpp_mem + 0x18); i++)
 		{
 			n = CPP_ReadPacket(resp, respLen);
-			if (n > 0) { cpp_dbgHead = resp[0]; cpp_dbgLen = n; }
+			if (n <= 0) continue;
+			cpp_dbgHead = resp[0]; cpp_dbgLen = n;
 			if (n >= minLen && resp[0] == head) { cpp_dbgOk++; return n; }
-			if (n > 0) cpp_dbgBad++;
-			if (!n && !*(volatile u32*)(cpp_mem + 0x18)) break;
+			cpp_dbgBad++;
 		}
+
+		u64 now = svcGetSystemTick();
+		if (now >= end) { cpp_dbgTimeouts++; return -1; }
+		u64 left = (end - now) / CPP_TICKS_PER_MS + 1;
+		if (left > 50) left = 50;
+
+		res = svcWaitSynchronizationN(&which, events, 2, false, (s64)left * CPP_MS);
+		if (res == 0 && which == 1) return 0;
+	}
+}
+
+// Sends a request and waits for its reply. The old version gave up after 20 ms, but the
+//  accessory only answers after the response time written in the request (100 ms for the
+//  calibration, 32 ms for the inputs): every reply came too late, it re-sent the request
+//  (which restarts the accessory's timer) and the Circle Pad Pro looked stuck at
+//  "calibrando" or never connected
+static int CPP_Exchange(const void* req, int reqLen, u8* resp, int respLen, int minLen, Handle recvEvent, u8 head, int ms) {
+	int tries, ret;
+	for (tries = 0; tries < 3; tries++)
+	{
+		CPP_Send(req, reqLen);
+		ret = CPP_WaitFor(resp, respLen, minLen, recvEvent, head, ms);
+		if (ret >= 0) return ret;
 	}
 	return -1;
 }
@@ -420,17 +446,17 @@ static void CPP_ThreadFunc(void* arg) {
 			u8 calResp[5 + 4 * 16];
 			cc_bool calibrated = false;
 
-			ret = CPP_Exchange(calReq, 6, calResp, sizeof(calResp), 5 + 16, recvEvent, 0x11);
+			ret = CPP_Exchange(calReq, 6, calResp, sizeof(calResp), 5 + 16, recvEvent, 0x11, 400);
 			if (ret == 0) goto exit;
 			if (ret > 0) {
 				for (i = 0; i < 4 && 5 + i * 16 + 16 <= ret && !calibrated; i++) 
 					calibrated = CPP_TryCalibration(calResp + 5 + i * 16);
 			}
 			// like Red Viper: the calibration may also be stored at 0x400 + i
-			for (j = 0; ret > 0 && !calibrated && j < 0x40; j++)
+			for (j = 0; ret > 0 && !calibrated && j < 4; j++)
 			{
-				calReq[2] = (u8)(0x400 + j); calReq[3] = (u8)((0x400 + j) >> 8);
-				ret = CPP_Exchange(calReq, 6, calResp, sizeof(calResp), 5 + 16, recvEvent, 0x11);
+				calReq[2] = (u8)(0x400 + j * 0x10); calReq[3] = (u8)((0x400 + j * 0x10) >> 8);
+				ret = CPP_Exchange(calReq, 6, calResp, sizeof(calResp), 5 + 16, recvEvent, 0x11, 400);
 				if (ret == 0) goto exit;
 				for (i = 0; i < 4 && 5 + i * 16 + 16 <= ret && !calibrated; i++) 
 					calibrated = CPP_TryCalibration(calResp + 5 + i * 16);
@@ -446,11 +472,18 @@ static void CPP_ThreadFunc(void* arg) {
 			u8 in[6];
 			int x, y, fails = 0;
 
+			// The request sets the polling period (byte 1, in ms): the accessory then keeps
+			//  sending input reports on its own. Only ask again when they stop coming
+			CPP_Send(inReq, 3);
 			while (*(volatile u8*)(cpp_mem + 0x08) == 2) // connection status: 2 = connected
 			{
-				ret = CPP_Exchange(inReq, 3, in, 6, 5, recvEvent, 0x10);
+				ret = CPP_WaitFor(in, 6, 5, recvEvent, 0x10, 100);
 				if (ret == 0) goto exit;
-				if (ret < 0) { if (++fails >= 3) break; continue; }
+				if (ret < 0) {
+					if (++fails >= 20) break; // about 2 seconds without any report
+					CPP_Send(inReq, 3);
+					continue;
+				}
 				fails = 0;
 
 				x = in[1] | ((in[2] & 0x0F) << 8);

@@ -1,0 +1,96 @@
+name: Teste no emulador (3DS)
+# Compila uma versao de teste (entra direto num mundo) e tira fotos da tela no emulador
+on:
+  push:
+    branches:
+      - claude/project-thread-yidpyz
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.ref }}-emulador
+  cancel-in-progress: true
+
+jobs:
+  build:
+    timeout-minutes: 15
+    runs-on: ubuntu-latest
+    container:
+      image: devkitpro/devkitarm:latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Compile 3DS test build
+        shell: bash
+        run: |
+          make 3ds EXTRA_CFLAGS="-DCC_AUTOTEST"
+          mkdir -p out && cp ClassiCube-3ds.3dsx out/
+      - uses: actions/upload-artifact@v7
+        with:
+          name: teste-3dsx
+          path: out
+
+  emulator:
+    needs: build
+    timeout-minutes: 25
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v5
+        with:
+          name: teste-3dsx
+          path: out
+      - name: Install emulator
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q xvfb imagemagick libfuse2 mesa-utils libgl1-mesa-dri libegl1 libxkbcommon-x11-0 libxcb-cursor0 libxcb-icccm4 libxcb-keysyms1 libxcb-shape0 libxcb-xinerama0 libxcb-randr0 libxcb-render-util0 libxcb-image0 xdotool
+          URL=$(gh api repos/azahar-emu/azahar/releases/latest --jq '.assets[].browser_download_url' | grep -i appimage | grep -vi room | head -1)
+          echo "Downloading $URL"
+          curl -sSL -o emu.dl "$URL"
+          file emu.dl
+          case "$URL" in
+            *.tar.gz) tar xzf emu.dl; APP=$(find . -name '*.AppImage' -not -path './out/*' | head -1);;
+            *.zip) unzip -q emu.dl; APP=$(find . -name '*.AppImage' | head -1);;
+            *) APP=emu.dl;;
+          esac
+          chmod +x "$APP"
+          "$APP" --appimage-extract >/dev/null
+          ls squashfs-root
+      - name: Prepare SD card
+        shell: bash
+        run: |
+          SD=$HOME/.local/share/azahar-emu/sdmc/3ds/ClassiCube
+          mkdir -p $SD/texpacks $SD/audio
+          cp misc/remaster/remaster.zip $SD/texpacks/classicube.zip
+          cp misc/cc_textures.zip       $SD/texpacks/classico.zip
+          cp misc/sons/saida/classicube.zip $SD/audio/classicube.zip || true
+          mkdir -p $HOME/.config/azahar-emu
+          printf '[Renderer]\ngraphics_api=0\ngraphics_api\\default=false\n[UI]\nfirstStart=false\nfirstStart\\default=false\ncheck_for_update_on_start=false\ncheck_for_update_on_start\\default=false\n' > $HOME/.config/azahar-emu/qt-config.ini
+      - name: Run and take screenshots
+        shell: bash
+        run: |
+          mkdir -p fotos
+          export LIBGL_ALWAYS_SOFTWARE=1 QT_QPA_PLATFORM=xcb
+          Xvfb :99 -screen 0 1280x960x24 & sleep 2
+          export DISPLAY=:99
+          BIN=$(ls squashfs-root/usr/bin/ | grep -i azahar | grep -vi room | head -1)
+          squashfs-root/usr/bin/$BIN out/ClassiCube-3ds.3dsx > fotos/emulador.log 2>&1 &
+          for t in 20 45 70 100 140 180; do
+            sleep $((t - ${prev:-0})); prev=$t
+            import -window root fotos/tela-${t}s.png || true
+          done
+          ls -la fotos; tail -50 fotos/emulador.log || true
+      - name: Publish screenshots
+        if: always()
+        shell: bash
+        run: |
+          cd fotos
+          git init -q -b teste-emulador
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          git add -A
+          git commit -q -m "Fotos do emulador (${GITHUB_SHA::9})"
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" teste-emulador

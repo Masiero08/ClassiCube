@@ -174,7 +174,7 @@ input[type="checkbox"] {
   padding: 4px 0;
 }
 
-input[type="text"], textarea {
+input[type="text"], input[type="time"], textarea {
   width: 100%;
   font: inherit;
   color: var(--text);
@@ -184,7 +184,7 @@ input[type="text"], textarea {
   padding: 10px 12px;
 }
 
-input[type="text"]:focus, textarea:focus {
+input[type="text"]:focus, input[type="time"]:focus, textarea:focus {
   outline: none;
   border-color: var(--accent);
   background: var(--surface);
@@ -317,6 +317,46 @@ textarea { resize: vertical; min-height: 84px; }
   display: flex;
   gap: 8px;
   margin-top: 10px;
+}
+
+.addrow input[type="time"] { width: 7.2em; flex: none; padding-left: 8px; padding-right: 4px; }
+.addrow input[type="text"] { min-width: 0; }
+
+ol.routine {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.routine li {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 8px 10px;
+  margin: 0 -10px;
+  border-radius: 10px;
+}
+
+.time {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  flex: none;
+}
+
+.routine .what { flex: 1; min-width: 0; }
+.routine li.past { color: var(--muted); }
+.routine li.now { background: var(--accent-soft); }
+
+.badge {
+  flex: none;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--accent-text);
+  background: var(--accent);
+  border-radius: 99px;
+  padding: 2px 8px;
 }
 
 .stats {

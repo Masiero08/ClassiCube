@@ -11,7 +11,7 @@ Funciona no celular, pode ser instalado na tela inicial e funciona offline. Os d
 
 | Aba | O que tem |
 | --- | --- |
-| **Hoje** | Projeto do mês, prioridades da semana e restrições em destaque; checklist das alavancas diárias; 3 prioridades do dia; energia (1–5); pergunta do dia com espaço para escrever. Dá para navegar pelos dias anteriores. |
+| **Hoje** | Projeto do mês, prioridades da semana e restrições em destaque; rotina do dia com horários (destaca o bloco atual); checklist das alavancas diárias; 3 prioridades do dia; energia (1–5); pergunta do dia com espaço para escrever. Dá para navegar pelos dias anteriores. |
 | **Visão** | Antivisão, visão, meta de 1 ano, projeto do mês, restrições e o editor das alavancas diárias. |
 | **Semana** | 3 prioridades da semana, checklist do reset (editável), revisão (o que deu certo, o que não funcionou, o que mudar) e resumo da semana. |
 | **Progresso** | Dias seguidos com todas as alavancas feitas, recorde, mapa das últimas 12 semanas, desempenho de cada alavanca em 30 dias, backup (exportar e importar JSON). |

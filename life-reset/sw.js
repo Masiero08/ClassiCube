@@ -1,5 +1,5 @@
 // Service worker: rede primeiro (para receber atualizações), cache como reserva offline.
-const CACHE = 'life-reset-v1';
+const CACHE = 'life-reset-v2';
 const ASSETS = [
   './',
   './index.html',

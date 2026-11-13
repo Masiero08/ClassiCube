@@ -54,6 +54,17 @@ const DEFAULT_STEPS = [
   'Reservar um tempo de descanso de verdade'
 ];
 
+const DEFAULT_ROUTINE = [
+  ['06:30', 'Acordar, beber água, sem celular'],
+  ['07:00', 'Treino ou movimento'],
+  ['08:00', 'Bloco de foco: projeto do mês'],
+  ['12:00', 'Almoço e pausa'],
+  ['13:30', 'Trabalho'],
+  ['18:30', 'Tempo livre, família e amigos'],
+  ['22:00', 'Revisar o dia e desligar as telas'],
+  ['23:00', 'Dormir']
+];
+
 const TITLES = { hoje: 'Hoje', visao: 'Visão', semana: 'Reset semanal', progresso: 'Progresso' };
 
 /* ---------- Utilidades ---------- */
@@ -92,6 +103,7 @@ function defaults() {
     vision: { antiVision: '', vision: '', yearGoal: '', monthProject: '', constraints: '' },
     levers: DEFAULT_LEVERS.map((text) => ({ id: uid(), text })),
     weeklySteps: DEFAULT_STEPS.map((text) => ({ id: uid(), text })),
+    routine: DEFAULT_ROUTINE.map(([time, text]) => ({ id: uid(), time, text })),
     days: {},
     weeks: {}
   };
@@ -106,6 +118,7 @@ function normalize(s) {
     vision: { ...def.vision, ...(s.vision || {}) },
     levers: Array.isArray(s.levers) ? s.levers : def.levers,
     weeklySteps: Array.isArray(s.weeklySteps) ? s.weeklySteps : def.weeklySteps,
+    routine: Array.isArray(s.routine) ? s.routine : def.routine,
     days: s.days && typeof s.days === 'object' ? s.days : {},
     weeks: s.weeks && typeof s.weeks === 'object' ? s.weeks : {}
   };
@@ -163,6 +176,7 @@ let tab = location.hash.slice(1) || 'hoje';
 let viewDate = new Date();
 let viewWeek = new Date();
 let editSteps = false;
+let editRoutine = false;
 
 function render() {
   if (!TITLES[tab]) tab = 'hoje';
@@ -217,6 +231,8 @@ function renderHoje() {
 
     ${focus}
 
+    ${renderRoutine(k === today)}
+
     <section class="card">
       <div class="card-head"><h2>Alavancas diárias</h2><span class="count">${done}/${total}</span></div>
       <div class="bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}"><span style="width:${pct}%"></span></div>
@@ -251,6 +267,48 @@ function renderHoje() {
       <h2>Pergunta do dia</h2>
       <p class="prompt">${esc(prompt)}</p>
       <textarea data-field="note" rows="4" placeholder="Escreva livremente…" aria-label="Resposta da pergunta do dia">${esc(d.note)}</textarea>
+    </section>`;
+}
+
+/* ---------- Rotina ---------- */
+
+const nowHM = () => { const d = new Date(); return `${pad(d.getHours())}:${pad(d.getMinutes())}`; };
+
+function renderRoutine(isToday) {
+  const blocks = [...state.routine].sort((a, b) => a.time.localeCompare(b.time));
+  let current = -1;
+  if (isToday) {
+    const now = nowHM();
+    blocks.forEach((b, i) => { if (b.time <= now) current = i; });
+  }
+
+  const body = editRoutine
+    ? `<ul class="editlist">${blocks.map((b) => `
+        <li><span><b class="time">${esc(b.time)}</b> ${esc(b.text)}</span>
+          <button class="icon-btn sm danger" data-act="del-block" data-id="${esc(b.id)}" aria-label="Remover">✕</button></li>`).join('')}
+      </ul>
+      <form class="addrow" data-form="add-block">
+        <input type="time" name="h" required aria-label="Horário">
+        <input type="text" name="t" placeholder="Atividade" maxlength="80" required aria-label="Atividade">
+        <button class="btn">Adicionar</button>
+      </form>`
+    : blocks.length
+      ? `<ol class="routine">${blocks.map((b, i) => `
+          <li class="${i === current ? 'now' : i < current ? 'past' : ''}">
+            <span class="time">${esc(b.time)}</span>
+            <span class="what">${esc(b.text)}</span>
+            ${i === current ? '<span class="badge">agora</span>' : ''}
+          </li>`).join('')}
+        </ol>`
+      : '<p class="muted">Nenhum bloco ainda. Toque em Editar para montar sua rotina.</p>';
+
+  return `
+    <section class="card">
+      <div class="card-head">
+        <h2>Rotina do dia</h2>
+        <button class="link" data-act="edit-routine">${editRoutine ? 'Concluir edição' : 'Editar'}</button>
+      </div>
+      ${body}
     </section>`;
 }
 
@@ -512,6 +570,16 @@ app.addEventListener('click', (e) => {
     case 'this-week':
       viewWeek = new Date();
       break;
+    case 'edit-routine':
+      editRoutine = !editRoutine;
+      break;
+    case 'del-block': {
+      const b = state.routine.find((x) => x.id === el.dataset.id);
+      if (!b || !confirm(`Remover "${b.time} ${b.text}" da rotina?`)) return;
+      state.routine = state.routine.filter((x) => x.id !== b.id);
+      save();
+      break;
+    }
     case 'edit-steps':
       editSteps = !editSteps;
       break;
@@ -579,6 +647,11 @@ app.addEventListener('submit', (e) => {
   const kind = form.dataset.form;
   if (kind === 'add-lever') state.levers.push({ id: uid(), text });
   else if (kind === 'add-step') state.weeklySteps.push({ id: uid(), text });
+  else if (kind === 'add-block') {
+    const time = form.elements.h.value;
+    if (!/^\d{2}:\d{2}$/.test(time)) return;
+    state.routine.push({ id: uid(), time, text });
+  }
   save();
   render();
   const input = app.querySelector(`form[data-form="${kind}"] input`);
@@ -630,6 +703,13 @@ function toast(msg) {
 }
 
 /* ---------- Ciclo de vida ---------- */
+
+// Atualiza o bloco "agora" da rotina a cada minuto, sem atrapalhar quem está digitando.
+setInterval(() => {
+  const a = document.activeElement;
+  const typing = a && app.contains(a) && /^(INPUT|TEXTAREA)$/.test(a.tagName);
+  if (tab === 'hoje' && !document.hidden && !typing && !editRoutine) render();
+}, 60000);
 
 let lastSeenDay = dkey(new Date());
 

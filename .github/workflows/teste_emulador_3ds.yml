@@ -54,11 +54,11 @@ jobs:
           case "$URL" in
             *.tar.gz) tar xzf emu.dl; APP=$(find . -name '*.AppImage' -not -path './out/*' | head -1);;
             *.zip) unzip -q emu.dl; APP=$(find . -name '*.AppImage' | head -1);;
-            *) APP=emu.dl;;
+            *) APP=./emu.dl;;
           esac
           chmod +x "$APP"
           "$APP" --appimage-extract >/dev/null
-          ls squashfs-root
+          ls squashfs-root squashfs-root/usr/bin
       - name: Prepare SD card
         shell: bash
         run: |
@@ -77,6 +77,8 @@ jobs:
           Xvfb :99 -screen 0 1280x960x24 & sleep 2
           export DISPLAY=:99
           BIN=$(ls squashfs-root/usr/bin/ | grep -i azahar | grep -vi room | head -1)
+          echo "binary: $BIN"
+          ls squashfs-root/usr/bin/ > fotos/bins.txt
           squashfs-root/usr/bin/$BIN out/ClassiCube-3ds.3dsx > fotos/emulador.log 2>&1 &
           for t in 20 45 70 100 140 180; do
             sleep $((t - ${prev:-0})); prev=$t
@@ -87,7 +89,7 @@ jobs:
         if: always()
         shell: bash
         run: |
-          cd fotos
+          mkdir -p fotos && cd fotos
           git init -q -b teste-emulador
           git config user.name "github-actions"
           git config user.email "github-actions@users.noreply.github.com"

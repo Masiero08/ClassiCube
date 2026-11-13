@@ -68,19 +68,19 @@ jobs:
           cp misc/cc_textures.zip       $SD/texpacks/classico.zip
           cp misc/sons/saida/classicube.zip $SD/audio/classicube.zip || true
           mkdir -p $HOME/.config/azahar-emu
-          printf '[Renderer]\ngraphics_api=0\ngraphics_api\\default=false\n[UI]\nfirstStart=false\nfirstStart\\default=false\ncheck_for_update_on_start=false\ncheck_for_update_on_start\\default=false\n' > $HOME/.config/azahar-emu/qt-config.ini
+          printf '[Renderer]\ngraphics_api=1\ngraphics_api\\default=false\n[Core]\nuse_cpu_jit=false\nuse_cpu_jit\\default=false\n[UI]\nfirstStart=false\nfirstStart\\default=false\ncheck_for_update_on_start=false\ncheck_for_update_on_start\\default=false\n' > $HOME/.config/azahar-emu/qt-config.ini
       - name: Run and take screenshots
         shell: bash
         run: |
           mkdir -p fotos
-          export LIBGL_ALWAYS_SOFTWARE=1 QT_QPA_PLATFORM=xcb
+          export LIBGL_ALWAYS_SOFTWARE=1 QT_QPA_PLATFORM=xcb MESA_GL_VERSION_OVERRIDE=4.6 MESA_GLSL_VERSION_OVERRIDE=460
           Xvfb :99 -screen 0 1280x960x24 & sleep 2
           export DISPLAY=:99
           BIN=$(ls squashfs-root/usr/bin/ | grep -i azahar | grep -vi room | head -1)
           echo "binary: $BIN"
           ls squashfs-root/usr/bin/ > fotos/bins.txt
           LD_LIBRARY_PATH=squashfs-root/usr/lib ldd squashfs-root/usr/bin/$BIN | grep 'not found' >> fotos/bins.txt || true
-          squashfs-root/usr/bin/$BIN out/ClassiCube-3ds.3dsx > fotos/emulador.log 2>&1 &
+          (cd squashfs-root && ./AppRun ../out/ClassiCube-3ds.3dsx) > fotos/emulador.log 2>&1 &
           for t in 20 45 70 100 140 180; do
             sleep $((t - ${prev:-0})); prev=$t
             import -window root fotos/tela-${t}s.png || true

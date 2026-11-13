@@ -46,7 +46,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           sudo apt-get update -q
-          sudo apt-get install -y -q xvfb imagemagick libfuse2 mesa-utils libgl1-mesa-dri libegl1 libxkbcommon-x11-0 libxcb-cursor0 libxcb-icccm4 libxcb-keysyms1 libxcb-shape0 libxcb-xinerama0 libxcb-randr0 libxcb-render-util0 libxcb-image0 xdotool
+          sudo apt-get install -y -q xvfb imagemagick libfuse2 mesa-utils libgl1-mesa-dri libegl1 libopengl0 libglx-mesa0 libegl-mesa0 libvulkan1 mesa-vulkan-drivers libsdl2-2.0-0 libpulse0 libasound2t64 libxkbcommon-x11-0 libxcb-cursor0 libxcb-icccm4 libxcb-keysyms1 libxcb-shape0 libxcb-xinerama0 libxcb-randr0 libxcb-render-util0 libxcb-image0 xdotool
           URL=$(gh api repos/azahar-emu/azahar/releases/latest --jq '.assets[].browser_download_url' | grep -i appimage | grep -vi room | head -1)
           echo "Downloading $URL"
           curl -sSL -o emu.dl "$URL"
@@ -79,6 +79,7 @@ jobs:
           BIN=$(ls squashfs-root/usr/bin/ | grep -i azahar | grep -vi room | head -1)
           echo "binary: $BIN"
           ls squashfs-root/usr/bin/ > fotos/bins.txt
+          LD_LIBRARY_PATH=squashfs-root/usr/lib ldd squashfs-root/usr/bin/$BIN | grep 'not found' >> fotos/bins.txt || true
           squashfs-root/usr/bin/$BIN out/ClassiCube-3ds.3dsx > fotos/emulador.log 2>&1 &
           for t in 20 45 70 100 140 180; do
             sleep $((t - ${prev:-0})); prev=$t

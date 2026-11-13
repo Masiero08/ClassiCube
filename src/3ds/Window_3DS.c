@@ -672,6 +672,10 @@ void Window_3DS_DiagText(cc_string* str) {
 	int stage = cpp_stage, cal = cpp_dbgCal, ok = cpp_dbgOk, to = cpp_dbgTimeouts;
 	int bad = cpp_dbgBad, head = cpp_dbgHead, len = cpp_dbgLen;
 
+#ifdef CC_COMMIT_SHA
+	/* build id first: a photo then shows which version is installed */
+	String_AppendConst(str, "v" CC_COMMIT_SHA " ");
+#endif
 	String_Format2(str, "%ix%i", &Atlas1D.Count, &per);
 	for (i = 0; i < count; i++)
 	{

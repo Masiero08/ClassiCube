@@ -68,7 +68,7 @@ jobs:
           cp misc/cc_textures.zip       $SD/texpacks/classico.zip
           cp misc/sons/saida/classicube.zip $SD/audio/classicube.zip || true
           mkdir -p $HOME/.config/azahar-emu
-          printf '[Renderer]\ngraphics_api=1\ngraphics_api\\default=false\n[Core]\nuse_cpu_jit=false\nuse_cpu_jit\\default=false\n[UI]\nfirstStart=false\nfirstStart\\default=false\ncheck_for_update_on_start=false\ncheck_for_update_on_start\\default=false\n' > $HOME/.config/azahar-emu/qt-config.ini
+          printf '[Renderer]\ngraphics_api=1\ngraphics_api\\default=false\n[Core]\nuse_cpu_jit=false\nuse_cpu_jit\\default=false\n[System]\nis_new_3ds=false\nis_new_3ds\\default=false\n[UI]\nfirstStart=false\nfirstStart\\default=false\ncheck_for_update_on_start=false\ncheck_for_update_on_start\\default=false\n' > $HOME/.config/azahar-emu/qt-config.ini
       - name: Run and take screenshots
         shell: bash
         run: |
